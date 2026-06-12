@@ -256,7 +256,7 @@ struct WorkoutsView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(StrandPalette.accent)
                         .frame(width: 22, alignment: .center)
-                    Text(g.sport)
+                    Text(WorkoutSource.displaySport(g.sport))
                         .font(StrandFont.headline)
                         .foregroundStyle(StrandPalette.textPrimary)
                         .lineLimit(1)

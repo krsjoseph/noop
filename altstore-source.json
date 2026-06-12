@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "2.6.4",
+          "buildVersion": "35",
+          "date": "2026-06-12",
+          "localizedDescription": "Workout names now read as proper words; Intelligence Rest duration fixed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.6.4/NOOP-v2.6.4-ios.ipa",
+          "size": 5560368,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "2.6.3",
           "buildVersion": "34",
           "date": "2026-06-12",
@@ -37,12 +46,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "2.6.3",
-      "buildVersion": "34",
+      "version": "2.6.4",
+      "buildVersion": "35",
       "versionDate": "2026-06-12",
-      "versionDescription": "Universal Mac build (Intel + Apple Silicon); iPhone import .zip fix; AltStore source added.",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.6.3/NOOP-v2.6.3-ios.ipa",
-      "size": 5557963,
+      "versionDescription": "Workout names now read as proper words; Intelligence Rest duration fixed.",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.6.4/NOOP-v2.6.4-ios.ipa",
+      "size": 5560368,
       "minOSVersion": "17.0"
     }
   ],

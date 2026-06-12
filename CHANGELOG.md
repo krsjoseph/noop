@@ -17,6 +17,15 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 2.6.4 — Tidier workout names, correct Rest duration
+
+- **Fixed:** workout names from your strap now read as proper words — **Traditional Strength Training**
+  instead of `TraditionalStrengthTraining` — on the Today tiles, the Workouts breakdown cards and the
+  session list, on all platforms. Thanks @RichrdJ. (#175)
+- **Fixed:** the Intelligence tab's **Rest** duration could read an hour too high (a 5h 39m night showed
+  as 6h 39m) because the hours component was rounded up instead of truncated. It now matches the Sleep
+  tab and dashboard exactly. Thanks @FrostDev7. (#180)
+
 ## 2.6.3 — Universal Mac build + iPhone import fix
 
 - **Fixed (Mac):** the download was accidentally an Apple-Silicon-only build, so it couldn't launch on

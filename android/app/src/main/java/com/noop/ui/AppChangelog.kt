@@ -25,7 +25,7 @@ object AppChangelog {
      * Bump this when you add a release below. The "What's New" sheet shows automatically when the
      * stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
      */
-    const val CURRENT_VERSION = "2.6.3"
+    const val CURRENT_VERSION = "2.6.4"
 
     data class Release(
         val version: String,
@@ -36,6 +36,15 @@ object AppChangelog {
 
     /** Newest first. */
     val releases: List<Release> = listOf(
+        Release(
+            version = "2.6.4",
+            title = "Tidier workout names, correct Rest duration",
+            date = "June 2026",
+            items = listOf(
+                "Fixed: workout names from your strap now read as proper words — Traditional Strength Training instead of TraditionalStrengthTraining — on the Today tiles, the Workouts breakdown cards and the session list, on all platforms. Thanks @RichrdJ (#175).",
+                "Fixed: the Intelligence tab's Rest duration could read an hour too high (a 5h 39m night showed as 6h 39m) because the hours were rounded up instead of truncated. It now matches the Sleep tab and dashboard exactly. Thanks @FrostDev7 (#180).",
+            ),
+        ),
         Release(
             version = "2.6.3",
             title = "Universal Mac build + iPhone import fix",

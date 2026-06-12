@@ -328,7 +328,7 @@ private fun SportCard(g: SportGroup) {
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    g.sport,
+                    WorkoutEditing.displaySport(g.sport),
                     style = NoopType.headline,
                     color = Palette.textPrimary,
                     maxLines = 1,

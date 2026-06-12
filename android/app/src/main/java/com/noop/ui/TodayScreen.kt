@@ -574,7 +574,7 @@ private fun TodayWorkoutsSection(workouts: List<WorkoutRow>) {
                 rowWorkouts.forEach { workout ->
                     StatTile(
                         modifier = Modifier.weight(1f),
-                        label = workout.sport,
+                        label = WorkoutEditing.displaySport(workout.sport),
                         value = workoutDuration(workout),
                         caption = workoutCaption(workout),
                         accent = workout.strain?.let { Palette.strainColor(it) } ?: Palette.textPrimary,
