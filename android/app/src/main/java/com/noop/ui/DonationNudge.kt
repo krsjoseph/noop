@@ -44,8 +44,8 @@ import androidx.compose.ui.unit.dp
  *  each release (the app itself NEVER touches the network). Keep in lockstep with the Swift
  *  `DonationStats`. */
 object DonationStats {
-    const val DOWNLOADS = 5_000
-    const val DONORS = 7
+    const val DOWNLOADS = 8_500
+    const val DONORS = 12
     const val DONATE_URL = "https://github.com/NoopApp/noop/wiki/Donations"
 }
 

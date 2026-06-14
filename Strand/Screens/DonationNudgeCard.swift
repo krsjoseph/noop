@@ -16,9 +16,9 @@ import StrandDesign
 /// the public donation-address explorers; the app itself NEVER touches the network).
 enum DonationStats {
     /// Total release-asset downloads across all releases, rounded down to a friendly floor.
-    static let downloads = 5_000
+    static let downloads = 8_500
     /// Distinct on-chain donations received across the BTC + ETH addresses.
-    static let donors = 7
+    static let donors = 12
     /// The canonical donations page (wiki).
     static let donateURL = URL(string: "https://github.com/NoopApp/noop/wiki/Donations")!
 }

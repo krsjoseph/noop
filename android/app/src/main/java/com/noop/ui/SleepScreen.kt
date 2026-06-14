@@ -819,15 +819,17 @@ private fun NightNavHeader(
                 modifier = Modifier
                     .weight(1f)
                     .clip(blockShape)
-                    .background(Palette.accent.copy(alpha = StrandAlpha.selectedFill))
-                    .border(Metrics.divider, Palette.accent.copy(alpha = StrandAlpha.selectedBorder), blockShape)
+                    // Clean material surface (matches DayNavBar) — no gold wash behind the date;
+                    // the gold pop lives only on the date text below.
+                    .background(Palette.surfaceInset)
+                    .border(Metrics.divider, Palette.hairline, blockShape)
                     .clickable(enabled = onPickNightDate != null, onClickLabel = "Pick night date") { showDatePicker = true }
                     .padding(vertical = Metrics.selectorPadding, horizontal = Metrics.selectorPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(nightLabel, style = NoopType.caption, color = Palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (dateLabel != null) {
-                    Text(dateLabel, style = NoopType.captionNumber, color = Palette.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(dateLabel, style = NoopType.captionNumber, color = Palette.accentHover, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             IconButton(onClick = { if (canGoNewer) onNavigate(offset - 1) }, enabled = canGoNewer) {
