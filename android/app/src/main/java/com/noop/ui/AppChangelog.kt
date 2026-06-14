@@ -25,7 +25,7 @@ object AppChangelog {
      * Bump this when you add a release below. The "What's New" sheet shows automatically when the
      * stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
      */
-    const val CURRENT_VERSION = "3.0.2"
+    const val CURRENT_VERSION = "3.0.3"
 
     data class Release(
         val version: String,
@@ -36,6 +36,14 @@ object AppChangelog {
 
     /** Newest first. */
     val releases: List<Release> = listOf(
+        Release(
+            version = "3.0.3",
+            title = "Large Apple Health imports no longer crash (iPhone/Mac)",
+            date = "June 2026",
+            items = listOf(
+                "Fixed on iPhone/Mac — a large multi-year Apple Health import could exhaust memory and close the app; the importer now aggregates day-by-day as it reads. Android already worked this way, so no Android-facing change; versioned in lockstep. Thanks @exzanimo (#355).",
+            ),
+        ),
         Release(
             version = "3.0.2",
             title = "Bluetooth stream + Apple Health sync fixes",

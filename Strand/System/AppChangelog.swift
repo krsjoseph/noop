@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "3.0.2"
+    static let currentVersion = "3.0.3"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,13 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "3.0.3",
+            title: "Large Apple Health imports no longer crash (iPhone/Mac)",
+            date: "June 2026",
+            items: [
+                "Fixed (iPhone/Mac): importing a large, multi-year Apple Health export no longer runs out of memory and closes the app. The importer now aggregates your data day-by-day as it reads, instead of holding every sample in memory at once — so even years of Apple-Watch heart-rate import cleanly. It also accepts a localised export filename (e.g. a Russian export's \"экспорт.xml\") instead of requiring it to be renamed to \"export.xml\". Thanks @exzanimo (#355).",
+            ]),
         Release(
             version: "3.0.2",
             title: "Bluetooth stream + Apple Health sync fixes",

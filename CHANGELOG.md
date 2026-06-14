@@ -17,6 +17,12 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 3.0.3 — Large Apple Health imports no longer crash (iPhone/Mac)
+
+- **Fixed (iPhone/Mac):** importing a large, multi-year Apple Health export no longer runs out of memory and closes the app — the importer aggregates day-by-day as it reads instead of holding every sample in memory (Android already worked this way). Also accepts a localised export filename (e.g. `экспорт.xml`) instead of requiring `export.xml`. Thanks @exzanimo (#355).
+
+---
+
 ## 3.0.2 — Bluetooth stream + Apple Health sync fixes
 
 - **Fixed:** a corrupt/misaligned Bluetooth frame could wedge the live data stream until a reconnect — NOOP now resyncs to the next real frame. Thanks @vulnix0x4 (#374). *(Android already carried this guard.)*
