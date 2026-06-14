@@ -164,6 +164,14 @@ final class AppModel: ObservableObject {
         // IntelligenceEngine computes, persists under "my-whoop-noop", and refreshes the dashboard.
         Task { [weak self] in
             guard let self else { return }
+            #if DEBUG
+            // DEBUG-only: when launched with `--demo-seed`, populate a deterministic synthetic
+            // dataset so an empty simulator/dev build can walk every screen (verification + marketing
+            // screenshots). No-op in Release (whole seeder is #if DEBUG) and once data already exists.
+            if AppleDemoSeeder.requested, let store = await self.repo.storeHandle() {
+                await AppleDemoSeeder.seedIfRequested(into: store)
+            }
+            #endif
             await self.repo.refresh()                          // surface any imported data at once
             try? await Task.sleep(nanoseconds: 6_000_000_000)  // give the first offload a moment
             // One-shot on-upgrade Effort rescore (#313): recompute strain from source across the FULL

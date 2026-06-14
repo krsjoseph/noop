@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import StrandDesign
 
 /// iOS entry point. Unlike the macOS app (which adds a `MenuBarExtra` scene), iOS uses a single
 /// `WindowGroup`; the glanceable menu-bar role is filled by the Home/Lock-Screen widget instead.
@@ -92,6 +93,25 @@ private struct iOSRootView: View {
     @State private var showWhatsNew = false
 
     var body: some View {
+        #if DEBUG
+        // DEBUG-only: `--demo-screen <name>` renders one screen full-bleed (gates bypassed) so a
+        // seeded simulator build can be screenshotted deterministically for verification + marketing.
+        // No-op in Release (whole branch is #if DEBUG) and when the arg is absent.
+        if let demo = DemoScreens.requested {
+            return AnyView(
+                NavigationStack {
+                    demo
+                        .background(StrandPalette.surfaceBase.ignoresSafeArea())
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                .preferredColorScheme(.dark)
+            )
+        }
+        #endif
+        return AnyView(shell)
+    }
+
+    private var shell: some View {
         ZStack {
             RootTabView()
             if !onboarded {
@@ -128,4 +148,30 @@ private struct iOSRootView: View {
         }
     }
 }
+
+#if DEBUG
+/// DEBUG-only screenshot harness. Maps `--demo-screen <name>` to a single screen so a seeded
+/// simulator build can be captured deterministically (verification + marketing). Stripped from Release.
+enum DemoScreens {
+    /// The screen named by `--demo-screen <name>`, or nil if the arg is absent/unknown.
+    static var requested: AnyView? {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--demo-screen"), i + 1 < args.count else { return nil }
+        switch args[i + 1].lowercased() {
+        case "today":    return AnyView(TodayView())
+        case "trends":   return AnyView(TrendsView())
+        case "sleep":    return AnyView(SleepView())
+        case "live":     return AnyView(LiveView())
+        case "stress":   return AnyView(StressView())
+        case "workouts": return AnyView(WorkoutsView())
+        case "health":   return AnyView(HealthView())
+        case "insights": return AnyView(InsightsView())
+        case "explore":  return AnyView(MetricExplorerView())
+        case "compare":  return AnyView(CompareView())
+        case "settings": return AnyView(SettingsView())
+        default:         return nil
+        }
+    }
+}
+#endif
 #endif

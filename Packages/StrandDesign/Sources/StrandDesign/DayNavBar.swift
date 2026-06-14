@@ -60,8 +60,10 @@ public struct DayNavBar: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .padding(.horizontal, 10)
-                .background(StrandPalette.accent.opacity(0.12), in: blockShape)
-                .overlay(blockShape.strokeBorder(StrandPalette.accent.opacity(0.55), lineWidth: 1))
+                // Clean, material surface — no gold wash behind the date (that read as a murky
+                // dark-yellow block); the gold pop lives only on the date text itself.
+                .background(StrandPalette.surfaceInset, in: blockShape)
+                .overlay(blockShape.strokeBorder(StrandPalette.hairline, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Pick a date")

@@ -159,8 +159,10 @@ internal fun DayNavBar(
             modifier = Modifier
                 .weight(1f)
                 .clip(blockShape)
-                .background(Palette.accent.copy(alpha = StrandAlpha.selectedFill))
-                .border(Metrics.divider, Palette.accent.copy(alpha = StrandAlpha.selectedBorder), blockShape)
+                // Clean, material surface — no gold wash behind the date (that read as a murky
+                // dark-yellow block); the gold pop lives only on the date text itself.
+                .background(Palette.surfaceInset)
+                .border(Metrics.divider, Palette.hairline, blockShape)
                 .clickable(onClickLabel = "Pick a date") { showPicker = true }
                 .padding(vertical = Metrics.selectorPadding, horizontal = Metrics.selectorPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -169,7 +171,7 @@ internal fun DayNavBar(
             Text(
                 date,
                 style = NoopType.captionNumber,
-                // Active day's date in bright gold-light to match the selected block.
+                // The single gold pop on the chip — the date itself, on a clean material surface.
                 color = Palette.accentHover,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
