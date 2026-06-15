@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,10 +75,12 @@ import com.noop.ble.WhoopModel
  * on/off as the screen enters/leaves composition.
  */
 @Composable
-fun LiveScreen(viewModel: AppViewModel) {
+fun LiveScreen(viewModel: AppViewModel, onManageDevices: () -> Unit = {}) {
     val live by viewModel.live.collectAsStateWithLifecycle()
     val bpm by viewModel.bpm.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+    // Active band name (MW-6) — names the band whose live data the console shows; falls back to "WHOOP".
+    val activeDeviceName by viewModel.activeDeviceName.collectAsStateWithLifecycle()
     val activeWorkout by viewModel.activeWorkout.collectAsStateWithLifecycle()
     val lastWorkout by viewModel.lastWorkout.collectAsStateWithLifecycle()
 
@@ -113,6 +119,11 @@ fun LiveScreen(viewModel: AppViewModel) {
     val zone5Bpm = zoneSet.zones.firstOrNull { it.number == 5 }?.lower?.roundToInt() ?: 0
 
     ScreenScaffold(title = "Live Body Console", subtitle = "Current physiology, strap trust, and session controls") {
+
+        // Active band row (MW-6) — names the band the console is reading, with a "Manage devices"
+        // affordance that opens the Devices screen. Additive; the connect/disconnect controls below are
+        // untouched. Mirrors the iOS Live screen's active-band header + Manage-devices link.
+        ActiveBandRow(name = activeDeviceName ?: "WHOOP", onManageDevices = onManageDevices)
 
         // Console header — the pill + a connection-mode badge (+ a live SYNCING badge during a history
         // offload), with battery / worn / last-sync stats. Mirrors the macOS consoleHeader.
@@ -513,6 +524,46 @@ private fun MaxHrZoneCard(hrMax: Int, zone5Bpm: Int, coachingOn: Boolean) {
                 color = Palette.textTertiary,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+/**
+ * Active band row (MW-6): names the band whose live data the console is showing, with a "Manage devices"
+ * affordance that opens the Devices screen. Additive — it sits above the console header and never touches
+ * the connect/disconnect controls. Mirrors the iOS Live screen's active-band header + Manage-devices link.
+ */
+@Composable
+private fun ActiveBandRow(name: String, onManageDevices: () -> Unit) {
+    NoopCard(padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Icon(
+                Icons.Filled.Watch,
+                contentDescription = null,
+                tint = Palette.accent,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.size(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Overline("Active band")
+                Text(name, style = NoopType.headline, color = Palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onManageDevices)
+                    .semantics { contentDescription = "Manage devices" }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Text("Manage devices", style = NoopType.subhead, color = Palette.accent)
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Palette.accent,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }

@@ -44,7 +44,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PairedDeviceRow::class,
         DayOwnershipRow::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class WhoopDatabase : RoomDatabase() {
@@ -202,6 +202,27 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 -> v9: ADDITIVE — adds `pairedDevice.peripheralId` (nullable TEXT) — the strap's stable BLE
+         * peripheral identifier (the Android twin of the Swift Database.swift `peripheralId` migration).
+         * On Android this is the [android.bluetooth.BluetoothDevice] MAC address; it lets the BLE client
+         * pin a connect to ONE specific strap (multi-WHOOP) and lets a freshly-paired device be looked up
+         * by its address.
+         *
+         * ALTER ... ADD COLUMN only (no data touched), so existing rows are untouched and read back with
+         * `peripheralId = NULL` — including the seeded "my-whoop" row (WHOOP has no stored MAC until it is
+         * (re)paired — fine). The SQL MUST match Room's generated column for a `String?` field exactly:
+         * TEXT, no NOT NULL, no SQL DEFAULT (a Kotlin construction default never reaches the schema) — the
+         * additive, nullable-safe form of MIGRATION_3_4. Like the others this is the no-destructive-
+         * fallback path: a mismatch throws loudly rather than silently wiping non-resendable strap history;
+         * CI's MigrationRoundTripTest guards the SQL.
+         */
+        internal val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pairedDevice` ADD COLUMN `peripheralId` TEXT")
+            }
+        }
+
         private fun build(appContext: Context): WhoopDatabase =
             Room.databaseBuilder(appContext, WhoopDatabase::class.java, DB_NAME)
                 // Real additive migration — NO destructive fallback (see the class doc): with
@@ -209,7 +230,7 @@ abstract class WhoopDatabase : RoomDatabase() {
                 // history on any schema mismatch. Room throws loudly instead; CI guards the SQL.
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                 )
                 .build()
     }

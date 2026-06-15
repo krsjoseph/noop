@@ -26,6 +26,15 @@ data class PairedDeviceRow(
     val brand: String,
     val model: String,
     val nickname: String?,
+    /**
+     * The strap's stable BLE peripheral identifier — on Android the [android.bluetooth.BluetoothDevice]
+     * MAC address (also exposed as [com.noop.ble.WhoopBleClient.lastDeviceAddress]). Added by the v8 → v9
+     * additive migration (the Android twin of the Swift `peripheralId` column). Lets the BLE client pin a
+     * connect to ONE specific strap (multi-WHOOP) and lets a freshly-paired device be looked up by its
+     * address. Nullable, no SQL DEFAULT (matches Room's generated column for a `String?` field); the
+     * seeded "my-whoop" row keeps it NULL until the strap is (re)paired.
+     */
+    val peripheralId: String? = null,
     val sourceKind: String,
     val capabilities: String, // comma-joined Metric rawValues, e.g. "hr,hrv,sleep"
     val status: String,

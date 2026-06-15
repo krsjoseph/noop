@@ -48,7 +48,10 @@ import kotlinx.coroutines.sync.withLock
  */
 class Backfiller(
     private val repository: WhoopRepository,
-    private val deviceId: String,
+    /** The device id every offloaded row is stamped with (read at finishChunk). MUTABLE so a
+     *  WHOOP→WHOOP active-device switch re-points it via [WhoopBleClient.setActiveDeviceId] and the
+     *  next chunk attributes to the new id; the single-WHOOP path never reassigns it ("my-whoop"). */
+    var deviceId: String,
     private val cursorStore: TrimCursorStore,
     /**
      * Confirms one HISTORY_END chunk to the strap. Carries both the trim cursor (first u32 of

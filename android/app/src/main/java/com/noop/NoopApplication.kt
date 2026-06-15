@@ -81,6 +81,11 @@ class NoopApplication : Application() {
             liveSink = { hr, rr -> ble.publishExternalLiveHr(hr, rr) },
             startWhoop = { ble.connect() },
             stopWhoop = { ble.disconnect() },
+            // Multi-WHOOP (MW-2/MW-3): pin the connection to the active WHOOP's persisted address and
+            // re-attribute live samples to it on a WHOOP→WHOOP switch. Both inert on the single-WHOOP
+            // path — the coordinator only invokes them for a non-legacy WHOOP / a non-null peripheralId.
+            setWhoopPreferredAddress = { addr -> ble.preferredAddress = addr },
+            setWhoopActiveDeviceId = { id -> ble.setActiveDeviceId(id) },
         )
     }
 }

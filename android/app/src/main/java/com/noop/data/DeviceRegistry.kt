@@ -56,6 +56,16 @@ class DeviceRegistry(
     /** Archive a device — keeps its row and samples (invariant I4). */
     suspend fun archive(id: String) = dao.archiveDevice(id)
 
+    /** Persist (or clear) a device's stable BLE peripheral identifier (the MAC address on Android). Lets
+     *  the seeded "my-whoop" adopt its strap's address on first connect and a specific WHOOP confirm its
+     *  identity. Façade over [DeviceRegistryDao.setPeripheralId]; mirrors the Swift store. */
+    suspend fun setPeripheralId(id: String, peripheralId: String?) = dao.setPeripheralId(id, peripheralId)
+
+    /** The paired device whose `peripheralId` matches [peripheralId], or null if none — resolves a strap
+     *  discovered by its MAC address back to its registry row. Mirrors the Swift store. */
+    suspend fun deviceForPeripheralId(peripheralId: String): PairedDeviceRow? =
+        dao.deviceForPeripheralId(peripheralId)
+
     /** Rename a device. A blank [nickname] clears it so the UI falls back to brand+model. Trims
      *  whitespace, mirroring the Swift `DeviceRegistry.rename`. */
     suspend fun rename(id: String, nickname: String?) {

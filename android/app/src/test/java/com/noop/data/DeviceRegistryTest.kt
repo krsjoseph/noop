@@ -57,6 +57,13 @@ class DeviceRegistryTest {
             devices[id]?.let { devices[id] = it.copy(nickname = nickname) }
         }
 
+        override suspend fun setPeripheralId(id: String, peripheralId: String?) {
+            devices[id]?.let { devices[id] = it.copy(peripheralId = peripheralId) }
+        }
+
+        override suspend fun deviceForPeripheralId(peripheralId: String): PairedDeviceRow? =
+            devices.values.firstOrNull { it.peripheralId == peripheralId }
+
         override suspend fun setDayOwner(row: DayOwnershipRow) {
             owners[row.day] = row // INSERT OR REPLACE by day PK
         }
@@ -171,6 +178,28 @@ class DeviceRegistryTest {
         assertEquals("my-whoop", reg.all().first().id)
         // dayOwnership rows for the device are cleared (the one table the JVM fake models).
         assertNull(reg.dayOwner("2026-06-15"))
+    }
+
+    @Test
+    fun seededWhoopHasNoPeripheralIdUntilSet() = runBlocking {
+        // The v8→v9 migration adds peripheralId as a nullable column; the seeded "my-whoop" row keeps it
+        // NULL until the strap is (re)paired and adopts its address. (MW-1 parity)
+        val reg = registryWith(seededDao())
+        assertNull(reg.all().first().peripheralId)
+        assertNull(reg.deviceForPeripheralId("AA:BB:CC:DD:EE:FF"))
+    }
+
+    @Test
+    fun setPeripheralIdRoundTrips() = runBlocking {
+        val reg = registryWith(seededDao())
+        reg.setPeripheralId("my-whoop", "AA:BB:CC:DD:EE:FF")
+        assertEquals("AA:BB:CC:DD:EE:FF", reg.all().first().peripheralId)
+        // Resolvable back from the address.
+        assertEquals("my-whoop", reg.deviceForPeripheralId("AA:BB:CC:DD:EE:FF")!!.id)
+        // A null clears it (back to "no stored MAC").
+        reg.setPeripheralId("my-whoop", null)
+        assertNull(reg.all().first().peripheralId)
+        assertNull(reg.deviceForPeripheralId("AA:BB:CC:DD:EE:FF"))
     }
 
     @Test

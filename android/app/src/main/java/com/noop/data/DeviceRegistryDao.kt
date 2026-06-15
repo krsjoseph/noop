@@ -43,6 +43,17 @@ interface DeviceRegistryDao {
     @Query("UPDATE pairedDevice SET nickname = :nickname WHERE id = :id")
     suspend fun renameDevice(id: String, nickname: String?)
 
+    /** Persist (or clear) a device's stable BLE peripheral identifier (the MAC address on Android). Lets
+     *  the seeded "my-whoop" adopt its strap's address on first connect and a specific WHOOP confirm its
+     *  identity. Twin of the Swift store's `setPeripheralId`. */
+    @Query("UPDATE pairedDevice SET peripheralId = :peripheralId WHERE id = :id")
+    suspend fun setPeripheralId(id: String, peripheralId: String?)
+
+    /** The paired device whose [peripheralId] matches, or null if none — so a strap discovered by its MAC
+     *  address can be resolved back to its registry row. Twin of the Swift store's `deviceForPeripheralId`. */
+    @Query("SELECT * FROM pairedDevice WHERE peripheralId = :peripheralId LIMIT 1")
+    suspend fun deviceForPeripheralId(peripheralId: String): PairedDeviceRow?
+
     // MARK: deleteAllData — clear one device's recordings across every deviceId-keyed table.
     //
     // Room has no dynamic table names, so each device-scoped table gets its own DELETE here; the

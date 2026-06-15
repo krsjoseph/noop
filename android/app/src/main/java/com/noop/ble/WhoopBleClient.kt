@@ -283,8 +283,15 @@ class WhoopBleClient(
      * [DeviceRegistry.activeDeviceId] (see NoopApplication), falling back to [DEFAULT_DEVICE_ID]
      * ("my-whoop") — which matches the Swift default and the rest of the Android app, so behaviour
      * is unchanged today while the registry takes over as the single source of the active id.
+     *
+     * MUTABLE (multi-WHOOP, MW-3): [setActiveDeviceId] re-points it so a WHOOP→WHOOP switch attributes
+     * new samples to the newly-active WHOOP immediately, without waiting for a relaunch. The single-WHOOP
+     * path NEVER reassigns it (the coordinator only calls [setActiveDeviceId] for a non-legacy WHOOP), so
+     * with one WHOOP it stays "my-whoop" throughout — byte-for-byte today's behaviour. The live persist
+     * sites + the analyze pass read this field directly; the [Backfiller] captured its own copy at
+     * construction, so [setActiveDeviceId] re-points that too (see there).
      */
-    private val deviceId: String = DEFAULT_DEVICE_ID,
+    private var deviceId: String = DEFAULT_DEVICE_ID,
     /** Durable trim-cursor store for the offload safe-trim watermark (see [Backfiller]). */
     private val cursorStore: TrimCursorStore = PrefsTrimCursorStore(context),
     /**
@@ -553,6 +560,37 @@ class WhoopBleClient(
     // MARK: Published state — the single source of truth the UI observes.
     private val _state = MutableStateFlow(LiveState())
     val state: StateFlow<LiveState> = _state.asStateFlow()
+
+    // MARK: Multi-WHOOP (additive — inert on the single-WHOOP path; MW-2/MW-3 parity with iOS BLEManager).
+
+    /**
+     * Pin connections to ONE specific strap by its [BluetoothDevice.address] (the Android analogue of the
+     * iOS CBPeripheral identifier). When non-null, [onScanResult]'s normal connect path connects ONLY to
+     * the device whose `address == preferredAddress` and ignores every other discovered WHOOP. When null
+     * (the only state a single-WHOOP user is ever in) the discover path is byte-for-byte unchanged — it
+     * connects to the FIRST WHOOP discovered. The app sets this to the active device's persisted
+     * `peripheralId`; setting it does NOT start/stop/redirect an in-flight connection on its own. Mirrors
+     * macOS `BLEManager.preferredPeripheralUUID`.
+     */
+    @Volatile
+    var preferredAddress: String? = null
+
+    /** A WHOOP strap surfaced by the Add-a-device wizard's present-scan ([scanForWhoops]) WITHOUT
+     *  auto-connecting. [address] is the BLE MAC; [name] the advertised name (may be null); [rssi] the
+     *  signal. Twin of the iOS `discoveredWhoops` tuple (uuid/name/rssi). */
+    data class DiscoveredWhoop(val address: String, val name: String?, val rssi: Int)
+
+    private val _discoveredWhoops = MutableStateFlow<List<DiscoveredWhoop>>(emptyList())
+    /** WHOOP straps seen while [scanningForList] is true (the Add-a-device wizard's present-scan), WITHOUT
+     *  auto-connecting. Cleared at the start of each [scanForWhoops]. Empty/unused on the default path. */
+    val discoveredWhoops: StateFlow<List<DiscoveredWhoop>> = _discoveredWhoops.asStateFlow()
+
+    /** Add-a-WHOOP wizard present-scan flag: while true, [onScanResult] ACCUMULATES every discovered strap
+     *  into [discoveredWhoops] instead of auto-connecting. Turned on by [scanForWhoops], off by
+     *  [stopWhoopScan]. Default false leaves the auto-connect path untouched. Written on the main looper
+     *  (scan lifecycle) and read in the GATT/scan callback — @Volatile for cross-thread visibility. */
+    @Volatile
+    private var scanningForList = false
 
     /**
      * Multi-source seam (Phase 1B): publish a live HR/R-R reading that came from a NON-WHOOP source
@@ -981,6 +1019,10 @@ class WhoopBleClient(
     @SuppressLint("MissingPermission")
     private fun startScan(model: WhoopModel, allowFallback: Boolean) {
         handler.removeCallbacks(scanFallbackRunnable)
+        // Defensive: the normal auto-connect scan is NEVER a present-scan. Clearing the flag here means a
+        // leaked wizard present-scan (e.g. the wizard was dismissed without stopWhoopScan) can't divert
+        // this connect's onScanResult into accumulate-not-connect. No-op on the (default) single-WHOOP path.
+        scanningForList = false
         selectedModel = model
         val sc = scanner ?: run {
             log("No BLE scanner available")
@@ -1106,6 +1148,87 @@ class WhoopBleClient(
         lastDevice = null   // don't auto-reconnect to the old strap; the next connect scans for the new model
         _state.value = _state.value.copy(connected = false, bonded = false, encryptedBond = false,
                                          r22FlagsAccepted = 0, deepPacketsThisSession = 0)   // #174 reset per session
+    }
+
+    /**
+     * Re-point which device id live WHOOP samples store under, when the active WHOOP changes (a
+     * WHOOP↔WHOOP switch via the registry). Only the [SourceCoordinator] calls this, and only when a
+     * DIFFERENT registered WHOOP becomes active — the single-WHOOP path leaves the seeded "my-whoop" id in
+     * place (NoopApplication set it at construction; this is never called), so that path is byte-for-byte
+     * unchanged. Sets this client's [deviceId] AND re-points the in-flight [Backfiller] so the very next
+     * live flush / standard-HR persist / historical finishChunk attributes new samples to the new id —
+     * without waiting for a relaunch. The live persist sites + analyze read [deviceId] directly; the
+     * Backfiller captured its own copy at construction, so both are updated here. Port of macOS
+     * `BLEManager.setActiveDeviceId`. Empty id is ignored.
+     */
+    fun setActiveDeviceId(id: String) {
+        if (id.isEmpty()) return
+        deviceId = id
+        backfiller.deviceId = id
+    }
+
+    /**
+     * Add-a-device wizard present-scan (MW-4): scan the given WHOOP family's service and surface every
+     * nearby strap in [discoveredWhoops] WITHOUT auto-connecting. Turns on [scanningForList] so
+     * [onScanResult] accumulates rather than connecting, and clears the list for a fresh presentation. It
+     * does NOT disturb an existing connection (it never touches [gatt]/bond state) — but it does take over
+     * the single LE scanner, so the wizard MUST call [stopWhoopScan] before any normal connect resumes.
+     * Respects the runtime BLUETOOTH_SCAN/CONNECT grant exactly like [startScan]. Port of macOS
+     * `BLEManager.scanForWhoops`.
+     */
+    @SuppressLint("MissingPermission")
+    fun scanForWhoops(model: WhoopModel) {
+        val adp = adapter
+        if (adp == null || !adp.isEnabled) {
+            log("Add-a-WHOOP scan: Bluetooth not ready")
+            return
+        }
+        val sc = scanner
+        if (sc == null) {
+            log("Add-a-WHOOP scan: no BLE scanner available")
+            return
+        }
+        // Cancel the auto-connect scan's not-found/fallback timers — neither should fire during a
+        // present-scan — and stop whatever LE scan is running before re-arming our own.
+        handler.removeCallbacks(scanTimeoutRunnable)
+        handler.removeCallbacks(scanFallbackRunnable)
+        stopScan()
+        selectedModel = model
+        scanningForList = true
+        _discoveredWhoops.value = emptyList()   // fresh list each time the wizard opens the scan
+        val filters = listOf(
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(model.service)).build(),
+        )
+        // LOW_LATENCY for a snappy wizard; the in-callback accumulation refreshes RSSI as straps move.
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+        scanning = true
+        try {
+            sc.startScan(filters, settings, scanCallback)
+            log("Add-a-WHOOP scan: presenting nearby ${model.displayName} straps")
+        } catch (se: SecurityException) {
+            scanning = false
+            scanningForList = false
+            log("Add-a-WHOOP scan blocked (permission): ${se.message}")
+        } catch (t: Throwable) {
+            scanning = false
+            scanningForList = false
+            log("Add-a-WHOOP scan failed to start: ${t.message}")
+        }
+    }
+
+    /**
+     * End the Add-a-device present-scan: stop scanning and clear [scanningForList] so [onScanResult]
+     * returns to its normal auto-connect behaviour. Idempotent — safe to call when not presenting. Port of
+     * macOS `BLEManager.stopWhoopScan`.
+     */
+    @SuppressLint("MissingPermission")
+    fun stopWhoopScan() {
+        if (!scanningForList) return
+        scanningForList = false
+        stopScan()
+        log("Add-a-WHOOP scan: stopped")
     }
 
     /**
@@ -1319,6 +1442,28 @@ class WhoopBleClient(
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device: BluetoothDevice = result.device
             val name = result.scanRecord?.deviceName ?: device.name ?: "unknown"
+            // Multi-WHOOP present-scan (Add-a-device wizard, MW-4): accumulate the strap, do NOT
+            // auto-connect, and return before touching the connect flow. Only reachable when the wizard
+            // turned on [scanningForList] via scanForWhoops(); on the default path this branch is skipped
+            // entirely and the auto-connect code below runs exactly as before.
+            if (scanningForList) {
+                val addr = device.address ?: return
+                val list = _discoveredWhoops.value.toMutableList()
+                val item = DiscoveredWhoop(address = addr, name = name.takeIf { it != "unknown" }, rssi = result.rssi)
+                val i = list.indexOfFirst { it.address == addr }
+                if (i >= 0) list[i] = item else list.add(item)   // refresh RSSI / append
+                _discoveredWhoops.value = list
+                return
+            }
+            // Multi-WHOOP preferred-peripheral filter (MW-2): when the app has pinned a specific strap,
+            // ignore any OTHER discovered WHOOP and keep scanning. When [preferredAddress] is null (the
+            // single-WHOOP default) this guard is skipped and the original "connect to the first
+            // discovered" path below is byte-for-byte unchanged.
+            val preferred = preferredAddress
+            if (preferred != null && !device.address.equals(preferred, ignoreCase = true)) {
+                log("Discovered $name (${device.address}) — not the preferred strap; ignoring")
+                return
+            }
             log("Discovered $name (rssi ${result.rssi}) — connecting")
             // Found it: cancel the not-found timeout AND the family-rotation fallback, then reflect
             // progress in the UI. (PR#195)

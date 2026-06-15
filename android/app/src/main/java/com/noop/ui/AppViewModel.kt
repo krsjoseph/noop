@@ -94,6 +94,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun setActiveDevice(id: String) {
         noopApp.deviceRegistry.setActive(id)
         noopApp.sourceCoordinator.onActiveDeviceChanged(id)
+        refreshActiveDeviceName()
+    }
+
+    /** The active band's display name (nickname, else collapsed brand+model), surfaced on the Live screen
+     *  (MW-6). Null until the first registry read resolves; falls back to "WHOOP" in the UI when null. */
+    private val _activeDeviceName = MutableStateFlow<String?>(null)
+    val activeDeviceName: StateFlow<String?> = _activeDeviceName.asStateFlow()
+
+    /** Re-read the active device row and republish its display name. Called at launch + after a setActive. */
+    fun refreshActiveDeviceName() {
+        viewModelScope.launch {
+            val all = runCatching { noopApp.deviceRegistry.all() }.getOrDefault(emptyList())
+            val active = all.firstOrNull { it.status == com.noop.data.DeviceStatus.active.name }
+            _activeDeviceName.value = active?.let { displayName(it) }
+        }
     }
 
     /** Archive (remove) a device — keeps its row + samples (invariant I4). */
@@ -119,6 +134,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             liveSink = { _, _ -> },
             persist = { _, _ -> },
         )
+
+    // MARK: - Add-a-device wizard (multi-WHOOP, MW-4) — thin pass-throughs to the BLE client.
+
+    /** WHOOP straps surfaced by the wizard's present-scan ([presentWhoopScan]), WITHOUT auto-connecting.
+     *  The wizard observes this directly so its pick list updates as straps appear. */
+    val discoveredWhoops: StateFlow<List<com.noop.ble.WhoopBleClient.DiscoveredWhoop>> = ble.discoveredWhoops
+
+    /**
+     * Point the WHOOP scan at a specific family, then present nearby straps WITHOUT auto-connecting (the
+     * Add-a-device wizard's WHOOP path). [prepareForModelSwitch] first idles the engine + clears any
+     * sticky bond/connection, then [WhoopBleClient.scanForWhoops] takes over the LE scanner in present-
+     * mode (it stops the connect scan and re-arms an accumulate-not-connect scan). Mirrors the macOS
+     * AppModel.presentWhoopScan. The persisted family selection is updated too so a later real connect to
+     * the chosen strap targets the right family.
+     */
+    fun presentWhoopScan(model: WhoopModel) {
+        _selectedModel.value = model
+        ble.prepareForModelSwitch()
+        ble.scanForWhoops(model)
+    }
+
+    /** End the WHOOP present-scan (idempotent). Call on leaving the wizard's pick step / on dismiss. */
+    fun stopWhoopScan() = ble.stopWhoopScan()
+
+    /**
+     * Register a paired device and (optionally) make it the active one — the Add-a-device wizard's single
+     * write path. [addPairedDevice] upserts the row; when [makeActive] is true [setActiveDevice] promotes
+     * it (which also tells the [SourceCoordinator] the active device changed, so it pins the WHOOP /
+     * starts the strap source). Mirrors the macOS AppModel.registerDevice.
+     */
+    suspend fun registerDevice(device: com.noop.data.PairedDeviceRow, makeActive: Boolean) {
+        addPairedDevice(device)
+        if (makeActive) setActiveDevice(device.id)
+    }
 
     // Body profile (age/sex/weight/height + HR-max override) — the same SharedPreferences
     // store the Settings screen edits. Feeds the on-device scorer's HRmax/zones/calories.
@@ -241,6 +290,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // existing WHOOP flow below runs unchanged; it only acts when a non-WHOOP strap is the active
         // device. The Devices screen (next task) calls onActiveDeviceChanged after a setActive.
         noopApp.sourceCoordinator.start()
+        // Resolve the active band's name for the Live screen header (MW-6). Falls back to "WHOOP" in the
+        // UI until this first read lands.
+        refreshActiveDeviceName()
         // Smooth HR from each LiveState emission, and re-arm the strap's firmware alarm whenever it
         // (re)bonds. A smart-alarm time changed while the strap was away never reached it — the send
         // is gated on bond — so the strap kept the OLD time and fired at it (#59). Gated on enabled so

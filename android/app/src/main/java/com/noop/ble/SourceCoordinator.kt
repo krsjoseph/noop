@@ -49,6 +49,19 @@ class SourceCoordinator(
     private val startWhoop: () -> Unit,
     /** Pause WHOOP via its EXISTING teardown (e.g. `AppViewModel.disconnect` → `ble.disconnect`). */
     private val stopWhoop: () -> Unit,
+    /**
+     * Pin the WHOOP connection to ONE strap by its persisted `peripheralId` (the MAC address), or null to
+     * clear the pin back to "connect to the first WHOOP found". Wraps [WhoopBleClient.preferredAddress].
+     * Called only on a WHOOP transition; nil on the legacy "my-whoop" path (unchanged). Default no-op keeps
+     * the existing `SourceCoordinator(...)` call sites compiling unchanged. (MW-2/MW-3)
+     */
+    private val setWhoopPreferredAddress: (String?) -> Unit = {},
+    /**
+     * Re-point which device id live WHOOP samples store under. Wraps [WhoopBleClient.setActiveDeviceId].
+     * Called ONLY when the active WHOOP is NOT the seeded "my-whoop" — the single-WHOOP path never invokes
+     * it, so the id stays "my-whoop". Default no-op keeps existing call sites compiling unchanged. (MW-3)
+     */
+    private val setWhoopActiveDeviceId: (String) -> Unit = {},
     /** Background scope for the suspend registry reads + persist. SupervisorJob keeps one failure from
      *  cancelling the others; IO keeps DB work off the main thread. */
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -58,6 +71,9 @@ class SourceCoordinator(
     private var standardSource: StandardHrSource? = null
     /** The deviceId [standardSource] is currently running for (so we don't churn on the same id). */
     private var activeStrapId: String? = null
+    /** The WHOOP registry id we last pointed the connection at, so a WHOOP→WHOOP switch is detected and a
+     *  repeat activation of the SAME WHOOP is a no-op. null until the first WHOOP activation. (MW-3) */
+    private var activeWhoopId: String? = null
     /** True once we've transitioned onto a generic strap. While false (the default / WHOOP-active state)
      *  switching to WHOOP is a pure no-op — we never issue a redundant WHOOP (re)scan. */
     private var onStrap = false
@@ -88,19 +104,62 @@ class SourceCoordinator(
     private suspend fun reconcile(id: String) {
         if (id == lastSeenId) return
         lastSeenId = id
-        if (isWhoop(id, registry.all())) switchToWhoop() else switchToStrap(id)
+        val devices = registry.all()
+        if (isWhoop(id, devices)) switchToWhoop(id, devices) else switchToStrap(id)
     }
 
     /**
-     * Active device is the WHOOP. If we'd been on a strap, tear that source down and resume WHOOP;
-     * otherwise (the dormant default) this is a pure no-op so the existing WHOOP startup is untouched.
+     * Active device is a WHOOP ([id]). Three churn-guarded sub-cases, mirroring macOS
+     * `SourceCoordinator.switchToWhoop`:
+     *   • Already streaming this exact WHOOP with no strap in between → pure no-op (the dormant default;
+     *     the single-WHOOP launch lands here and touches nothing but the initial preferred-address).
+     *   • Coming back from a generic strap → stop that source, point WHOOP at this id, resume its scan.
+     *   • A DIFFERENT WHOOP → drop the current link, re-point (preferred address + deviceId), reconnect.
      */
-    private fun switchToWhoop() {
-        if (!onStrap) return   // already WHOOP-mode (incl. first launch) → no churn
-        standardSource?.stop()
-        activeStrapId = null
-        onStrap = false
-        startWhoop()
+    private fun switchToWhoop(id: String, devices: List<PairedDeviceRow>) {
+        // Already streaming this exact WHOOP with no strap in between → nothing to do.
+        if (!onStrap && activeWhoopId == id) return
+
+        val peripheralId = devices.firstOrNull { it.id == id }?.peripheralId
+
+        when {
+            onStrap -> {
+                // Coming back from a generic strap: tear that source down first, then resume WHOOP.
+                standardSource?.stop()
+                activeStrapId = null
+                onStrap = false
+                pointWhoop(id, peripheralId)
+                startWhoop()
+            }
+            activeWhoopId == null -> {
+                // First WHOOP activation of the session (the normal launch path). Set the targeting so the
+                // existing WHOOP flow — kicked off elsewhere on launch — uses it. For the seeded "my-whoop"
+                // (peripheralId null, id "my-whoop") this is setWhoopPreferredAddress(null) and NO
+                // setActiveDeviceId / NO scan / NO disconnect: byte-for-byte today's behaviour.
+                pointWhoop(id, peripheralId)
+            }
+            else -> {
+                // WHOOP → a DIFFERENT WHOOP: drop the current link, re-point, and reconnect.
+                stopWhoop()
+                pointWhoop(id, peripheralId)
+                startWhoop()
+            }
+        }
+    }
+
+    /**
+     * Apply the WHOOP targeting for the now-active WHOOP [id]. Always sets the preferred address (null for
+     * the legacy "my-whoop" → connect to any WHOOP, unchanged). Re-points the sample deviceId ONLY for a
+     * non-legacy WHOOP — the seeded "my-whoop" keeps the bootstrap-set id, so the single-WHOOP path never
+     * calls setActiveDeviceId. Records [activeWhoopId] for future change detection. Mirrors macOS
+     * `pointWhoop`.
+     */
+    private fun pointWhoop(id: String, peripheralId: String?) {
+        setWhoopPreferredAddress(peripheralId)
+        if (id != WhoopBleClient.DEFAULT_DEVICE_ID) {
+            setWhoopActiveDeviceId(id)
+        }
+        activeWhoopId = id
     }
 
     /**

@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -25,7 +24,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -52,11 +50,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.ble.SourceCoordinator
-import com.noop.ble.StandardHrSource
 import com.noop.data.DeviceStatus
 import com.noop.data.Metric
 import com.noop.data.PairedDeviceRow
-import com.noop.data.SourceKind
 import kotlinx.coroutines.launch
 
 // MARK: - Devices
@@ -146,9 +142,9 @@ fun DevicesScreen(viewModel: AppViewModel) {
         WhoopFirstFooter()
     }
 
-    // --- Add a heart-rate strap ---
+    // --- Add a device (guided, branching wizard: WHOOP family · HR strap · coming-soon rows) ---
     if (showAddWizard) {
-        AddDeviceSheet(
+        AddDeviceWizard(
             viewModel = viewModel,
             onClose = { showAddWizard = false; reload() },
         )
@@ -434,221 +430,6 @@ private fun WhoopFirstFooter() {
     }
 }
 
-// MARK: - Add device sheet (scan + name + add)
-//
-// "Add a heart-rate strap" — runs its OWN discovery-only [StandardHrSource] (it never connects here;
-// the SourceCoordinator owns connection once the strap becomes active). Lists nearby straps live;
-// tapping one reveals a name field and an Add button. On Add it registers a `paired` device, then offers
-// to make it active. Renders its searching/empty state cleanly with no hardware present. Faithful twin of
-// the macOS AddDeviceSheet.
-
-@Composable
-private fun AddDeviceSheet(viewModel: AppViewModel, onClose: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    // A discovery-only source for this sheet — never persists, never connects; we only read its
-    // `discovered` / `scanning` StateFlows while scanning. Created once per sheet.
-    val scanner = remember { viewModel.makeStrapScanner() }
-    val discovered by scanner.discovered.collectAsStateWithLifecycle()
-    val scanning by scanner.scanning.collectAsStateWithLifecycle()
-
-    var selected by remember { mutableStateOf<StandardHrSource.DiscoveredStrap?>(null) }
-    var nameDraft by remember { mutableStateOf("") }
-    // After adding, ask whether to make the new strap active.
-    var justAdded by remember { mutableStateOf<PairedDeviceRow?>(null) }
-
-    // Scan while the sheet is shown; stop on dismiss.
-    LaunchedEffect(Unit) { scanner.scan() }
-
-    fun add(strap: StandardHrSource.DiscoveredStrap) {
-        scanner.stopScan()
-        val now = System.currentTimeMillis() / 1000
-        val name = nameDraft.trim()
-        val device = PairedDeviceRow(
-            id = strap.address,
-            brand = brandGuess(strap.name),
-            model = name.ifEmpty { strap.name },
-            nickname = null,
-            sourceKind = SourceKind.liveBLE.name,
-            capabilities = "hr,hrv",
-            status = DeviceStatus.paired.name,
-            addedAt = now,
-            lastSeenAt = now,
-        )
-        scope.launch { viewModel.addPairedDevice(device) }
-        justAdded = device
-    }
-
-    AlertDialog(
-        onDismissRequest = { scanner.stopScan(); onClose() },
-        containerColor = Palette.surfaceOverlay,
-        title = {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Add a heart-rate strap", style = NoopType.title2, color = Palette.textPrimary)
-                    Text(
-                        "Polar, Wahoo, Coospo, Garmin HRM and other standard BLE straps.",
-                        style = NoopType.caption,
-                        color = Palette.textTertiary,
-                    )
-                }
-                IconButton(onClick = { scanner.stopScan(); onClose() }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Palette.textTertiary, modifier = Modifier.size(20.dp))
-                }
-            }
-        },
-        text = {
-            val chosen = selected
-            if (chosen == null) {
-                ScanStep(
-                    scanning = scanning,
-                    discovered = discovered,
-                    onRescan = { scanner.scan() },
-                    onSelect = { strap -> nameDraft = strap.name; selected = strap },
-                )
-            } else {
-                NamingStep(
-                    strap = chosen,
-                    name = nameDraft,
-                    onName = { nameDraft = it },
-                    onBack = { selected = null },
-                    onAdd = { add(chosen) },
-                )
-            }
-        },
-        confirmButton = {},
-        dismissButton = {},
-    )
-
-    // After adding, offer to make the new strap active.
-    justAdded?.let { device ->
-        ConfirmDialog(
-            title = "Make this your active strap?",
-            message = "Make ${displayName(device)} your active strap now? It will provide your live heart rate. " +
-                "You can change this any time.",
-            confirmLabel = "Make active",
-            cancelLabel = "Not now",
-            onConfirm = {
-                scope.launch { viewModel.setActiveDevice(device.id) }
-                justAdded = null
-                onClose()
-            },
-            onDismiss = { justAdded = null; onClose() },
-        )
-    }
-}
-
-// Step 1 — live scan list / empty state.
-@Composable
-private fun ScanStep(
-    scanning: Boolean,
-    discovered: List<StandardHrSource.DiscoveredStrap>,
-    onRescan: () -> Unit,
-    onSelect: (StandardHrSource.DiscoveredStrap) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StatePill(
-                if (scanning) "Searching…" else "Idle",
-                tone = if (scanning) StrandTone.Accent else StrandTone.Neutral,
-                pulsing = scanning,
-            )
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onRescan) {
-                Text("Rescan", style = NoopType.subhead, color = Palette.accent)
-            }
-        }
-
-        if (discovered.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .frostedCardSurface(cornerRadius = 14.dp)
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CircularProgressIndicator(color = Palette.accent, modifier = Modifier.size(22.dp))
-                Text("Searching for nearby straps…", style = NoopType.body, color = Palette.textPrimary)
-                Text(
-                    "Make sure your strap is awake and not connected to another app.",
-                    style = NoopType.subhead,
-                    color = Palette.textSecondary,
-                )
-            }
-        } else {
-            discovered.sortedByDescending { it.rssi }.forEach { strap ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .frostedCardSurface(cornerRadius = 12.dp)
-                        .clickable { onSelect(strap) }
-                        .semantics { contentDescription = "${strap.name}, signal ${SignalBars.level(strap.rssi)} of 4" }
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SignalBars(strap.rssi)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(strap.name, style = NoopType.body, color = Palette.textPrimary)
-                        Text(brandGuess(strap.name), style = NoopType.caption, color = Palette.textTertiary)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Step 2 — name the chosen strap + Add.
-@Composable
-private fun NamingStep(
-    strap: StandardHrSource.DiscoveredStrap,
-    name: String,
-    onName: (String) -> Unit,
-    onBack: () -> Unit,
-    onAdd: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .frostedCardSurface(cornerRadius = 12.dp)
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SignalBars(strap.rssi)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(strap.name, style = NoopType.headline, color = Palette.textPrimary)
-                Text(brandGuess(strap.name), style = NoopType.caption, color = Palette.textTertiary)
-            }
-        }
-
-        Overline("Name")
-        OutlinedTextField(
-            value = name,
-            onValueChange = onName,
-            singleLine = true,
-            placeholder = { Text("Strap name", style = NoopType.body, color = Palette.textTertiary) },
-            colors = devicesFieldColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = "Strap name" },
-        )
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) {
-                Text("Back", style = NoopType.body, color = Palette.textSecondary)
-            }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onAdd, enabled = name.trim().isNotEmpty()) {
-                Text("Add", style = NoopType.body, color = if (name.trim().isNotEmpty()) Palette.accent else Palette.textTertiary)
-            }
-        }
-    }
-}
-
 // MARK: - Shared dialogs
 
 @Composable
@@ -772,7 +553,7 @@ private fun PickActiveDialog(
 // are coarse on purpose — a precise dBm readout would be noise to the user. Mirrors the Swift SignalBars.
 
 @Composable
-private fun SignalBars(rssi: Int) {
+internal fun SignalBars(rssi: Int) {
     val level = SignalBars.level(rssi)
     Row(
         verticalAlignment = Alignment.Bottom,
@@ -791,7 +572,7 @@ private fun SignalBars(rssi: Int) {
     }
 }
 
-private object SignalBars {
+internal object SignalBars {
     /** RSSI (negative dBm) → 0..4 signal level, coarse buckets. Matches the Swift SignalBars.level. */
     fun level(rssi: Int): Int = when {
         rssi >= -55 -> 4
@@ -854,7 +635,7 @@ private fun lastSeenLine(device: PairedDeviceRow, isLiveConnected: Boolean): Str
 }
 
 /** Best-effort brand from the advertised name. Falls back to a neutral label. Mirrors Swift brandGuess. */
-private fun brandGuess(name: String): String {
+internal fun brandGuess(name: String): String {
     val lower = name.lowercase()
     return when {
         lower.contains("polar") -> "Polar"
@@ -863,6 +644,7 @@ private fun brandGuess(name: String): String {
         lower.contains("garmin") || lower.contains("hrm") -> "Garmin"
         lower.contains("scosche") || lower.contains("rhythm") -> "Scosche"
         lower.contains("magene") -> "Magene"
+        lower.contains("amazfit") || lower.contains("helio") || lower.contains("zepp") -> "Amazfit"
         else -> "Heart-rate strap"
     }
 }

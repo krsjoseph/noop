@@ -402,7 +402,12 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         onSupport = { nav.navigateTopLevel(Destination.Support.route) },
                     )
                 }
-                composable(Destination.Live.route) { LiveScreen(viewModel) }
+                composable(Destination.Live.route) {
+                    LiveScreen(
+                        viewModel = viewModel,
+                        onManageDevices = { nav.navigateTopLevel(Destination.Devices.route) },
+                    )
+                }
                 composable(Destination.Sleep.route) {
                     SleepScreen(
                         vm = viewModel,
