@@ -192,6 +192,7 @@ enum DemoScreens {
         case "explore":  return AnyView(MetricExplorerView())
         case "compare":  return AnyView(CompareView())
         case "settings": return AnyView(SettingsView())
+        case "devices":  return AnyView(DevicesView())
         default:         return nil
         }
     }

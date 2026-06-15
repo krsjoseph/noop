@@ -43,7 +43,9 @@ final class AppModel: ObservableObject {
     /// Observable cache over the paired-device registry; `activeDeviceId` drives the source coordinator.
     /// Built lazily once the store opens (see `wireSourceCoordinator`). nil until then — with no generic
     /// strap paired the active id stays "my-whoop", so this never affects the WHOOP startup path.
-    private(set) var deviceRegistry: DeviceRegistry?
+    /// `@Published` so the Devices screen re-renders the moment the registry is wired in (it observes
+    /// `model.deviceRegistry`); nested `registry.$devices` changes are observed by the screen directly.
+    @Published private(set) var deviceRegistry: DeviceRegistry?
     /// Runs exactly one device's live BLE at a time. DORMANT whenever WHOOP is active (the default and
     /// every no-strap case): it only acts when a non-WHOOP generic strap becomes the active device,
     /// pausing WHOOP and running the isolated `StandardHRSource`. nil until wired (post store-open).

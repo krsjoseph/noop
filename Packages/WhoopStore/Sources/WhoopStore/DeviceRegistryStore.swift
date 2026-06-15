@@ -45,6 +45,29 @@ public struct DeviceRegistryStore {
         }
     }
 
+    /// Every table whose rows are keyed by `deviceId` (the per-device sample/derived tables). This is
+    /// the authoritative list `deleteAllData` clears — kept in sync with the `deviceId`-keyed tables in
+    /// `Database.swift`. The `pairedDevice` registry row itself is NOT here (a delete-data operation
+    /// empties the device's recordings; archiving/removing the registry entry is a separate op).
+    static let deviceScopedTables = [
+        "hrSample", "rrInterval", "spo2Sample", "skinTempSample", "respSample", "gravitySample",
+        "stepSample", "ppgHrSample", "event", "battery", "dailyMetric", "sleepSession",
+        "journal", "workout", "appleDaily", "metricSeries", "dayOwnership",
+    ]
+
+    /// Permanently delete every recorded sample/derived row belonging to one device, across all
+    /// `deviceId`-keyed tables, in a single transaction (all-or-nothing). The `pairedDevice` registry
+    /// row is left intact — the caller archives/removes that separately. Tables are deleted defensively
+    /// with `DELETE FROM <table> WHERE deviceId = ?`; a missing table would throw, but every table here
+    /// is created unconditionally by the migrator, so the set is stable.
+    public func deleteAllData(deviceId: String) throws {
+        try dbQueue.write { db in
+            for table in Self.deviceScopedTables {
+                try db.execute(sql: "DELETE FROM \(table) WHERE deviceId = ?", arguments: [deviceId])
+            }
+        }
+    }
+
     // MARK: day ownership
     public struct DayOwner: Equatable { public let deviceId: String; public let locked: Bool }
 

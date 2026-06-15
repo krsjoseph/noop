@@ -36,6 +36,48 @@ final class DeviceRegistry: ObservableObject {
         }
     }
 
+    // MARK: - UI mutations (Devices screen)
+    //
+    // Each op delegates to the synchronous store, then `reload()`s so the published `devices` /
+    // `activeDeviceId` reflect the change and the UI updates. Best-effort: a store failure leaves the
+    // published state untouched (we never crash the UI on a write error).
+
+    /// Add or upsert a paired device (the Add wizard's chosen strap). Refreshes the published list.
+    func add(_ device: PairedDevice) {
+        try? store.add(device)
+        reload()
+    }
+
+    /// Make `id` the single active device. The store demotes whatever was active in the same
+    /// transaction (invariant I1); changing `activeDeviceId` drives the `SourceCoordinator` to run the
+    /// right live source.
+    func setActive(_ id: String) {
+        try? store.setActive(id)
+        reload()
+    }
+
+    /// Archive (remove) a device: NOOP stops connecting to it, but its recorded data is kept. If the
+    /// archived device was the active one, `activeDeviceId` is left as-is here — the caller decides the
+    /// next active device (or leaves none active) and calls `setActive` explicitly.
+    func archive(_ id: String) {
+        try? store.archive(id)
+        reload()
+    }
+
+    /// Rename a device. `name` nil/empty clears the nickname so it falls back to brand+model.
+    func rename(_ id: String, to name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try? store.rename(id, nickname: (trimmed?.isEmpty == false) ? trimmed : nil)
+        reload()
+    }
+
+    /// Permanently delete every recorded sample/derived row for a device across all `deviceId`-keyed
+    /// tables. Does NOT remove the registry row (that's `archive`); this only empties its recordings.
+    func deleteDeviceData(_ id: String) {
+        try? store.deleteAllData(deviceId: id)
+        reload()
+    }
+
     /// Refine the seeded neutral "WHOOP" model on the 'my-whoop' row to the strap the user actually
     /// picked (migration v15 seeds a placeholder the app can't fill at migration time, since the
     /// selected model lives in the app's UserDefaults). No-op when it already matches. Best-effort.
