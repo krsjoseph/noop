@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "4.2.13",
+          "buildVersion": "109",
+          "date": "2026-06-16",
+          "localizedDescription": "NOOP 4.2.13. See the GitHub release notes for what changed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.13/NOOP-v4.2.13-ios.ipa",
+          "size": 8069257,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "4.2.10",
           "buildVersion": "108",
           "date": "2026-06-16",
@@ -613,12 +622,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "4.2.10",
-      "buildVersion": "108",
+      "version": "4.2.13",
+      "buildVersion": "109",
       "versionDate": "2026-06-16",
-      "versionDescription": "Week in Review: a sparse week reads 'too early to call' instead of falsely 'steady'.",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.10/NOOP-v4.2.10-ios.ipa",
-      "size": 8063910,
+      "versionDescription": "NOOP 4.2.13. See the GitHub release notes for what changed.",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.13/NOOP-v4.2.13-ios.ipa",
+      "size": 8069257,
       "minOSVersion": "17.0"
     }
   ],
