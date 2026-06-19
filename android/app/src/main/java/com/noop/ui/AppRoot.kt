@@ -53,6 +53,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
@@ -377,7 +378,11 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
         if (showUpdatesInbox) {
             ModalBottomSheet(
                 onDismissRequest = { showUpdatesInbox = false },
-                containerColor = Palette.surfaceRaised,
+                // Open full-height (no half-pull) so it reads like the iOS Updates sheet, and use the
+                // BEIGE surfaceBase so the white NoopCards POP — surfaceRaised made white cards sit on a
+                // white sheet (no contrast), which is why the Android inbox looked flat vs iOS.
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = Palette.surfaceBase,
                 contentColor = Palette.textPrimary,
             ) {
                 UpdatesInboxScreen(
