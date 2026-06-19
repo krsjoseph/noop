@@ -244,9 +244,21 @@ fun SleepScreen(
         }
     }
 
+    // The browsable DAY list: every block grouped by the calendar day it ENDS on (matching the
+    // dashboard's per-night merge key, `localEndDay` above), newest day first, blocks within a day
+    // oldest→newest. Each day is ONE ◀/▶ stop, so a split-sleep / nap day reads as a single night
+    // and a WHOOP 4.0 user with one detected night isn't stuck on dead arrows — the chevrons step
+    // by DAY, not by flat session index (#57/#59). Mirrors iOS SleepView.navDays (in-view grouping).
+    val navDays = remember(sleeps) {
+        sleeps.groupBy { localDayString(it.endTs) }
+            .toSortedMap(reverseOrder())                       // newest day first
+            .map { (_, blocks) -> blocks.sortedBy { it.effectiveStartTs } }
+    }
+
     // The navigated night, decoded once per (offset, data) change — chevron taps re-pick
-    // instantly without re-parsing stagesJSON on every recomposition. (#160)
-    val night = remember(nightOffset, sleeps, days) { selectNight(sleeps, days, nightOffset) }
+    // instantly without re-parsing stagesJSON on every recomposition. The offset now indexes
+    // DAYS (navDays), so a day with a detected night always resolves to that night. (#160, #59)
+    val night = remember(nightOffset, navDays, days) { selectNight(navDays, days, nightOffset) }
 
     // The whole screen follows the selected night: the grid/trends window ends on its day,
     // exactly as it followed the old day selector. Null when that day has no stage minutes.
@@ -255,11 +267,12 @@ fun SleepScreen(
     }
     val display = remember(model, night) { heroDisplay(model, night) }
 
-    // Jump straight to a night by its (local) wake-day — the center date block opens a picker. (#160)
+    // Jump straight to a night by its (local) wake-day — the center date block opens a picker.
+    // navDays is newest-day-first, so the day's index IS its offset (0 = last night). (#160, #59)
     val onPickNightDate: (LocalDate) -> Unit = { targetDate ->
         val targetStr = targetDate.toString()
-        val idx = sleeps.indexOfLast { s -> localDayString(s.endTs) == targetStr }
-        if (idx >= 0) nightOffset = sleeps.lastIndex - idx
+        val dayIdx = navDays.indexOfFirst { day -> day.any { localDayString(it.endTs) == targetStr } }
+        if (dayIdx >= 0) nightOffset = dayIdx
     }
 
     ScreenScaffold(title = "Sleep", subtitle = "Last night, read in two seconds.") {
@@ -298,7 +311,7 @@ fun SleepScreen(
                 display = display,
                 clock = night?.clockLabel ?: model?.clockLabel,
                 nightOffset = nightOffset,
-                lastIndex = max(sleeps.lastIndex, 0),
+                lastIndex = max(navDays.lastIndex, 0),
                 onNavigate = { nightOffset = it },
                 session = night?.session,
                 onUpdateTimes = { s, start, end ->
@@ -1720,20 +1733,28 @@ internal data class HeroDisplay(
 )
 
 /**
- * Pick the night [offset] sleep-sessions back from the most recent (0 = latest), clamped
- * so a stale offset after a data change shows the oldest night rather than nothing. The
- * day key tries UTC then local-tz attribution of the wake timestamp — imported
- * DailyMetric.day is local-tz while dayString is UTC, so a near-midnight-UTC wake needs
- * the second key; both derive from THIS session's endTs, never another night. (#160)
+ * Pick the night for the DAY [offset] stops back from the most recent (0 = latest). [navDays]
+ * is grouped-by-calendar-day, newest first, so the chevrons step by DAY not by flat session
+ * index — a WHOOP 4.0 user with a single detected night has exactly one stop (both arrows
+ * correctly disabled) instead of arrows that move within naps/split blocks of one night and
+ * appear stuck (#57/#59). Mirrors iOS SleepView.decodedNight(at:)/navDays.
+ *
+ * The day's REPRESENTATIVE session is its last-ending block (the night's wake) — that carries
+ * the wake time the daily-metric model + clock label key off. Clamped so a stale offset after a
+ * data change shows the oldest day rather than nothing. The day key tries UTC then local-tz
+ * attribution of the wake timestamp — imported DailyMetric.day is local-tz while dayString is
+ * UTC, so a near-midnight-UTC wake needs the second key; both derive from THIS session's endTs,
+ * never another night. (#160)
  */
 internal fun selectNight(
-    sleeps: List<SleepSession>,
+    navDays: List<List<SleepSession>>,
     days: List<DailyMetric>,
     offset: Int,
 ): HeroNight? {
-    if (sleeps.isEmpty()) return null
-    val idx = (sleeps.size - 1 - offset).coerceIn(0, sleeps.size - 1)
-    val session = sleeps[idx]
+    if (navDays.isEmpty()) return null
+    val dayIdx = offset.coerceIn(0, navDays.size - 1)
+    val blocks = navDays[dayIdx]
+    val session = blocks.maxByOrNull { it.endTs } ?: return null
     val utcKey = AnalyticsEngine.dayString(session.endTs)
     val localKey = localDayString(session.endTs)
     val dayKey = listOf(utcKey, localKey).firstOrNull { key ->

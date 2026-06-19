@@ -130,10 +130,17 @@ struct StressView: View {
         // The sustained-stress suggestion opens the existing Breathe trainer in a sheet —
         // in-app and passive (no alert / notification), inheriting the app environment.
         .sheet(isPresented: $showBreathe) {
-            NavigationStack { BreathingView() }
-                #if os(macOS)
-                .frame(width: 520, height: 760)
-                #endif
+            NavigationStack {
+                BreathingView()
+                    .toolbar {
+                        ToolbarItem {
+                            Button("Done") { showBreathe = false }
+                        }
+                    }
+            }
+            #if os(macOS)
+            .frame(width: 520, height: 760)
+            #endif
         }
     }
 

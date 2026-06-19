@@ -376,7 +376,10 @@ class WhoopBleClient(
         // (CoreBluetooth does this implicitly via setNotifyValue; Android requires the explicit write).
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        /** Auto-rescan delay after an unintentional disconnect (BLEManager: "rescanning in 3s"). */
+        /** Fixed rescan delay for the firmware-reset / stale-OS-bond re-pair path ONLY — that path
+         *  deliberately KEEPS scanning at a steady 3s so a fresh re-pair is picked up promptly, so it
+         *  stays un-backed-off. The ordinary involuntary-reconnect paths use the capped-exponential
+         *  [ReconnectBackoff] instead (#48). (BLEManager: "rescanning in 3s".) */
         private const val RECONNECT_DELAY_MS = 3_000L
         /** Give up a scan after this long with no strap found, and tell the user why. */
         private const val SCAN_TIMEOUT_MS = 20_000L
@@ -423,6 +426,23 @@ class WhoopBleClient(
         /** Proceed to service discovery even if onMtuChanged never fires (some stacks ignore
          *  requestMtu); keeps connect from stalling behind the MTU exchange. */
         private const val MTU_FALLBACK_MS = 1_500L
+        /** Bonded-handshake watchdog (#50): if no genuine bond lands within this of service discovery
+         *  starting, bounce the link rather than sit forever in "finishing secure handshake" (OnePlus
+         *  Nord 2 wedged the post-discovery bond/CCCD phase, which had no timeout). 7s comfortably
+         *  spans the MTU exchange → discovery → CCCD drain → confirmed bond write on a healthy link. */
+        private const val BOND_WATCHDOG_MS = 7_000L
+
+        /** ATT error codes the GATT stack surfaces as `status` when a strap refuses the encrypted bond —
+         *  the Android analogue of CoreBluetooth's "Encryption/Authentication is insufficient" error the
+         *  iOS #52 path keys on. Equal to BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION/_ENCRYPTION;
+         *  pinned here as raw values because the underlying ATT codes are what some stacks pass through. */
+        private const val GATT_INSUFFICIENT_AUTHENTICATION = 5    // BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION
+        private const val GATT_INSUFFICIENT_ENCRYPTION = 15       // BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION
+        /** Consecutive bond refusals on the pinned strap before handing the pin off to a different,
+         *  live-bonding strap (#52). 3 (not 1): a single "insufficient" can be a transient just-works
+         *  race; three in a row on the pin while ANOTHER strap bonds fine is an unrecoverable stale pin.
+         *  Mirrors the iOS `pinBondRefusalLimit`. */
+        private const val PIN_BOND_REFUSAL_LIMIT = 3
 
         /** 5/MG raw-capture file (app filesDir; shared via Settings → "Share 5/MG capture"). */
         const val WHOOP5_CAPTURE_FILE = "whoop5-backfill-capture.jsonl"
@@ -670,9 +690,20 @@ class WhoopBleClient(
      * connects to the FIRST WHOOP discovered. The app sets this to the active device's persisted
      * `peripheralId`; setting it does NOT start/stop/redirect an in-flight connection on its own. Mirrors
      * macOS `BLEManager.preferredPeripheralUUID`.
+     *
+     * Backed by [_preferredAddress] so the setter can reset the #52 bond-refusal streak when a genuinely
+     * NEW pin is set (the old streak belonged to the previous strap). Re-applying the SAME pin — the
+     * common no-op when the active device doesn't change — preserves an in-progress count. Mirrors iOS
+     * `setPreferredPeripheral`. The public read/write contract is unchanged for existing call sites.
      */
     @Volatile
-    var preferredAddress: String? = null
+    private var _preferredAddress: String? = null
+    var preferredAddress: String?
+        get() = _preferredAddress
+        set(value) {
+            if (!value.equals(_preferredAddress, ignoreCase = true)) pinnedBondRefusals = 0
+            _preferredAddress = value
+        }
 
     /** True when [dev] is the strap we're pinned to — or when no pin is set (single-WHOOP default, any
      *  WHOOP acceptable). The involuntary-reconnect fast paths consult this so they can never re-attach to a
@@ -1824,6 +1855,142 @@ class WhoopBleClient(
      *  nag the user. Reset to 0 on any genuine bond. (5/MG firmware reset parity, 2026-06) */
     private var staleDirectFailures = 0
 
+    /** Consecutive involuntary reconnect attempts, feeding the capped-exponential [ReconnectBackoff]
+     *  (3, 6, 12, 24, 48, 60s…). Replaces the old fixed [RECONNECT_DELAY_MS] rescan loop so a strap
+     *  that's genuinely out of range stops hammering BLE — the Android twin of the iOS
+     *  failedConnectAttempts schedule (BLEManager.swift didFailToConnect, #414). Bumped per scheduled
+     *  reconnect; reset to 0 on STATE_CONNECTED and on an explicit user Connect. @Volatile because the
+     *  GATT callbacks (where it's read/reset) land on binder-pool threads on API 26/27. (#48, adopt
+     *  from ryanbr — reimplemented under NoopApp) */
+    @Volatile
+    private var failedReconnectAttempts = 0
+
+    /** Bump the attempt counter and return the next backoff delay. Called from the disconnect path
+     *  in place of the fixed [RECONNECT_DELAY_MS]. */
+    private fun nextReconnectDelayMs(): Long {
+        failedReconnectAttempts++
+        return ReconnectBackoff.nextDelayMs(failedReconnectAttempts)
+    }
+
+    /** Clear the backoff so the next reconnect starts back at the 3s base — fired on a successful
+     *  connect and on an explicit user-driven Connect (which must not inherit an accumulated delay). */
+    fun resetReconnectBackoff() {
+        failedReconnectAttempts = 0
+    }
+
+    /** Bonded-handshake watchdog (#50): every other connect phase has a timeout (scan; MTU fallback;
+     *  keep-alive) but the post-discovery bond/CCCD handshake had none — so a WHOOP 4.0 that wedges
+     *  in "finishing secure handshake" (OnePlus Nord 2, #50) never bounced, and keep-alive recovery
+     *  bails before [didBond]. This bonded-INDEPENDENT watchdog bounces the link if no genuine bond
+     *  lands within [BOND_WATCHDOG_MS], mirroring the MTU fallback. Armed when service discovery
+     *  starts; cancelled on bond and in reset/teardown. */
+    private val bondWatchdogRunnable = Runnable { onBondWatchdog() }
+
+    @SuppressLint("MissingPermission")
+    private fun onBondWatchdog() {
+        // Already bonded (or torn down) — nothing wedged; the cancel sites normally beat us here, but
+        // a late post on a binder-pool thread could still fire, so re-check before bouncing.
+        if (didBond || gatt == null) return
+        log("Bond handshake stuck for ${BOND_WATCHDOG_MS / 1000}s — bouncing link to retry (#50)")
+        // Make the auto-reconnect fire (this is an involuntary bounce, not a user disconnect), then
+        // drop the link. gatt.disconnect() throwing on a dead binder (#314) must not crash from a
+        // timer — fall through to a clean teardown if it does (mirrors the keep-alive bounce).
+        intentionalDisconnect = false
+        try {
+            gatt?.disconnect()   // → handleDisconnect → reset() (cancels this) → backoff reconnect
+        } catch (t: Throwable) {
+            log("bond watchdog bounce: gatt.disconnect() threw ${t.javaClass.simpleName}; tearing down")
+            teardownAfterGattFailure()
+        }
+    }
+
+    private fun armBondWatchdog() {
+        handler.removeCallbacks(bondWatchdogRunnable)
+        handler.postDelayed(bondWatchdogRunnable, BOND_WATCHDOG_MS)
+    }
+
+    private fun cancelBondWatchdog() {
+        handler.removeCallbacks(bondWatchdogRunnable)
+    }
+
+    // MARK: Multi-WHOOP stale-pin recovery (#52) — Android twin of the iOS bond-fallback. When a pinned
+    // strap keeps refusing the encrypted bond but a DIFFERENT WHOOP bonded fine this run, hand the pin to
+    // the working strap rather than looping forever on the dead pin (which would also leave buzz/haptics
+    // dead, since they gate on encryptedBond). Reimplemented under NoopApp, mirroring BLEManager's
+    // pinnedBondRefusals/lastBondedPeripheralUUID/noteGenuineBond/readoptWorkingStrap.
+
+    /** Address of the last strap that reached a GENUINE encrypted bond this run — the live working strap
+     *  the registry pin should point at if the pinned one keeps refusing. Null until anything bonds.
+     *  @Volatile: written from the GATT bond callback (binder-pool thread on API 26/27). */
+    @Volatile
+    private var lastBondedAddress: String? = null
+
+    /** Consecutive INSUFFICIENT_AUTH/ENCRYPTION bond refusals on the CURRENTLY PINNED strap. A stale pin
+     *  (pointing at a strap bonded elsewhere / not really here) makes [connect] drop the strap that DOES
+     *  bond and loop on the dead pin. Counted here; cleared by any genuine bond. @Volatile — same thread
+     *  rationale as above. */
+    @Volatile
+    private var pinnedBondRefusals = 0
+
+    /** A genuine bond this run: [address] is a live working strap (re-adopt target), and a bond proves no
+     *  stale pin is wedging us — so clear the refusal streak. Twin of iOS `noteGenuineBond`. */
+    private fun noteGenuineBond(address: String?) {
+        if (address != null) lastBondedAddress = address
+        pinnedBondRefusals = 0
+    }
+
+    /** Count an encrypted-bond refusal IF it happened on the pinned strap, and once the streak reaches
+     *  [PIN_BOND_REFUSAL_LIMIT] hand the pin to a different strap that bonded fine this run. [status] must
+     *  be an insufficient-auth/encryption GATT code; other failures (BUSY, etc.) don't implicate the pin.
+     *  No-op on the single-WHOOP path ([preferredAddress] null). Twin of the iOS didWriteValueFor block. */
+    @SuppressLint("MissingPermission")
+    private fun noteBondRefusalIfPinned(failedAddress: String?, status: Int) {
+        if (!isInsufficientAuthStatus(status)) return
+        if (didBond) return   // a refusal AFTER we already bonded this run isn't a stale-pin signal
+        val pinned = preferredAddress ?: return                 // single-WHOOP: nothing to re-adopt
+        if (failedAddress == null || !failedAddress.equals(pinned, ignoreCase = true)) return
+        pinnedBondRefusals++
+        log("Multi-WHOOP: pinned strap $pinned refused the encrypted bond (status=$status, refusal $pinnedBondRefusals/$PIN_BOND_REFUSAL_LIMIT)")
+        val working = lastBondedAddress
+        if (pinnedBondRefusals >= PIN_BOND_REFUSAL_LIMIT && working != null && !working.equals(pinned, ignoreCase = true)) {
+            readoptWorkingStrap(working = working, awayFrom = pinned)
+        }
+    }
+
+    /** Break out of the dead-pin loop and re-adopt the live-bonding [working] strap (#52), away from the
+     *  pinned [awayFrom] one that keeps refusing the encrypted bond. Clears [preferredAddress] so the scan
+     *  stops filtering to the dead strap — [working] (and any other WHOOP) is then eligible — and drops the
+     *  dead-pin link so the auto-rescan reconnects. On reconnect, STATE_CONNECTED republishes the strap's
+     *  address on the [connectedPeripheralAddress] seam the SourceCoordinator observes, so the registry's
+     *  identity adoption runs through its normal first-connect path. (The registry re-point itself lives in
+     *  the SourceCoordinator; this BLE side just stops the loop and frees the working strap to connect.) */
+    @SuppressLint("MissingPermission")
+    private fun readoptWorkingStrap(working: String, awayFrom: String) {
+        log("Multi-WHOOP: pinned strap $awayFrom unreachable after $pinnedBondRefusals bond refusals — re-adopting the live strap $working")
+        pinnedBondRefusals = 0
+        // Drop the dead pin so onScanResult no longer ignores every OTHER WHOOP. The app re-asserts a pin
+        // from the registry on the next active-device change; until then any bonded WHOOP is acceptable
+        // (the single-WHOOP default), which is exactly the recovery we want — [working] can now connect.
+        preferredAddress = null
+        lastDevice = null   // don't fast-path reconnect to the dead-pin handle; rescan picks the working strap
+        // Bonding the dead-pin link is still in teardown here, so route through the normal scan-based
+        // connect — onScanResult (pin now null) connects to the working strap when it advertises.
+        resetReconnectBackoff()   // a deliberate re-adopt, not an out-of-range retry — start fresh
+        intentionalDisconnect = false
+        try {
+            gatt?.disconnect()   // drop the dead-pin link → handleDisconnect → rescan (pin cleared)
+        } catch (t: Throwable) {
+            log("re-adopt: gatt.disconnect() threw ${t.javaClass.simpleName}; tearing down")
+            teardownAfterGattFailure()
+        }
+    }
+
+    /** True for the GATT statuses that mean the strap refused the encrypted bond: INSUFFICIENT_AUTHENTICATION
+     *  (5) and INSUFFICIENT_ENCRYPTION (15) — the Android analogue of CoreBluetooth's "Encryption/Authentication
+     *  is insufficient" error string the iOS #52 path keys on. */
+    private fun isInsufficientAuthStatus(status: Int): Boolean =
+        status == GATT_INSUFFICIENT_AUTHENTICATION || status == GATT_INSUFFICIENT_ENCRYPTION
+
     /** Guards the once-per-connect service-discovery kick. Discovery is deferred behind an MTU request
      *  (and a fallback timeout), so this ensures it fires EXACTLY once whichever path wins. AtomicBoolean
      *  (not @Volatile): on API 26/27 the GATT callbacks land on binder-pool threads, so onMtuChanged and
@@ -1837,6 +2004,11 @@ class WhoopBleClient(
         if (!serviceDiscoveryKicked.compareAndSet(false, true)) return
         val ops = gattOps ?: return
         log("Discovering services ($reason)")
+        // Arm the bonded-independent handshake watchdog (#50): from here the post-discovery bond/CCCD
+        // phase runs, and it's the one connect stage that previously had no timeout. If [didBond] is
+        // still false after BOND_WATCHDOG_MS, [onBondWatchdog] bounces the link. Cancelled on bond and
+        // in reset/teardown. Once-per-connection because kickServiceDiscovery is idempotent.
+        armBondWatchdog()
         // safeGatt: discovery on a dead binder (radio off, #314) tears down rather than crashing.
         safeGatt("discoverServices") { ops.discoverServicesCompat() }
     }
@@ -1893,6 +2065,9 @@ class WhoopBleClient(
                 BluetoothProfile.STATE_CONNECTED -> {
                     // Port of didConnect: mark connected, negotiate a larger ATT MTU, THEN discover.
                     handler.removeCallbacks(scanTimeoutRunnable)
+                    // A successful connect clears the reconnect backoff — the next involuntary drop
+                    // starts the 3,6,12…s schedule afresh (iOS didConnect: failedConnectAttempts=0, #48).
+                    resetReconnectBackoff()
                     _state.value = _state.value.copy(connected = true, advertisingName = g.device.name, scanning = false, statusNote = null, encryptedBond = false, reconnectGuide = null)
                     // Multi-WHOOP: publish the connected strap's stable BLE address so SourceCoordinator can
                     // adopt it onto the active registry device's peripheralId on first connect. Additive twin
@@ -2008,12 +2183,23 @@ class WhoopBleClient(
             // Port of didWriteValueFor: a CONFIRMED-write completion (no error) == bonding succeeded.
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 log("Confirmed write failed: status=$status")
+                // Multi-WHOOP stale-pin recovery (#52). A status of INSUFFICIENT_AUTHENTICATION (5) /
+                // INSUFFICIENT_ENCRYPTION (15) on the bond write == the strap refused the encrypted bond
+                // (the Android twin of the iOS "Encryption/Authentication is insufficient" error). When a
+                // STALE registry pin points at a strap that keeps refusing but a DIFFERENT strap bonded
+                // fine this run, connect() otherwise drops the working strap and loops forever on the dead
+                // pin (encryptedBond never turns true, which also kills buzz/haptics that gate on it).
+                // Count consecutive refusals on the PINNED strap; after the limit, hand the pin to the
+                // live-bonding strap so the registry re-adopts it. (Reimplemented under NoopApp, #52.)
+                noteBondRefusalIfPinned(g.device.address, status)
             } else if (!didBond && connectedFamily == DeviceFamily.WHOOP5) {
                 // EXPERIMENTAL (issue #17): the CLIENT_HELLO is now a confirmed write, so this ACK means
                 // just-works bonding completed. Now subscribe the puffin notify chars (realtime HR rides
                 // these as REALTIME_DATA — the strap rejected them on the unauthenticated link), then arm
                 // realtime HR with puffin framing. Mirrors the macOS post-bond flow.
                 didBond = true
+                cancelBondWatchdog()          // genuine bond reached — the handshake watchdog stands down (#50)
+                noteGenuineBond(g.device.address)   // #52: this strap bonds fine; clears any pin-refusal streak
                 bondedDirectAttempt = false   // fast-path connect reached a real session (#78 fork)
                 staleDirectFailures = 0       // genuine bond — clear the wiped-bond counter (#84 parity)
                 _state.value = _state.value.copy(bonded = true, encryptedBond = true)   // genuine bond (#69)
@@ -2031,6 +2217,8 @@ class WhoopBleClient(
                 if (wantsRealtime) { realtimeArmed = true; send(CommandNumber.TOGGLE_REALTIME_HR, byteArrayOf(1)) }
             } else if (!didBond && connectedFamily == DeviceFamily.WHOOP4) {
                 didBond = true
+                cancelBondWatchdog()          // secure handshake completed — stand the watchdog down (#50)
+                noteGenuineBond(g.device.address)   // #52: this strap bonds fine; clears any pin-refusal streak
                 _state.value = _state.value.copy(bonded = true, encryptedBond = true)   // WHOOP4 bond is genuine (#69)
                 log("BONDED (confirmed write acknowledged) — custom channels should now flow")
             }
@@ -3532,15 +3720,20 @@ class WhoopBleClient(
                 // fall through to the pin-aware rescan below (mirrors macOS re-asserting the pin on every
                 // reconnect). On the single-WHOOP path [preferredAddress] is null → isPreferred is always
                 // true → byte-for-byte unchanged.
-                log("Disconnected (status=$status); reconnecting directly in ${RECONNECT_DELAY_MS / 1000}s")
+                // Capped-exponential backoff (3,6,12,24,48,60s) so a strap that's genuinely out of
+                // range stops hammering BLE — replaces the old fixed RECONNECT_DELAY_MS. The counter
+                // resets on the next STATE_CONNECTED and on an explicit user Connect. (#48)
+                val directDelay = nextReconnectDelayMs()
+                log("Disconnected (status=$status); reconnecting directly in ${directDelay / 1000}s (attempt $failedReconnectAttempts)")
                 handler.postDelayed({
                     if (!intentionalDisconnect) connectToDevice(dev, autoConnect = true)
-                }, RECONNECT_DELAY_MS)
+                }, directDelay)
             } else {
-                log("Disconnected (status=$status); rescanning in ${RECONNECT_DELAY_MS / 1000}s")
+                val rescanDelay = nextReconnectDelayMs()
+                log("Disconnected (status=$status); rescanning in ${rescanDelay / 1000}s (attempt $failedReconnectAttempts)")
                 handler.postDelayed({
                     if (!intentionalDisconnect) connect(selectedModel)
-                }, RECONNECT_DELAY_MS)
+                }, rescanDelay)
             }
         } else {
             log("Disconnected (intentional)")
@@ -3592,6 +3785,9 @@ class WhoopBleClient(
         handler.removeCallbacks(backfillTimeoutRunnable)
         stopBackfillTimer()
         stopKeepAlive()
+        // The bonded-handshake watchdog (#50) is per-connection — cancel it so a pending bounce can't
+        // fire after the link is already down (it would otherwise re-enter a dead/null gatt).
+        cancelBondWatchdog()
 
         // Fresh reassembler per connection. The macOS BLEManager reassigns a NEW Reassembler on each
         // connect (BLEManager.swift:183); matching that here stops a partial/garbage frame left over

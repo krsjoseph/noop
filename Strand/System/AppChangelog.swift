@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "5.1.2"
+    static let currentVersion = "5.2.0"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,18 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "5.2.0",
+            title: "Connection & sleep fixes — a focused tune-up",
+            date: "June 2026",
+            items: [
+                "**Fixed (WHOOP 5/MG): pairing could get stuck and the buzz go silent.** If your strap had been re-paired or reset, NOOP could latch onto an old Bluetooth identity, fail to finish the secure bond and loop forever — which also stopped haptics. NOOP now notices a strap that *is* bonding fine and switches to it. (iPhone, Mac & Android.)",
+                "**Fixed (WHOOP 4.0 on some Androids): stuck on \"finishing the secure handshake\".** On phones whose Bluetooth double-fires the connection setup (seen on OnePlus), pairing could wedge with no way out — NOOP now bounces and retries automatically instead of hanging.",
+                "**Fixed (Android): the Sleep tab could get stuck on a single night.** The date arrows now step by day, so newer nights show up and the arrows behave.",
+                "**Fixed (Mac): the Breathe session opened from Stress had no close button** — added a **Done** button so you're never trapped.",
+                "**Fixed: the strap battery badge could overlap the date** in the home header. Tidied up — the battery still shows on your dashboard. (iPhone & Android.)",
+                "**Smarter reconnect when your strap's out of range** — NOOP backs off gradually instead of rescanning on a fixed timer (easier on battery), and reconnects instantly the moment you tap Connect. Thanks to **ryanbr** for the contribution. (Android — matches iPhone & Mac.)",
+            ]),
         Release(
             version: "5.1.2",
             title: "Design polish & cross-platform parity",

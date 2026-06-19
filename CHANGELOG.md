@@ -17,6 +17,17 @@ approximate; downloads are on the [Releases](https://noop.fans/NoopApp/noop/rele
 
 ---
 
+## 5.2.0 — connection & sleep fixes (all platforms)
+
+A focused fix release from the board, verified against source on all three platforms.
+
+- **Fixed (WHOOP 5/MG):** pairing could get stuck and haptics go silent when a strap had been re-paired/reset and NOOP clung to a stale Bluetooth identity. NOOP now detects a strap that is bonding correctly and adopts it (iPhone, Mac & Android).
+- **Fixed (WHOOP 4.0, some Androids):** "finishing the secure handshake" could wedge forever on phones whose Bluetooth double-fires connection setup (e.g. OnePlus) — a watchdog now bounces and retries automatically.
+- **Fixed (Android):** the Sleep tab could get stuck on a single night; the date arrows now step by calendar day (parity with iPhone/Mac).
+- **Fixed (Mac):** the Breathe session opened from Stress had no close button — added a **Done** control.
+- **Fixed:** the strap battery badge could overlap the date in the home header (iPhone & Android); the battery still shows on the dashboard.
+- **Smarter reconnect (Android):** exponential backoff when the strap is out of range instead of a fixed-interval rescan (lighter on battery), reset instantly on an explicit Connect — matches iPhone/Mac. Thanks to **ryanbr** for the contribution.
+
 ## 5.1.2 — design polish & cross-platform parity (all platforms)
 
 A refinement release focused on making iPhone, Mac and Android look and behave the same.

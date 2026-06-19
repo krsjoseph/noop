@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Air
-import androidx.compose.material.icons.filled.Battery5Bar
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -410,10 +409,12 @@ fun TodayScreen(
         topPadding = 12.dp,
     ) {
         // Compact top bar: profile/settings avatar (leading) · ‹ day-nav › (centred, bold, tap-to-pick)
-        // · strap battery → bell → + (trailing cluster). Replaces the big title + the standalone
-        // full-width day-selector pill (WHOOP-style). The day-nav label is driven by THIS screen's own
-        // selectedDayOffset/selectedDay (not DayNavBar's internal LocalDate.now()) so the header label
-        // and the data day never drift. The night-streak chip is dropped (no iOS equivalent).
+        // · bell → + (trailing cluster). Replaces the big title + the standalone full-width
+        // day-selector pill (WHOOP-style). The strap-battery reading lives on the dashboard Sources row
+        // (#57 — the header badge that duplicated it overlapped the day-nav label). The day-nav label is
+        // driven by THIS screen's own selectedDayOffset/selectedDay (not DayNavBar's internal
+        // LocalDate.now()) so the header label and the data day never drift. The night-streak chip is
+        // dropped (no iOS equivalent).
         TodayTopBar(
             dayLabel = dayNavShortLabel(selectedDayOffset, selectedDay),
             selectedDay = selectedDay,
@@ -421,7 +422,6 @@ fun TodayScreen(
             onOlder = { selectedDayOffset += 1 },
             onNewer = { if (selectedDayOffset > 0) selectedDayOffset -= 1 },
             onPickDay = { offset -> selectedDayOffset = offset },
-            batteryPct = if (live.connected) live.batteryPct?.roundToInt() else null,
             updateStore = updateStore,
             onOpenUpdates = onOpenUpdates,
             onQuickActions = onQuickActions,
@@ -825,7 +825,6 @@ private fun TodayTopBar(
     onOlder: () -> Unit,
     onNewer: () -> Unit,
     onPickDay: (Int) -> Unit,
-    batteryPct: Int?,
     updateStore: UpdateStore?,
     onOpenUpdates: () -> Unit,
     onQuickActions: () -> Unit,
@@ -899,7 +898,9 @@ private fun TodayTopBar(
                 onClick = { if (canGoNewer) onNewer() },
             )
         }
-        // Sides — profile/settings (leading) + the battery → bell → + cluster (trailing).
+        // Sides — profile/settings (leading) + the bell → + cluster (trailing). The strap-battery
+        // reading lives on the dashboard Sources row (#57 removed the duplicate header badge that
+        // overlapped the centred day-nav label).
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -919,25 +920,7 @@ private fun TodayTopBar(
                 ProfileAvatar(size = 26.dp)
             }
             Spacer(Modifier.weight(1f))
-            // Strap-battery badge (when connected + a live reading exists): percentage + a small glyph.
-            if (batteryPct != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Battery5Bar,
-                        contentDescription = "Strap battery $batteryPct percent",
-                        tint = Palette.textTertiary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        "$batteryPct%",
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                        modifier = Modifier.padding(start = Metrics.space2),
-                    )
-                }
-                Spacer(Modifier.width(Metrics.space8))
-            }
-            // The Updates "ringer" — between the battery and the +. Bell with a gold unread badge.
+            // The Updates "ringer" — before the +. Bell with a gold unread badge.
             if (updateStore != null) {
                 UpdateBell(unreadCount = updateStore.unreadCount, onClick = onOpenUpdates)
                 Spacer(Modifier.width(Metrics.space8))

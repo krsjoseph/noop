@@ -226,8 +226,13 @@ final class SourceCoordinator: ObservableObject {
     /// Guards (so this never corrupts the registry):
     ///   • nil uuid (a disconnect/never-connected republish) → ignore.
     ///   • the active device is NOT a WHOOP (a generic strap is active) → ignore; this connection isn't ours.
-    ///   • the active WHOOP already has a DIFFERENT non-nil peripheralId → a different strap connected;
-    ///     LOG it and do NOT clobber the stored identity.
+    ///   • the active WHOOP already has a DIFFERENT non-nil peripheralId → a different strap connected:
+    ///     - normally LOG it and do NOT clobber the stored identity (`didConnect` publishes pre-bond, so
+    ///       `encryptedBond` is false — could be a transient/other strap; mis-mapping it would be wrong).
+    ///     - BUT when this republish lands with `encryptedBond == true`, it's the BLEManager #52 stale-pin
+    ///       handoff confirming a genuine bond on the live working strap (the only path that republishes
+    ///       `connectedPeripheralUUID` post-bond). The stored pin is dead (it refused the bond N× in a row);
+    ///       RE-ADOPT the working strap so we stop looping on the strap that won't bond. See #52.
     ///   • it already matches → nothing to write.
     private func connectedPeripheralChanged(to uuid: String?) {
         guard let uuid else { return }
@@ -243,9 +248,18 @@ final class SourceCoordinator: ObservableObject {
         case .some(uuid):
             break                               // already adopted this exact strap → nothing to do
         case .some(let existing):
-            // A DIFFERENT strap connected under this WHOOP row. Never silently overwrite — that would
-            // mis-map another physical strap's samples onto this device. Log and leave the stored id.
-            live.append(log: "Multi-WHOOP: active device \(activeId) is registered to strap \(existing) but \(uuid) connected — not overwriting.")
+            // A DIFFERENT strap connected under this WHOOP row. Re-adopt ONLY when this is the #52 stale-pin
+            // handoff — i.e. the engine is genuinely encrypted-bonded to the strap whose id just arrived.
+            // BLEManager only republishes `connectedPeripheralUUID` with `encryptedBond` true as that vetted
+            // handoff (after the pinned strap refused the bond N× while this one bonded); an ordinary
+            // pre-bond `didConnect` publish always carries `encryptedBond == false`, so the protective
+            // "don't clobber" path below is preserved for every normal/transient different-strap connect.
+            if live.encryptedBond {
+                live.append(log: "Multi-WHOOP (#52): active device \(activeId) was pinned to strap \(existing) which refused to bond — re-adopting the working strap \(uuid).")
+                registry.setPeripheralId(activeId, peripheralId: uuid)
+            } else {
+                live.append(log: "Multi-WHOOP: active device \(activeId) is registered to strap \(existing) but \(uuid) connected — not overwriting.")
+            }
         }
     }
 

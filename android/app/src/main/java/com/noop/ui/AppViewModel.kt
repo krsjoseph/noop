@@ -809,6 +809,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // MARK: - Strap controls (thin pass-throughs to the BLE client)
 
     fun connect(promoteService: Boolean = true) {
+        // An explicit user-driven Connect must start the reconnect schedule fresh — never inherit a
+        // backoff delay accumulated by a prior involuntary-reconnect loop (#48, iOS connect() parity).
+        ble.resetReconnectBackoff()
         ble.connect(_selectedModel.value)
         // Keep the link alive when the app is closed, unless the user has opted out. Started from the
         // foreground (this is a user tap), so Android 12+'s background-start rule is satisfied.

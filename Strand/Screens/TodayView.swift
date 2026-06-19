@@ -311,7 +311,9 @@ struct TodayView: View {
                     if selectedDayOffset > 0 { selectedDayOffset -= 1 }
                 }
             }
-            // Sides — profile/settings (leading) + strap battery (trailing).
+            // Sides — profile/settings (leading) + updates/quick-action (trailing). The strap-battery
+            // reading lives on the dashboard metrics row (#57 removed the duplicate header badge that
+            // overlapped the day-nav label).
             HStack {
                 Button { showSettings = true } label: {
                     // Shows the user's chosen profile photo (Circle-cropped) if set, else the
@@ -322,9 +324,8 @@ struct TodayView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Profile and settings")
                 Spacer()
-                StrapBatteryBadge(pct: live.batteryPct)
-                // Updates "ringer" — between the battery badge and the +. Bell with a gold unread badge.
-                updateBell.padding(.leading, 6)
+                // Updates "ringer" — before the +. Bell with a gold unread badge.
+                updateBell
                 // Quick-action "+" — moved here from the tab bar to balance the avatar on the left and
                 // free the bottom bar to four clean tabs. Routes to the shell's quick-action sheet.
                 Button { router.requestQuickActions() } label: {
@@ -1123,38 +1124,6 @@ struct TodayView: View {
     @ViewBuilder
     private func ringNoData() -> some View {
         Text("No data").font(StrandFont.headline).foregroundStyle(StrandPalette.textSecondary)
-    }
-
-    /// Strap-battery badge for the Today header (WHOOP-style): the percentage + a clean custom battery
-    /// glyph that fills proportionally and turns red when low. Renders nothing until the strap reports a
-    /// battery level, so a disconnected/sim state shows no stray icon.
-    private struct StrapBatteryBadge: View {
-        let pct: Double?
-        var body: some View {
-            if let pct {
-                let frac = max(0.06, min(1, pct / 100))
-                let fill = pct <= 15 ? StrandPalette.statusCritical : StrandPalette.textSecondary
-                HStack(spacing: 6) {
-                    Text("\(Int(pct.rounded()))%")
-                        .font(StrandFont.captionNumber)
-                        .foregroundStyle(StrandPalette.textSecondary)
-                    HStack(spacing: 1.5) {
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .stroke(StrandPalette.textTertiary, lineWidth: 1.5)
-                                .frame(width: 24, height: 12)
-                            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .fill(fill)
-                                .frame(width: max(2, 20 * frac), height: 7)
-                                .padding(.leading, 2)
-                        }
-                        Capsule().fill(StrandPalette.textTertiary).frame(width: 2, height: 5)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Strap battery \(Int(pct.rounded())) percent")
-            }
-        }
     }
 
     // MARK: HEART RATE — today's continuous HR, off the strap's own ~1Hz history.
