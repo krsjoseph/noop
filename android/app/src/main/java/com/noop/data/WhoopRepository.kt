@@ -345,6 +345,31 @@ class WhoopRepository(private val dao: WhoopDao) {
      *  the DAO query; keyed by the IMMUTABLE detected [detectedStartTs]. Returns rows changed. */
     suspend fun updateSleepStages(deviceId: String, detectedStartTs: Long, stagesJSON: String): Int =
         dao.updateSleepStages(deviceId, detectedStartTs, stagesJSON)
+
+    // MARK: - Per-epoch sleep analytics (v18: motionJSON / sleepStateJSON). Banked beside stagesJSON on
+    // the sleepSession row; written/read through targeted methods so the @Upsert recompute/import path
+    // (which never names these columns) preserves them. Port of iOS WhoopStore.persist/sessionMotion +
+    // persist/sessionSleepState. HONESTY: an absent signal is stored as NULL and read back as null, never
+    // a fabricated zero series; an EMPTY input array clears the column.
+
+    /** Persist the SleepStager's per-epoch motion magnitudes for one session (H8), keyed by the immutable
+     *  detected [sessionStart]. Empty clears to NULL. Returns rows changed (0 when no such session). */
+    suspend fun persistSessionMotion(deviceId: String, sessionStart: Long, motionEpochs: List<Double>): Int =
+        dao.updateSessionMotion(deviceId, sessionStart, if (motionEpochs.isEmpty()) null else encodeDoubleArray(motionEpochs))
+
+    /** The persisted per-epoch motion magnitudes for one session, or null when unset / unparseable. */
+    suspend fun sessionMotion(deviceId: String, sessionStart: Long): List<Double>? =
+        dao.sessionMotionJson(deviceId, sessionStart)?.let { decodeDoubleArray(it) }
+
+    /** Persist the decoded v18 band sleep_state per epoch for one session (H2), keyed by [sessionStart].
+     *  Empty clears to NULL. Returns rows changed. */
+    suspend fun persistSessionSleepState(deviceId: String, sessionStart: Long, states: List<Int>): Int =
+        dao.updateSessionSleepState(deviceId, sessionStart, if (states.isEmpty()) null else encodeIntArray(states))
+
+    /** The persisted decoded v18 band sleep_state per epoch for one session, or null when unset. */
+    suspend fun sessionSleepState(deviceId: String, sessionStart: Long): List<Int>? =
+        dao.sessionSleepStateJson(deviceId, sessionStart)?.let { decodeIntArray(it) }
+
     suspend fun upsertMetricSeries(rows: List<MetricSeriesRow>) = dao.upsertMetricSeries(rows)
     suspend fun upsertJournal(rows: List<JournalEntry>) = dao.upsertJournal(rows)
     suspend fun upsertWorkouts(rows: List<WorkoutRow>) = dao.upsertWorkouts(rows)
@@ -617,15 +642,28 @@ class WhoopRepository(private val dao: WhoopDao) {
      * fill the days the import doesn't cover. Port of macOS Repository.mergeDaily.
      */
     suspend fun daysMerged(deviceId: String): List<DailyMetric> =
-        mergeDaily(imported = dao.days(deviceId), computed = dao.days(computedDeviceId(deviceId)))
+        mergeDaily(
+            imported = dao.days(deviceId),
+            computed = dao.days(computedDeviceId(deviceId)),
+            // H5 (#509): days the user hand-edited the sleep of (the edit lives under the computed source);
+            // on those days the computed sleep fields win over a re-imported night.
+            userEditedDays = userEditedDays(dao.editedSleepSessions(computedDeviceId(deviceId))),
+        )
 
     /**
      * Reactive merged daily metrics (oldest first): imported [deviceId] rows win per day,
      * computed "<deviceId>-noop" rows gap-fill. Emits whenever either source changes.
+     *
+     * H5 (#509): also keys off the computed source's user-edited sessions so a hand-edited night's sleep
+     * figures keep precedence over a re-imported night (and the chart re-emits when an edit lands).
      */
     fun daysMergedFlow(deviceId: String): Flow<List<DailyMetric>> =
-        dao.daysFlow(deviceId).combine(dao.daysFlow(computedDeviceId(deviceId))) { imported, computed ->
-            mergeDaily(imported = imported, computed = computed)
+        combine(
+            dao.daysFlow(deviceId),
+            dao.daysFlow(computedDeviceId(deviceId)),
+            dao.editedSleepSessionsFlow(computedDeviceId(deviceId)),
+        ) { imported, computed, edited ->
+            mergeDaily(imported = imported, computed = computed, userEditedDays = userEditedDays(edited))
         }
 
     /**
@@ -800,6 +838,34 @@ class WhoopRepository(private val dao: WhoopDao) {
         /** Build a repository backed by the process-wide singleton database. */
         fun from(context: Context): WhoopRepository = WhoopRepository(WhoopDatabase.get(context))
 
+        // MARK: - Compact per-epoch JSON (v18 motionJSON / sleepStateJSON), byte-equivalent with Swift's
+        // JSONEncoder/JSONDecoder on [Double] / [Int]: a bare `[..]` array, whole doubles emitted WITHOUT a
+        // trailing `.0` (Swift encodes 3.0 as `3`, 1.5 as `1.5`). Hand-built rather than org.json so the
+        // string round-trips identically across platforms; decode tolerates either form.
+
+        /** A single double in Swift JSONEncoder's form: an integral value as a bare integer (`3`, `0`),
+         *  otherwise its shortest decimal (`1.5`, `12.25`). */
+        internal fun encodeDouble(x: Double): String =
+            if (x.isFinite() && x == kotlin.math.floor(x) && !x.isInfinite()) x.toLong().toString() else x.toString()
+
+        internal fun encodeDoubleArray(xs: List<Double>): String =
+            xs.joinToString(separator = ",", prefix = "[", postfix = "]") { encodeDouble(it) }
+
+        internal fun encodeIntArray(xs: List<Int>): String =
+            xs.joinToString(separator = ",", prefix = "[", postfix = "]") { it.toString() }
+
+        /** Parse a bare JSON number array to doubles, or null when unparseable (absent stays absent). */
+        internal fun decodeDoubleArray(json: String): List<Double>? = runCatching {
+            val arr = org.json.JSONArray(json)
+            List(arr.length()) { arr.getDouble(it) }
+        }.getOrNull()
+
+        /** Parse a bare JSON number array to ints, or null when unparseable. */
+        internal fun decodeIntArray(json: String): List<Int>? = runCatching {
+            val arr = org.json.JSONArray(json)
+            List(arr.length()) { arr.getInt(it) }
+        }.getOrNull()
+
         /**
          * Candidate (source, key) pairs to try for [key], in precedence order, given the user's
          * [preferredSource]. The strap's real id is [strapDeviceId], so the computed sibling is
@@ -892,10 +958,16 @@ class WhoopRepository(private val dao: WhoopDao) {
          * Imported daily rows win per day; computed rows fill the days the import doesn't
          * cover. Returns oldest→newest by day string (lexicographic = chronological for
          * YYYY-MM-DD). Port of macOS Repository.mergeDaily.
+         *
+         * H5 (#509): a day in [userEditedDays] is one the user hand-edited the sleep of. For those days
+         * the COMPUTED row's SLEEP fields (the edit) take precedence over the import — otherwise a
+         * re-imported WHOOP/Apple night would silently mask the correction. Non-sleep fields still follow
+         * the imports-win merge, and every NON-edited day is unchanged (the default empty set).
          */
         internal fun mergeDaily(
             imported: List<DailyMetric>,
             computed: List<DailyMetric>,
+            userEditedDays: Set<String> = emptySet(),
         ): List<DailyMetric> {
             val byDay = LinkedHashMap<String, DailyMetric>()
             for (d in computed) byDay[d.day] = d // computed first…
@@ -911,7 +983,7 @@ class WhoopRepository(private val dao: WhoopDao) {
                 // though, writes a "my-whoop" row with recovery/strain/sleep-stages NULL — without this
                 // it would BLANK a strap-computed day (and a stale one already written stays blanked).
                 // Coalescing every nullable field both prevents that and HEALS days already shadowed. (#112)
-                byDay[d.day] = if (c == null) d else d.copy(
+                val merged = if (c == null) d else d.copy(
                     totalSleepMin = d.totalSleepMin ?: c.totalSleepMin,
                     efficiency = d.efficiency ?: c.efficiency,
                     deepMin = d.deepMin ?: c.deepMin,
@@ -929,8 +1001,36 @@ class WhoopRepository(private val dao: WhoopDao) {
                     steps = d.steps ?: c.steps,
                     activeKcalEst = d.activeKcalEst ?: c.activeKcalEst,
                 )
+                // H5: on an edited day, the computed (edit-derived) SLEEP fields win over the import.
+                byDay[d.day] = if (c != null && d.day in userEditedDays) {
+                    merged.copy(
+                        totalSleepMin = c.totalSleepMin,
+                        efficiency = c.efficiency,
+                        deepMin = c.deepMin,
+                        remMin = c.remMin,
+                        lightMin = c.lightMin,
+                        disturbances = c.disturbances,
+                    )
+                } else {
+                    merged
+                }
             }
             return byDay.values.sortedBy { it.day }
+        }
+
+        /**
+         * The set of LOCAL wake-days that carry a user-edited sleep session — keyed exactly as
+         * `DailyMetric.day` (the engine's offset-local-day keyer, matching [mergeSleep]'s endDay). Drives
+         * the H5 edit-merge precedence in [mergeDaily]. Port of macOS Repository.userEditedDays.
+         */
+        internal fun userEditedDays(sessions: List<SleepSession>): Set<String> {
+            val days = HashSet<String>()
+            for (s in sessions) {
+                if (!s.userEdited) continue
+                val offsetSec = (java.util.TimeZone.getDefault().getOffset(s.endTs * 1000) / 1000).toLong()
+                days.add(com.noop.analytics.AnalyticsEngine.dayString(s.endTs, offsetSec))
+            }
+            return days
         }
 
         /**

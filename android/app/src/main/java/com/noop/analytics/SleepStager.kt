@@ -112,6 +112,51 @@ object SleepStager {
      */
     const val daytimeRestingHRMult: Double = 0.95
 
+    // ── H4 physiological in-bed span cap (#547 / #531 / #509 / tail) ───────────
+    //
+    // Maximum plausible in-bed span (seconds) for a SINGLE assembled main-sleep run. No real single night
+    // runs longer than this: a 12 h+ "sleep" is a bad-clock artefact (a stale/duplicated timestamp range,
+    // or a strap that banked one frozen still stretch under a wrong clock) reading as one enormous still
+    // block — which then reports a 12 h sleep and poisons Rest / the debt ledger / the headline. 16 h is
+    // well above any genuine night yet below the clock-artefact range. A run whose span exceeds this is
+    // DROPPED (not silently truncated to 16 h, which would fabricate a wake time): an over-long block is
+    // not trustworthy enough to assert a span for at all. Mirrors Swift `maxMainSleepSpanS`.
+    const val maxMainSleepSpanS: Long = 16L * 60L * 60L
+
+    // ── H7 morning-stillness nap suppression (#531) ───────────────────────────
+    //
+    // After a real overnight wake the wrist is often still (sitting with coffee, back in bed scrolling, a
+    // sofa) for a stretch that the gravity spine reads as a fresh "nap" — #531's 9 am phantom nap right after
+    // the night ended. It is NOT a night-tail continuation (handled by nightContinuationGapMin and exempted),
+    // and it can clear the ordinary daytime guard (long + the post-wake HR is still low), so it slipped
+    // through. H7 holds a daytime block that BEGINS within morningStillnessWindowMin of the just-detected
+    // overnight wake to a STRONGER bar: it must show a genuine SUSTAINED re-onset — a real second sleep dips
+    // clearly below the day median, not merely near it. Mirrors Swift.
+
+    /** A daytime block whose onset falls within this many minutes AFTER an overnight chain's wake is treated
+     *  as suspected morning residual stillness and held to the stronger re-onset bar below. ~3 h covers the
+     *  post-wake window where residual stillness masquerades as a nap; a genuine afternoon nap (hours later)
+     *  is past it and faces only the ordinary daytime guard. Mirrors Swift `morningStillnessWindowMin`. (#531) */
+    const val morningStillnessWindowMin: Int = 180
+
+    /** The stronger resting-HR bar (× day baseline) a suspected-morning-stillness block must clear to be kept
+     *  as a real re-onset. Stricter than the ordinary daytime [daytimeRestingHRMult] (0.95): residual waking
+     *  stillness keeps a near-waking HR, so only a block that dips clearly (a true second sleep) survives.
+     *  Mirrors Swift `morningReonsetRestingHRMult`. (#531) */
+    const val morningReonsetRestingHRMult: Double = 0.90
+
+    /** The persisted v18 BAND sleep_state value that means "asleep" (Interpreter's `(sb>>4)&3`: 0 wake /
+     *  1 still / 2 asleep / 3 up). The strap's OWN scored band state — an independent anchor we CONSUME to
+     *  confirm a borderline morning re-onset (H7). Mirrors Swift `bandStateAsleep`. (#531 / H8 consume) */
+    const val bandStateAsleep: Int = 2
+
+    /** Fraction of a suspected-morning-stillness block's epochs whose persisted band sleep_state must read
+     *  "asleep" ([bandStateAsleep]) for the strap's OWN signal to CONFIRM a genuine re-onset and KEEP the
+     *  block even when its HR dip is borderline. A real second sleep the strap itself scored asleep is a
+     *  strong, honest anchor; a residual-stillness false nap reads "still"/"up", not "asleep". ≥0.6 keeps
+     *  this conservative. Mirrors Swift `morningReonsetBandAsleepFrac`. (H8 consume) */
+    const val morningReonsetBandAsleepFrac: Double = 0.6
+
     /** Seconds in a calendar day (for local-hour-of-day arithmetic). */
     const val secondsPerDay: Long = 86_400L
 
@@ -560,6 +605,55 @@ object SleepStager {
     }
 
     /**
+     * H7 morning-stillness nap suppression (#531). Returns true = KEEP, false = REJECT, for a daytime block
+     * [p] that begins shortly after a real overnight wake. [morningWakeEnd] is the end of the just-detected
+     * OVERNIGHT chain (null when the prior chain was not overnight, or there was none) — when [p].start is
+     * within [morningStillnessWindowMin] of it, the block is suspected morning residual stillness and must
+     * clear the ORDINARY daytime guard AND show a SUSTAINED re-onset: its resting HR must dip below the
+     * stronger [morningReonsetRestingHRMult] × baseline bar (a true second sleep, not near-waking stillness).
+     * Outside the morning window this is a no-op (returns the plain daytime-guard result), so a genuine
+     * afternoon nap is unaffected. Mirrors Swift `passesMorningStillnessGuard`. (#531)
+     */
+    internal fun passesMorningStillnessGuard(
+        p: Period,
+        restingHR: Int?,
+        baseline: Double?,
+        morningWakeEnd: Long?,
+        bandSleepState: List<Pair<Long, Int>> = emptyList(),
+    ): Boolean {
+        // Only a daytime block beginning within the post-wake window of an overnight chain is suspected.
+        if (morningWakeEnd == null || p.start < morningWakeEnd ||
+            (p.start - morningWakeEnd) > (morningStillnessWindowMin * 60).toLong()
+        ) {
+            return passesDaytimeGuard(p, restingHR, baseline)
+        }
+        // Suspected morning stillness needs at least the ordinary daytime guard (long enough + a real dip).
+        if (!passesDaytimeGuard(p, restingHR, baseline)) return false
+        // CONSUME the strap's OWN banked band sleep_state (#531 / H8): if the strap itself scored this block
+        // predominantly "asleep", that is a strong independent re-onset anchor — KEEP it even on a borderline
+        // HR dip. This only ever RESCUES a block the strap says was real sleep; it never fabricates one.
+        if (bandStateConfirmsAsleep(p, bandSleepState)) return true
+        // Otherwise require the clearly-deeper cardiac dip of a true second sleep.
+        if (baseline == null || restingHR == null) return false
+        return restingHR.toDouble() <= baseline * morningReonsetRestingHRMult
+    }
+
+    /**
+     * CONSUME-side helper (#531 / H8): true when the strap's OWN persisted v18 band sleep_state over the
+     * block [p.start, p.end] reads predominantly "asleep" ([bandStateAsleep]), at/above
+     * [morningReonsetBandAsleepFrac] of the in-block samples — an independent confirmation of a real
+     * re-onset. Empty/absent band state → false (no anchor → fall back to the HR bar); we never invent an
+     * "asleep" reading the strap did not bank. Pure + deterministic. Mirrors Swift `bandStateConfirmsAsleep`.
+     * (#531 / H8 consume)
+     */
+    internal fun bandStateConfirmsAsleep(p: Period, bandSleepState: List<Pair<Long, Int>>): Boolean {
+        val inBlock = bandSleepState.filter { it.first in p.start..p.end }
+        if (inBlock.isEmpty()) return false
+        val asleep = inBlock.count { it.second == bandStateAsleep }
+        return asleep.toDouble() / inBlock.size.toDouble() >= morningReonsetBandAsleepFrac
+    }
+
+    /**
      * Off-wrist HR-gap spans (#500). The contiguous HR-coverage gaps of at least [offWristHRGapMin]
      * minutes WITHIN [p.start, p.end], as concrete [start, end) sub-intervals — a strong wrist-OFF
      * proxy. Worn, the strap streams ~1 Hz HR (or PPG-derived HR on a 5/MG), so a real night yields no
@@ -654,6 +748,12 @@ object SleepStager {
         gravity: List<GravitySample>,
         tzOffsetSeconds: Long = 0L,
         wristOff: List<Pair<Long, Long>> = emptyList(),
+        // The strap's OWN persisted v18 BAND sleep_state per timestamp (Interpreter's `(sb shr 4) and 3`:
+        // 0 wake / 1 still / 2 asleep / 3 up), consumed ONLY to confirm a borderline H7 morning re-onset
+        // (#531): a daytime block the strap itself scored predominantly "asleep" is kept even on a borderline
+        // HR dip. Default empty keeps pure-function callers/tests free of it; IntelligenceEngine passes the
+        // night window's persisted band state. It can only RESCUE a real-sleep block, never fabricate. Mirrors Swift.
+        bandSleepState: List<Pair<Long, Int>> = emptyList(),
     ): List<DetectedSleep> {
         val grav = gravity.sortedBy { it.ts }
         if (grav.size < 2) return emptyList()
@@ -692,6 +792,12 @@ object SleepStager {
         for (p in runs) {
             if (p.stage != "sleep") continue
             if ((p.end - p.start) <= minSleepS) continue
+            // H4 physiological in-bed span cap (#547/#531/#509 tail): a single assembled main-sleep run
+            // longer than ~16 h is a bad-clock artefact (a frozen still stretch banked under a stale/wrong
+            // clock), not a real night. Drop it rather than report (or truncate to) a 12 h+ "sleep" — an
+            // over-long block can't be trusted to assert a span at all, and truncating would fabricate a
+            // wake time. Checked before staging so the artefact never reaches the aggregate. Mirrors Swift.
+            if ((p.end - p.start) > maxMainSleepSpanS) continue
             if (!confirmSleepWithHR(p, hrS, baseline)) continue
             // Off-wrist backstop (#500), FRACTIONAL rule (design credited to j0b-dev's #504 analysis):
             // a wrist-OFF stretch is still gravity with no HR, so it slips past both the gravity spine
@@ -710,7 +816,15 @@ object SleepStager {
             val resting = sessionRestingHR(start = p.start, end = p.end, hr = hrS)
             val continuesChain = chainPrevEnd?.let { p.start - it <= continuationGapS } ?: false
             val isNightTail = continuesChain && chainFromOvernight   // the night's tail, not a nap
-            if (isDaytimeCenter(p, tzOffsetSeconds) && !passesDaytimeGuard(p, resting, baseline) && !isNightTail) continue
+            // H7 (#531): when the prior accepted chain BEGAN overnight, its wake (chainPrevEnd) anchors the
+            // morning-stillness window. A daytime block beginning within it that is NOT a night-tail must
+            // clear the STRONGER re-onset bar — killing the 9 am phantom nap of residual post-wake stillness
+            // while keeping a genuine second sleep. Outside the window the guard is the ordinary daytime bar.
+            val morningWakeEnd = if (chainFromOvernight) chainPrevEnd else null
+            if (isDaytimeCenter(p, tzOffsetSeconds) &&
+                !passesMorningStillnessGuard(p, resting, baseline, morningWakeEnd, bandSleepState) &&
+                !isNightTail
+            ) continue
             val stages = stageSession(start = p.start, end = p.end, grav = grav,
                 hr = hrS, rr = rrS, resp = respS)
             val eff = efficiency(start = p.start, end = p.end, stages = stages)
@@ -826,6 +940,30 @@ object SleepStager {
         }
         if (segments.isNotEmpty()) segments[segments.size - 1].end = end
         return segments
+    }
+
+    // ── Per-epoch motion (H8 — persisted beside stagesJSON) ───────────────────
+
+    /**
+     * The per-epoch MOTION magnitudes for a session window, on the SAME 30 s epoch grid as [stageSession]'s
+     * `stagesJSON` (one entry per epoch, in order). Each value is the epoch's summed |Δgravity| (the raw
+     * pre-rescale Cole–Kripke activity count) — the strap's own motion signal, banked so later passes and
+     * the UI can read per-epoch movement without re-reading the raw gravity stream. Returns `[]` when the
+     * window has too little gravity to grid (mirrors [stageSession]'s degenerate fallback), so the caller
+     * persists NULL (no fabricated zero series). Pure + deterministic; shares [buildEpochGrid] with staging
+     * so the grids align epoch-for-epoch. Mirrors Swift `sessionEpochMotion`. (H8)
+     */
+    fun sessionEpochMotion(start: Long, end: Long, grav: List<GravitySample>): List<Double> {
+        val gSeg = rowsBetween(grav, start, end) { it.ts }
+        if (gSeg.size < 2) return emptyList()
+        val gDeltas = gravityDeltas(gSeg)
+        val gTimes = gSeg.map { it.ts }
+        val grid = buildEpochGrid(
+            start = start.toDouble(), end = end.toDouble(),
+            gravTimes = gTimes, gravDeltas = gDeltas,
+            hr = emptyList(), rr = emptyList(), resp = emptyList(),
+        )
+        return grid.counts
     }
 
     // ── Epoch grid ────────────────────────────────────────────────────────────

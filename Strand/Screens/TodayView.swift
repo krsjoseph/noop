@@ -141,6 +141,11 @@ struct TodayView: View {
     @AppStorage(Self.guideCardSeenKey) private var scoringGuideCardSeen = false
     static let guideCardSeenKey = "scoringGuideCardSeen"
 
+    // H6 — the steps-calibration sheet, opened from the Steps tile when it's showing an ESTIMATE (a WHOOP
+    // 4.0 user, whose strap doesn't transmit steps). Presents the SAME StepsCalibrationSheet Settings uses,
+    // so a 4.0 user can reach calibration from where they actually notice the "est." caption.
+    @State private var showStepsCalibration = false
+
     // THE single grid definition — every tile group reuses it so margins line up. minimum 150 (not
     // 168) so two tiles reliably fit a phone's ~345pt content width; at 168 the grid sat on the
     // single-vs-two-column boundary and could collapse to one full-width column on a narrow phone.
@@ -679,6 +684,11 @@ struct TodayView: View {
         // The Updates inbox (the header bell). Both platforms.
         .sheet(isPresented: $showUpdatesInbox) {
             UpdatesInboxView(onClose: { showUpdatesInbox = false })
+        }
+        // H6 — the steps-calibration sheet, opened from an estimated Steps tile (the same sheet Settings
+        // hosts). Presented from Today so a WHOOP 4.0 user can calibrate from where the "est." caption shows.
+        .sheet(isPresented: $showStepsCalibration) {
+            StepsCalibrationSheet(repo: repo, onClose: { showStepsCalibration = false })
         }
         // Honour a "Restore to Today" tap from the inbox: flip the matching dismissed flag back so the
         // card reappears (the inbox also clears the @AppStorage key directly, but this covers an
@@ -1492,7 +1502,9 @@ struct TodayView: View {
         VStack(spacing: 3) {
             if let n = recoveryCalibration {
                 Text("Calibrating").font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.7).fixedSize()
                 Text("\(n) of \(Baselines.minNightsSeed)").font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
+                    .lineLimit(1)
             } else if let carried = lastScoredCharge {
                 Text("\(Int(carried.value.rounded()))%")
                     .font(StrandFont.headline)
@@ -1510,7 +1522,10 @@ struct TodayView: View {
 
     @ViewBuilder
     private func ringNoData() -> some View {
+        // lineLimit + fixedSize so a small flanking ring (Rest/Effort) never wraps "No data" mid-word
+        // inside the ring's narrow interior (#495/#549).
         Text("No data").font(StrandFont.headline).foregroundStyle(StrandPalette.textSecondary)
+            .lineLimit(1).minimumScaleFactor(0.7).fixedSize()
     }
 
     // MARK: HEART RATE — today's continuous HR, off the strap's own ~1Hz history.
@@ -1670,6 +1685,12 @@ struct TodayView: View {
         if let p = lastScoredRecoveryDay, let v = prior(p) {
             return (format(v), carriedCaption(p))
         }
+        // H10 — an empty vital on TODAY reads honestly ("After tonight's sleep") instead of a lone unit
+        // beside a bare "—", which looked like a fault; a navigated PAST day keeps the plain unit (it's
+        // genuinely missing data the user can't act on now). Pure copy via `emptyVitalCaption`.
+        if let honest = Self.emptyVitalCaption(unit: unit, isToday: selectedDayOffset == 0) {
+            return ("—", honest)
+        }
         return ("—", unit)
     }
 
@@ -1714,9 +1735,10 @@ struct TodayView: View {
                                           : (buildingHint(.effort) ?? "of \(UnitFormatter.effortScaleMax(effortScale))"),
                 accent: d?.strain.map { StrandPalette.effortTint(fraction: $0 / StrainScorer.maxStrain) } ?? StrandPalette.textPrimary,
                 sparkline: sparks["strain"],
-                sparkColor: StrandPalette.strain066
+                sparkColor: StrandPalette.strain066,
+                // Inline ⓘ in the tile header (not a corner overlay) so it never sits over the value (#495).
+                accessory: { scoreInfoButton(.effort) }
             )
-            .overlay(alignment: .topTrailing) { scoreInfoButton(.effort) }
         case .rest:
             // Unscored TODAY → "building, wear it tonight" instead of a lone "—" caption (#527);
             // a scored day keeps its sleep-duration / efficiency caption.
@@ -1730,9 +1752,10 @@ struct TodayView: View {
                     : (buildingHint(.rest) ?? restCaption(d) ?? Self.needsStrapCaption),
                 accent: restScore.map { StrandPalette.recoveryColor($0) } ?? StrandPalette.textPrimary,
                 sparkline: sparks["sleep_total_min"],
-                sparkColor: StrandPalette.metricPurple
+                sparkColor: StrandPalette.metricPurple,
+                // Inline ⓘ in the tile header (not a corner overlay) so it never sits over the value (#495).
+                accessory: { scoreInfoButton(.rest) }
             )
-            .overlay(alignment: .topTrailing) { scoreInfoButton(.rest) }
         case .hrv:
             // Carry the last scored night's HRV at the rollover (#543) — today's wins, the carried value
             // is stamped "Last night · <date>", and a never-scored metric still shows "—".
@@ -1778,7 +1801,10 @@ struct TodayView: View {
             StatTile(
                 label: "Respiratory",
                 value: respValue,
-                caption: respCarry.caption,
+                // When the sparkline-tail fallback surfaces a real value (respValue ≠ "—" while respCarry
+                // was empty), use the plain "rpm" caption — not carriedVital's empty "After tonight's sleep"
+                // state — so the caption matches the shown number (H10 mustn't mislabel a real value).
+                caption: (respValue != "—" && respCarry.value == "—") ? "rpm" : respCarry.caption,
                 accent: respValue == "—" ? StrandPalette.textPrimary : StrandPalette.accent,
                 sparkline: sparks["resp_rate"],
                 sparkColor: StrandPalette.accent
@@ -1793,6 +1819,9 @@ struct TodayView: View {
                 ?? aLatest?.steps.map { intString(Double($0)) }
                 ?? (sparks["steps"]?.last).map { intString($0) }
             let estSteps = stepsEstByDay[selectedDayKey]
+            // H6 — only an ESTIMATED day (no real strap/phone count, so the on-device estimate filled in)
+            // gets the calibration entry; a real measured count needs no calibration.
+            let isEstimated = realSteps == nil && estSteps != nil
             StatTile(
                 label: "Steps",
                 value: realSteps ?? estSteps.map { intString(Double($0)) } ?? "—",
@@ -1800,7 +1829,10 @@ struct TodayView: View {
                 caption: realSteps != nil ? "today" : (estSteps != nil ? "est." : "today"),
                 accent: (realSteps != nil || estSteps != nil) ? StrandPalette.metricCyan : StrandPalette.textPrimary,
                 sparkline: sparks["steps"],
-                sparkColor: StrandPalette.metricCyan
+                sparkColor: StrandPalette.metricCyan,
+                // H6 — an estimated-steps tile carries a small ⚙︎ that opens the steps-calibration sheet
+                // (the SAME one Settings hosts), so a WHOOP 4.0 user can tune the estimate from here.
+                accessory: { if isEstimated { stepsCalibrationButton } }
             )
         case .weight:
             StatTile(
@@ -1993,6 +2025,24 @@ struct TodayView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("How \(section.rawValue.capitalized) is calculated")
         .help("How this score is calculated")
+    }
+
+    /// H6 — the small ⚙︎ on an ESTIMATED Steps tile that opens the steps-calibration sheet. A WHOOP 4.0
+    /// strap doesn't transmit steps, so NOOP estimates them from motion calibrated to the phone's count;
+    /// this puts the "tune that estimate" entry right where the user reads the "est." caption.
+    private var stepsCalibrationButton: some View {
+        Button {
+            showStepsCalibration = true
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(StrandPalette.textTertiary)
+                .padding(8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Calibrate steps estimate")
+        .help("Calibrate the steps estimate")
     }
 
     // MARK: - Loading
@@ -2285,6 +2335,16 @@ struct TodayView: View {
     /// shows instead of a bare blank when there's no value, no calibration count and nothing to carry.
     /// Matches `MetricTileState.needsStrap.title` verbatim so the tile and the explained note say the same words.
     static let needsStrapCaption = "Needs the strap"
+
+    /// H10 — the honest empty-state caption for a recovery-vital tile (HRV / Resting HR / SpO₂ / Respiratory)
+    /// when TODAY has no value yet and there's nothing to carry over. Those vitals are measured overnight, so
+    /// "After tonight's sleep" tells the user WHEN the tile fills rather than leaving a bare "—" beside a lone
+    /// unit that read as broken. Returns nil off-today (a past day keeps the plain unit — it's missing data the
+    /// user can't act on now). Pure copy/gate so it can be unit-tested without a live view. Mirror in Kotlin.
+    static func emptyVitalCaption(unit: String, isToday: Bool) -> String? {
+        guard isToday else { return nil }
+        return "After tonight's sleep"
+    }
 
     /// Pure copy/gate behind `buildingHint` — extracted so it can be unit-tested without a live view.
     /// Rest fills in after a night's sleep; Effort fills in once cardio load is logged. Em-dash-free

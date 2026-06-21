@@ -912,6 +912,82 @@ final class SleepStageTotalsTests: XCTestCase {
         XCTAssertEqual(sel.asleepSeconds, 38 * 60, "decoded asleep = 24+8+6 = 38 min")
     }
 
+    // MARK: - #561 biphasic gap-bridge (mainNightGroupIndices)
+
+    func testGroupIndicesBridgesTwoAdjacentFragments() throws {
+        // Two overnight fragments split by a 30-min wake gap (< 60-min bridge) → one group of BOTH.
+        let a = ts525("2026-06-14T23:00")
+        let aEnd = a + 3 * 3600                     // 23:00 → 02:00
+        let b = aEnd + 30 * 60                      // 02:30 (30-min gap < gapBridgeMaxMin)
+        let blocks = [
+            SleepStageTotals.NightBlock(start: a, end: aEnd),
+            SleepStageTotals.NightBlock(start: b, end: b + 3 * 3600),   // 02:30 → 05:30
+        ]
+        let group = try XCTUnwrap(SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: 0))
+        XCTAssertEqual(group, [0, 1], "a <60-min wake gap bridges both fragments into the main-night group")
+    }
+
+    func testGroupIndicesDoesNotBridgeLongGap() throws {
+        // A 5 h wake gap is NOT a biphasic interruption — the second block is a separate (daytime) sleep,
+        // so the group is just the single winning block (the longer overnight one).
+        let a = ts525("2026-06-14T23:00")
+        let aEnd = a + 5 * 3600                     // 23:00 → 04:00 (5h overnight, the main night)
+        let b = aEnd + 5 * 3600                     // 09:00 (5h gap >> 60-min bridge)
+        let blocks = [
+            SleepStageTotals.NightBlock(start: a, end: aEnd),
+            SleepStageTotals.NightBlock(start: b, end: b + 2 * 3600),   // 2h daytime nap
+        ]
+        let group = try XCTUnwrap(SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: 0))
+        XCTAssertEqual(group, [0], "a long wake gap is not bridged — only the main block is the group")
+    }
+
+    func testGroupIndicesSingleBlockMatchesBareSelector() throws {
+        // No gap to bridge → the group is exactly the single block mainNightIndex would pick (no regression).
+        let s = ts525("2026-06-15T00:00")
+        let blocks = [SleepStageTotals.NightBlock(start: s, end: s + 7 * 3600)]
+        XCTAssertEqual(try XCTUnwrap(SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: 0)), [0])
+        XCTAssertNil(SleepStageTotals.mainNightGroupIndices([], offsetSec: 0))
+    }
+
+    func testGroupIndicesBridgedNightOutscoresLoneNap() throws {
+        // A biphasic main night (2h + gap + 2h = 4h bridged) must out-score a lone 3h daytime nap that,
+        // un-bridged, would beat either 2h fragment alone — proving the bridge is what wins.
+        let f1 = ts525("2026-06-14T23:00")
+        let f1End = f1 + 2 * 3600                    // 23:00 → 01:00
+        let f2 = f1End + 20 * 60                     // 01:20 (20-min gap)
+        let f2End = f2 + 2 * 3600                    // → 03:20
+        let nap = ts525("2026-06-15T13:00")          // daytime
+        let blocks = [
+            SleepStageTotals.NightBlock(start: f1,  end: f1End),
+            SleepStageTotals.NightBlock(start: nap, end: nap + 3 * 3600),  // 3h lone nap
+            SleepStageTotals.NightBlock(start: f2,  end: f2End),
+        ]
+        let group = try XCTUnwrap(SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: 0))
+        XCTAssertEqual(group.sorted(), [0, 2], "the bridged biphasic night wins, returning BOTH its fragments")
+    }
+
+    // MARK: - #561 stages-path seam sums the bridged group (analyzeDay parity)
+
+    func testHonoringEditsSumsBiphasicGroup() throws {
+        // Two overnight fragments (each ~3h25m of sleep) split by a short wake gap, fed through the
+        // edit/recompute seam with onsets supplied → the daily total is the SUM of BOTH, not the longer one.
+        let a = ts525("2026-06-14T23:00")
+        // fragment A: 24+82+96 = 202 min sleep + 8 wake = 210 min in-bed → ends 02:30
+        let aStages = #"{"awake":8,"light":24,"deep":82,"rem":96}"#
+        let aInBedSec = 210 * 60
+        let b = a + aInBedSec + 20 * 60               // 20-min wake gap < 60-min bridge
+        // fragment B: 20+90+70 = 180 min sleep + 10 wake = 190 min in-bed
+        let bStages = #"{"awake":10,"light":20,"deep":90,"rem":70}"#
+        let r = try XCTUnwrap(SleepStageTotals.dailyAggregateHonoringEdits(
+            detected: [(startTs: a, stagesJSON: aStages), (startTs: b, stagesJSON: bStages)],
+            edited: [:],
+            onsetByStart: [a: a, b: b], offsetSec: 0))
+        // Summed sleep = 202 + 180 = 382 min; the longer fragment alone would be only 202.
+        XCTAssertEqual(r.sleep.totalSleepMin, 382, accuracy: 0.001,
+                       "the seam SUMS the bridged biphasic group, not just the longest fragment")
+        XCTAssertEqual(r.sleep.deepMin, 172, accuracy: 0.001)   // 82 + 90
+    }
+
     private func night(endDay: String, hours: Int) -> (start: Int, end: Int, hr: [HRSample],
                                                        rr: [RRInterval], gravity: [GravitySample]) {
         let fmt = DateFormatter()

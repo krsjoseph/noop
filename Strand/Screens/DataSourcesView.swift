@@ -603,6 +603,13 @@ struct DataSourcesView: View {
                 .foregroundStyle(StrandPalette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // FI-2 (#490) — the 4.0-vs-5.0 explainer. Broadcast works for BOTH strap generations because it
+            // re-shares whatever LIVE heart rate NOOP already has off the strap; it doesn't depend on the
+            // 5/MG-only deep-data path. The honest distinction is WHERE that live HR comes from (4.0 = the
+            // strap's standard HR characteristic; 5/MG = PPG-derived once connected), not whether broadcast
+            // works at all. Stated plainly so a 4.0 owner knows this is for them too.
+            generationExplainer
+
             // Honest live status only while it's on: a warning note if the radio can't run, else either
             // who's reading it or that we're waiting (never a fabricated "connected").
             if broadcastHrEnabled {
@@ -627,6 +634,45 @@ struct DataSourcesView: View {
                 }
             }
         }
+    }
+
+    /// FI-2 (#490) — a compact, honest "works with both strap generations" explainer under the broadcast
+    /// toggle. Two short lines (4.0 / 5.0·MG) frame WHERE the live HR comes from on each, so a WHOOP 4.0
+    /// owner knows broadcast is for them and a 5/MG owner understands the PPG-derived source — without
+    /// over-promising. Plain copy, no claim that either generation is "better".
+    private var generationExplainer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            generationRow(title: "WHOOP 4.0",
+                          detail: "Broadcasts the strap's own live heart rate over Bluetooth.")
+            generationRow(title: "WHOOP 5.0 & MG",
+                          detail: "Broadcasts the live heart rate NOOP derives from the strap once connected.")
+        }
+        .padding(.top, 2)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(DomainTheme.effort.color.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func generationRow(title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(DomainTheme.effort.color)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(StrandFont.footnote.weight(.semibold))
+                    .foregroundStyle(StrandPalette.textSecondary)
+                Text(detail)
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(detail)")
     }
 
     private var liveCard: some View {

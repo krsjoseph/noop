@@ -103,7 +103,7 @@ public struct SectionHeader: View {
 
 // MARK: - Metric tile (UNIFORM fixed height)
 
-public struct StatTile: View {
+public struct StatTile<Accessory: View>: View {
     let label: LocalizedStringKey, value: String
     var caption: String? = nil
     var accent: Color = StrandPalette.textPrimary
@@ -111,13 +111,19 @@ public struct StatTile: View {
     var deltaColor: Color = StrandPalette.textTertiary
     var sparkline: [Double]? = nil
     var sparkColor: Color = StrandPalette.accent
+    /// An optional trailing accessory laid out INLINE in the header row beside the label (e.g. a small
+    /// ⓘ that opens a scoring guide). Inline placement — not a corner overlay — so it can never sit on
+    /// top of the value, sparkline or trend chip on a narrow tile (#495). Defaults to nothing.
+    @ViewBuilder var accessory: () -> Accessory
 
     public init(label: LocalizedStringKey, value: String, caption: String? = nil,
                 accent: Color = StrandPalette.textPrimary, delta: String? = nil,
                 deltaColor: Color = StrandPalette.textTertiary,
-                sparkline: [Double]? = nil, sparkColor: Color = StrandPalette.accent) {
+                sparkline: [Double]? = nil, sparkColor: Color = StrandPalette.accent,
+                @ViewBuilder accessory: @escaping () -> Accessory) {
         self.label = label; self.value = value; self.caption = caption; self.accent = accent
         self.delta = delta; self.deltaColor = deltaColor; self.sparkline = sparkline; self.sparkColor = sparkColor
+        self.accessory = accessory
     }
 
     public var body: some View {
@@ -125,7 +131,13 @@ public struct StatTile: View {
         // part of its colour world while staying legible on the deep blue-black.
         NoopCard(padding: 14, tint: accent) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(label).strandOverline()
+                // Header row: the metric label, and (right-aligned) the optional accessory laid out in
+                // flow so it reserves its own space rather than floating over the value below (#495).
+                HStack(alignment: .top, spacing: 4) {
+                    Text(label).strandOverline()
+                    Spacer(minLength: 0)
+                    accessory()
+                }
                 Spacer(minLength: 4)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(value).font(StrandFont.number(26)).foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.6)
@@ -148,6 +160,19 @@ public struct StatTile: View {
         // One VoiceOver stop per tile (label, value, caption, delta) instead of up
         // to four fragmented stops; the decorative sparkline is hidden above.
         .accessibilityElement(children: .combine)
+    }
+}
+
+// Backward-compatible convenience: a StatTile with NO accessory (the common case) — every existing
+// call site keeps working unchanged, and the type defaults `Accessory` to `EmptyView`.
+public extension StatTile where Accessory == EmptyView {
+    init(label: LocalizedStringKey, value: String, caption: String? = nil,
+         accent: Color = StrandPalette.textPrimary, delta: String? = nil,
+         deltaColor: Color = StrandPalette.textTertiary,
+         sparkline: [Double]? = nil, sparkColor: Color = StrandPalette.accent) {
+        self.init(label: label, value: value, caption: caption, accent: accent, delta: delta,
+                  deltaColor: deltaColor, sparkline: sparkline, sparkColor: sparkColor,
+                  accessory: { EmptyView() })
     }
 }
 

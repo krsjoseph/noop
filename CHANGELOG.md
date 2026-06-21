@@ -17,6 +17,45 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 6.1.0 — Smarter sleep, naps, more devices, and a big board-clear (all platforms)
+
+A large update built from the open issues, discussions and community PRs, cross-referenced so related reports were fixed together rather than one at a time.
+
+**Sleep**
+- **Interrupted nights are counted in full.** A night broken by a short wake is now bridged and summed instead of being scored as just one fragment. (#561, thanks ryanbr)
+- **No more 12-hour "sleep".** An implausibly long single block from a bad-clock or off-wrist strap is capped, so it can't masquerade as one night. (#547/#531/#509 family)
+- **Phantom morning naps suppressed.** A still stretch right after you wake is no longer mistaken for a second sleep unless there's a clear, sustained re-onset. (#531)
+- **Honest stage confidence.** When the deep/REM split can't be trusted on a quiet night, the stage breakdown says so rather than implying precision. (#469)
+- **Your edits win.** A night you've hand-edited now takes precedence over an imported value, so edits aren't masked by an Apple/WHOOP import. (#509)
+- **On-device nap detection.** Opt in and NOOP spots a likely nap from your motion and offers it for a one-tap add; nothing is auto-logged and your sleep scores are untouched. (PR#569, thanks @cbarrado)
+- **WHOOP 4.0 sleep on the v19 offload layout.** Straps that previously banked nothing on this firmware now hand over the motion the stager needs. (#344, thanks airtonzanon)
+
+**Devices, glanceable surfaces & features**
+- New 2×2 Android home-screen widget showing Charge, Effort and Rest together. (#516)
+- Opt-in morning-recap and post-workout notifications, off by default, no AI. (#517)
+- Caffeine cutoff window with a gentle late-intake nudge. (#526, PR#566, thanks @mvanhorn)
+- Per-weekday smart-alarm wake times. (#548, PR#554, thanks @MumiZed)
+- Broadcast your heart rate out from a WHOOP 4.0, not just a 5.0. (D#490)
+- Android Devices → Remove now releases the Bluetooth link so the band can re-pair. (#520)
+- Clearer WHOOP 4.0 steps calibration and honest empty-state copy for steps/SpO₂/skin-temp instead of bare dashes. (#316 and the 4.0 "no data" cluster)
+
+**Fixes, polish & tooling**
+- Fixed the iPhone Today score-ring + info-button overlap. (#495, PR#549, thanks @MumiZed)
+- Skip the idle 15-minute re-score when nothing new synced, for battery. (PR#565, thanks @ryanbr)
+- Last-synced time survives a process restart instead of reverting to "Never". (PR#556, thanks @tavelli)
+- Charging bolt on the Live battery header; charging flag no longer gated to a 45-second window. (PR#568, thanks @cbarrado)
+- WHOOP 5/MG v26 record decode corrected (byte 21 is a burst index, not a channel). (PR#553, thanks sunny-noop)
+- Linux raw-capture import into Android, and a Linux spot-HRV tool. (PR#542/PR#541, thanks sunny-noop)
+- **Distribution:** the AltStore source and Homebrew cask are current again and now update automatically with every release (they had silently stuck at 5.3.0). (#560/#562)
+- German localization completed (444/444).
+
+**Install / update**
+- **macOS:** the universal app zip on the Releases page (or `brew upgrade --cask noop`).
+- **iOS:** sideload the IPA (AltStore / SideStore).
+- **Android:** the APK on the Releases page.
+
+---
+
 ## 6.0.3 — Date-hygiene fix for straps with a bad clock (all platforms)
 
 A targeted robustness fix for a real bug pikapik487 caught with detailed logs.

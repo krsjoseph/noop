@@ -294,6 +294,11 @@ fun SettingsScreen(vm: AppViewModel) {
     // from About — the plain-English tour of sleep sorting, scores, recording and provenance.
     var showHowNoopWorks by remember { mutableStateOf(false) }
 
+    // "WHOOP 4.0 vs 5.0/MG: what each can read and why" explainer (FI-2 / #490), reachable from the
+    // Strap section by BOTH model owners. Clears up which features each strap supports — e.g. why the
+    // strap-firmware broadcast-out is 5/MG-only while NOOP's own re-broadcast works on any strap.
+    var showModelComparison by remember { mutableStateOf(false) }
+
     // "Recalibrate Charge baseline" confirm dialog (Charge advanced). Writes now-seconds to BOTH the
     // noop.hrvBaselineEpoch and noop.recoveryBaselineEpoch prefs so foldHistory re-seeds every baseline
     // that feeds Charge from tonight onward; the standing analyze loop picks it up on its next pass.
@@ -1050,6 +1055,42 @@ fun SettingsScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.textSecondary),
                 ) { Text("Share strap log (for bug reports)", style = NoopType.captionNumber) }
+
+                // "WHOOP 4.0 vs 5.0/MG — what each can read and why" (FI-2 / #490). Shown to BOTH model
+                // owners, so a 4.0 user understands their strap is fully supported (and why the firmware
+                // broadcast-out is 5/MG-only while NOOP's own re-broadcast in Data Sources works on a 4.0).
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Palette.surfaceInset)
+                        .border(1.dp, Palette.hairline, RoundedCornerShape(10.dp))
+                        .clickable { showModelComparison = true }
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .semantics { contentDescription = "WHOOP 4.0 versus 5.0 — what each can read and why" },
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = Palette.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("WHOOP 4.0 vs 5.0/MG", style = NoopType.headline, color = Palette.textPrimary)
+                            Text(
+                                "What each strap can read, and why some features differ.",
+                                style = NoopType.footnote,
+                                color = Palette.textSecondary,
+                            )
+                        }
+                        Text("›", style = NoopType.title2, color = Palette.accent)
+                    }
+                }
             }
         }
 
@@ -1976,6 +2017,18 @@ fun SettingsScreen(vm: AppViewModel) {
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
                     HowNoopWorksScreen(onClose = { showHowNoopWorks = false })
+                }
+            }
+        }
+
+        // "WHOOP 4.0 vs 5.0/MG" explainer sheet (FI-2 / #490), opened from the Strap section. Same idiom.
+        if (showModelComparison) {
+            Dialog(
+                onDismissRequest = { showModelComparison = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
+                    WhoopModelComparisonScreen(onClose = { showModelComparison = false })
                 }
             }
         }

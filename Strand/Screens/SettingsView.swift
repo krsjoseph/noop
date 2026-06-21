@@ -1900,7 +1900,9 @@ private struct StepsComparisonRow: Identifiable {
 /// table + a manual coefficient override with a live preview. Presented as a sheet from Settings →
 /// Profile → "Steps estimate". Reads the SAME data the engine fits against (the computed `steps_est`
 /// series and the phone's `steps`), never recomputing the headline. Mirrors Android `StepsCalibrationScreen`.
-private struct StepsCalibrationSheet: View {
+// Internal (not file-private) so the Today Steps tile can present the SAME calibration sheet directly
+// when it's showing an ESTIMATE for a WHOOP 4.0 user — one shared entry point, no duplicated screen (H6).
+struct StepsCalibrationSheet: View {
     let repo: Repository
     let onClose: () -> Void
     @EnvironmentObject var profile: ProfileStore

@@ -222,7 +222,8 @@ final class IntelligenceEngine: ObservableObject {
         // except recovery is baseline-independent, so pass 2 only re-scores the cheap recovery
         // composite. The hr/rr/resp/gravity arrays go out of scope each iteration (memory stays bounded).
         var scoredNights: [(daily: DailyMetric, strain: Double?, cachedSleep: [CachedSleepSession],
-                            workouts: [ExerciseSession], nightlySkin: Double?)] = []
+                            workouts: [ExerciseSession], nightlySkin: Double?,
+                            sessionMotion: [Int: [Double]])] = []
         // Nightly values harvested in pass 1, keyed by day, to seed the pass-2 baseline.
         var nightlyHrvByDay: [String: Double?] = [:]
         var nightlyRhrByDay: [String: Double?] = [:]
@@ -318,6 +319,15 @@ final class IntelligenceEngine: ObservableObject {
             // detector see the whole day, so a 5 pm run shows up on the same day.
             let dayGrav = (try? await store.gravitySamples(deviceId: owner, from: dayMid, to: dayEnd, limit: 200_000)) ?? []
 
+            // CONSUME (#531 / H8): the prior pass's persisted v18 BAND sleep_state for sessions overlapping
+            // the night window, expanded to timestamped (ts, state) samples on the 30 s grid, so the H7
+            // morning-stillness guard can confirm a borderline re-onset against the strap's OWN scored band.
+            // Read under `computedId` (where the prior pass banded its detected sessions); empty on the first
+            // pass (no banded sessions yet) → the guard simply falls back to the HR bar. Honest: only real
+            // banded "asleep" epochs rescue a block, never a fabricated one.
+            let bandSleepState = await bandSleepStateSamples(computedId: deviceId + "-noop",
+                                                             from: from, to: to, store: store)
+
             let res = await Task.detached(priority: .utility) {
                 AnalyticsEngine.analyzeDay(day: day, hr: hr, rr: rr, resp: resp, gravity: grav,
                                            steps: steps, dayHr: dayHr, daySteps: daySteps,
@@ -325,14 +335,16 @@ final class IntelligenceEngine: ObservableObject {
                                            skinTemp: skin,
                                            profile: up, baselines: baselines1, maxHROverride: maxHR,
                                            tzOffsetSeconds: tzOffset, wristOff: wristOff,
-                                           habitualMidsleepSec: habitualMidsleepSec)
+                                           habitualMidsleepSec: habitualMidsleepSec,
+                                           bandSleepState: bandSleepState)
             }.value
             nightlyHrvByDay[res.daily.day] = res.daily.avgHrv
             nightlyRhrByDay[res.daily.day] = res.daily.restingHr.map(Double.init)
             nightlyRespByDay[res.daily.day] = res.daily.respRateBpm
             nightlySkinByDay[res.daily.day] = res.nightlySkinTempC
             scoredNights.append((daily: res.daily, strain: res.strain, cachedSleep: res.cachedSleep,
-                                 workouts: res.workouts, nightlySkin: res.nightlySkinTempC))
+                                 workouts: res.workouts, nightlySkin: res.nightlySkinTempC,
+                                 sessionMotion: res.sessionMotionByStart))
             await Task.yield()
         }
 
@@ -636,6 +648,21 @@ final class IntelligenceEngine: ObservableObject {
             !skipWindows.contains { s.startTs < $0.end && $0.start < s.endTs }   // time-overlap test
         }
         if !cachedSleepKept.isEmpty { _ = try? await store.upsertSleepSessions(cachedSleepKept, deviceId: computedId) }
+        // ── Persist per-epoch motion (H8) beside each kept session's stagesJSON ──────────────────────────
+        // The sleepSession rows exist now (just upserted), so the targeted motion UPDATE lands. Persist ONLY
+        // for the sessions actually kept (not edited/dismissed), keyed by the detected start `analyzeDay`
+        // returned. A session whose gravity wouldn't grid was omitted from the map and is left as NULL — an
+        // absent motion series stays absent, never a fabricated zero array.
+        let keptStarts = Set(cachedSleepKept.map { $0.startTs })
+        var motionByStart: [Int: [Double]] = [:]
+        for night in scoredNights {
+            for (start, motion) in night.sessionMotion where keptStarts.contains(start) {
+                motionByStart[start] = motion
+            }
+        }
+        for (start, motion) in motionByStart {
+            _ = try? await store.persistSessionMotion(deviceId: computedId, sessionStart: start, motionEpochs: motion)
+        }
         // Make re-detection idempotent across runs: clear the prior computed detected workouts in the
         // scored window (a bout's startTs can drift as more HR arrives, which would otherwise orphan
         // stale rows under the (deviceId,startTs,sport) key), then re-insert.
@@ -797,6 +824,30 @@ final class IntelligenceEngine: ObservableObject {
     /// `SleepStageTotals.habitualMidsleepSec`, which keeps the longest block per day (naps drop out). The
     /// imported + computed sets can overlap; both are unioned and the learner de-dupes per day by length.
     /// (#547) Mirrors the Android `computeHabitualMidsleep`.
+    /// CONSUME (#531 / H8): the prior pass's persisted v18 BAND sleep_state for sessions overlapping
+    /// `[from, to]`, expanded to timestamped `(ts, state)` samples on the 30 s epoch grid, for the H7
+    /// morning-stillness guard's re-onset confirmation. Reads the computed sessions in the window, then each
+    /// one's persisted per-epoch sleep_state (NULL when never banded — first pass / imported night), and maps
+    /// epoch `i` to `startTs + i*30`. Empty when nothing is banded yet, so the guard simply falls back to the
+    /// HR bar. Honest: only real banded states are surfaced, never a fabricated reading. The grid here mirrors
+    /// `SleepStager`'s 30 s epoch grid, so an epoch's timestamp lands inside the candidate run it scores.
+    private func bandSleepStateSamples(computedId: String, from: Int, to: Int,
+                                       store: WhoopStore) async -> [(ts: Int, state: Int)] {
+        let epochS = 30
+        let sessions = (try? await store.sleepSessions(deviceId: computedId, from: from, to: to,
+                                                       limit: 4000)) ?? []
+        var samples: [(ts: Int, state: Int)] = []
+        for s in sessions {
+            guard let states = try? await store.sessionSleepState(deviceId: computedId,
+                                                                  sessionStart: s.startTs),
+                  !states.isEmpty else { continue }
+            for (i, st) in states.enumerated() {
+                samples.append((ts: s.startTs + i * epochS, state: st))
+            }
+        }
+        return samples
+    }
+
     private static func computeHabitualMidsleep(
         store: WhoopStore, importedId: String, computedId: String,
         windowStart: Int, windowEnd: Int, offsetSec: Int

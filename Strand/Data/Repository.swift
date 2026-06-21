@@ -276,7 +276,12 @@ final class Repository: ObservableObject {
         for p in debt { fig[p.day, default: ImportedSleepFigures()].debtMin = p.value }
 
         self.importedSleep = fig   // assigned BEFORE days/sleeps: one consistent publish per refresh
-        self.days = Self.mergeDaily(imported: imported, computed: computed)
+        // H5 (#509): a night the user hand-edited (userEdited) must keep its corrected sleep figures even
+        // when a WHOOP/Apple import also covers that day. The computed ("-noop") session carries the edit,
+        // and IntelligenceEngine re-keys the computed DAILY row from it; collect those edited days so the
+        // merge lets the computed row's SLEEP fields win there (imports still win on every un-edited day).
+        let editedDays = Self.userEditedDays(compSleep)
+        self.days = Self.mergeDaily(imported: imported, computed: computed, userEditedDays: editedDays)
         self.sleeps = Self.mergeSleep(imported: impSleep, computed: compSleep)
         self.vitalRows = Self.sourceRows(imported: imported, computed: computed, apple: apple)
         self.freshness = Self.computeFreshness(imported: imported, computed: computed, apple: apple,
@@ -304,17 +309,39 @@ final class Repository: ObservableObject {
     /// Imported daily values win field-by-field; computed rows fill only nil imported fields.
     /// This preserves official export/import values while allowing fresh local analysis to populate
     /// Charge, skin temperature deviation, activity totals, or other fields missing from that row.
-    nonisolated static func mergeDaily(imported: [DailyMetric], computed: [DailyMetric]) -> [DailyMetric] {
+    ///
+    /// H5 (#509): a day in `userEditedDays` is one the user hand-edited the sleep of (a corrected
+    /// bed/wake time, an added nap, a deleted night). For those days the COMPUTED row's SLEEP fields
+    /// take precedence over the import — otherwise a re-imported WHOOP/Apple night would silently mask
+    /// the user's correction. Non-sleep fields (recovery/strain/HRV/RHR/activity…) still follow the
+    /// normal imports-win merge, and every NON-edited day is unchanged.
+    nonisolated static func mergeDaily(imported: [DailyMetric], computed: [DailyMetric],
+                                       userEditedDays: Set<String> = []) -> [DailyMetric] {
         var byDay: [String: DailyMetric] = [:]
         for d in computed { byDay[d.day] = d }
         for d in imported {
             if let existing = byDay[d.day] {
-                byDay[d.day] = d.fillingNilFields(from: existing)
+                let merged = d.fillingNilFields(from: existing)
+                byDay[d.day] = userEditedDays.contains(d.day)
+                    ? merged.takingSleepFields(from: existing)   // edited night: computed sleep wins
+                    : merged
             } else {
                 byDay[d.day] = d
             }
         }
         return byDay.values.sorted { $0.day < $1.day }
+    }
+
+    /// The set of LOCAL wake-days that carry a user-edited sleep session — keyed exactly as
+    /// `DailyMetric.day` is (the engine's cached-offset local-day keyer, matching `mergeSleep.endDay`).
+    /// Drives the H5 edit-merge precedence in `mergeDaily`.
+    nonisolated static func userEditedDays(_ sessions: [CachedSleepSession]) -> Set<String> {
+        var days = Set<String>()
+        for s in sessions where s.userEdited {
+            let offsetSec = TimeZone.current.secondsFromGMT(for: Date(timeIntervalSince1970: TimeInterval(s.endTs)))
+            days.insert(AnalyticsEngine.dayString(s.endTs, offsetSec: offsetSec))
+        }
+        return days
     }
 
     /// Daily rows tagged with the source that supplied them, for the source-aware vital-sign cards.
@@ -1086,6 +1113,32 @@ private extension DailyMetric {
             respRateBpm: respRateBpm ?? fallback.respRateBpm,
             steps: steps ?? fallback.steps,
             activeKcalEst: activeKcalEst ?? fallback.activeKcalEst
+        )
+    }
+
+    /// A copy of self where the SLEEP fields are overridden by `source` — used by the H5 edit-merge so a
+    /// hand-edited night's computed sleep figures win over the import for that day (#509). Only the sleep
+    /// columns move; every other field (recovery/strain/HRV/RHR/activity/in-sleep vitals) is left as-is, so
+    /// the import still wins for non-sleep metrics on the edited day.
+    func takingSleepFields(from source: DailyMetric) -> DailyMetric {
+        DailyMetric(
+            day: day,
+            totalSleepMin: source.totalSleepMin,
+            efficiency: source.efficiency,
+            deepMin: source.deepMin,
+            remMin: source.remMin,
+            lightMin: source.lightMin,
+            disturbances: source.disturbances,
+            restingHr: restingHr,
+            avgHrv: avgHrv,
+            recovery: recovery,
+            strain: strain,
+            exerciseCount: exerciseCount,
+            spo2Pct: spo2Pct,
+            skinTempDevC: skinTempDevC,
+            respRateBpm: respRateBpm,
+            steps: steps,
+            activeKcalEst: activeKcalEst
         )
     }
 }

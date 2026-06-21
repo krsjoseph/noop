@@ -320,6 +320,14 @@ object IntelligenceEngine {
             // whole day, so a 5 pm run shows up the same day.
             val dayGrav = repo.gravitySamples(owner, dayMidnight, dayEnd, STREAM_LIMIT)
 
+            // CONSUME (#531 / H8): the prior pass's persisted v18 BAND sleep_state for sessions overlapping
+            // the night window, expanded to timestamped (ts, state) samples on the 30 s grid, so the H7
+            // morning-stillness guard can confirm a borderline re-onset against the strap's OWN scored band.
+            // Read under [computedId] (where the prior pass banded its detected sessions); empty on the first
+            // pass → the guard falls back to the HR bar. Honest: only real banded "asleep" epochs rescue a
+            // block. Mirrors Swift.
+            val bandSleepState = bandSleepStateSamples(repo, computedId, from, to)
+
             val res = AnalyticsEngine.analyzeDay(
                 day = day,
                 hr = hr,
@@ -337,6 +345,7 @@ object IntelligenceEngine {
                 tzOffsetSeconds = tzOffsetSeconds,
                 wristOff = wristOff,
                 habitualMidsleepSec = habitualMidsleepSec,
+                bandSleepState = bandSleepState,
             )
 
             // Harvest the baseline-independent nightly aggregates (a day with no detected
@@ -697,6 +706,21 @@ object IntelligenceEngine {
             skipWindows.any { (start, end) -> s.startTs < end && start < s.endTs } // time-overlap test
         }
         if (sleepKept.isNotEmpty()) repo.upsertSleepSessions(sleepKept)
+        // ── Persist per-epoch motion (H8) beside each kept session's stagesJSON ──────────────────────────
+        // The sleepSession rows exist now (just upserted), so the targeted motion UPDATE lands. Persist ONLY
+        // for the sessions actually kept (not edited/dismissed), keyed by the detected start analyzeDay
+        // returned. A session whose gravity wouldn't grid was omitted from the map and is left as NULL — an
+        // absent motion series stays absent, never a fabricated zero array. Mirrors Swift.
+        val keptStarts = sleepKept.map { it.startTs }.toHashSet()
+        val motionByStart = HashMap<Long, List<Double>>()
+        for (res in scoredNights) {
+            for ((start, motion) in res.sessionMotionByStart) {
+                if (start in keptStarts) motionByStart[start] = motion
+            }
+        }
+        for ((start, motion) in motionByStart) {
+            repo.persistSessionMotion(computedId, start, motion)
+        }
         // Make re-detection idempotent across runs: clear the prior computed detected workouts
         // in the scored window (a bout's startTs can drift as more HR arrives, which would
         // otherwise orphan stale rows under the (deviceId,startTs,sport) key), then re-insert.
@@ -776,6 +800,35 @@ object IntelligenceEngine {
      * imported + computed sets can overlap; both are unioned and the learner de-dupes per day by length.
      * Mirrors Swift `IntelligenceEngine.computeHabitualMidsleep`. (#547)
      */
+    /**
+     * CONSUME (#531 / H8): the prior pass's persisted v18 BAND sleep_state for sessions overlapping
+     * [from, to], expanded to timestamped (ts, state) samples on the 30 s epoch grid, for the H7
+     * morning-stillness guard's re-onset confirmation. Reads the computed sessions in the window, then each
+     * one's persisted per-epoch sleep_state (null when never banded — first pass / imported night), and maps
+     * epoch `i` to `startTs + i*30`. Empty when nothing is banded yet, so the guard simply falls back to the
+     * HR bar. Honest: only real banded states are surfaced, never a fabricated reading. The grid here mirrors
+     * SleepStager's 30 s epoch grid, so an epoch's timestamp lands inside the candidate run it scores. Mirrors
+     * Swift `IntelligenceEngine.bandSleepStateSamples`. (#531 / H8 consume)
+     */
+    private suspend fun bandSleepStateSamples(
+        repo: WhoopRepository,
+        computedId: String,
+        from: Long,
+        to: Long,
+    ): List<Pair<Long, Int>> {
+        val epochS = 30L
+        val sessions = repo.sleepSessions(computedId, from, to, 4000)
+        val samples = ArrayList<Pair<Long, Int>>()
+        for (s in sessions) {
+            val states = repo.sessionSleepState(computedId, s.startTs) ?: continue
+            if (states.isEmpty()) continue
+            for ((i, st) in states.withIndex()) {
+                samples.add((s.startTs + i * epochS) to st)
+            }
+        }
+        return samples
+    }
+
     private suspend fun computeHabitualMidsleep(
         repo: WhoopRepository,
         importedId: String,

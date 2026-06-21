@@ -42,10 +42,14 @@ import com.noop.protocol.Whoop5Config
 import com.noop.protocol.extractStreams
 import com.noop.analytics.Baselines
 import com.noop.analytics.IntelligenceEngine
+import com.noop.analytics.NapDetector
+import com.noop.analytics.NapPrefs
+import com.noop.analytics.NapVerdict
 import com.noop.analytics.SedentaryDetector
 import com.noop.analytics.StressOnsetDetector
 import com.noop.analytics.UserProfile
 import com.noop.analytics.WorkoutDetector
+import com.noop.data.NapStore
 import com.noop.ingest.HealthConnectWriter
 import com.noop.ui.BiofeedbackPrefs
 import com.noop.ui.InactivityPrefs
@@ -588,6 +592,28 @@ class WhoopBleClient(
             )
 
         /**
+         * PR #568: should a BATTERY_LEVEL event drive the LIVE charging pill? The old code gated on a 45s
+         * event-timestamp freshness window, which suppressed the bolt for the first ~45s of every connect
+         * on a strap with a stale RTC. The only thing we must still exclude is a HISTORICAL BATTERY_LEVEL
+         * replayed mid-backfill — i.e. an offload frame. So the rule is simply "not a replayed offload
+         * frame", matching iOS, where the offload path never reaches the live router. Pure so it's
+         * unit-testable without a live GATT stack.
+         */
+        fun shouldApplyChargingFromBatteryEvent(replayedOffload: Boolean): Boolean = !replayedOffload
+
+        /**
+         * H3 (#520): the LiveState the device-remove RELEASE publishes — the link fully dropped + every
+         * stale live readout cleared, so a removed strap can't keep showing live HR / a bond / a charging
+         * pill. Pure model of what [releaseStrap] applies, so a test can assert the released state without a
+         * live instance. Mirrors iOS forgetDevice's state clears.
+         */
+        fun releasedLiveState(previous: LiveState): LiveState =
+            previous.clearedBiometrics().copy(
+                connected = false, bonded = false, encryptedBond = false,
+                charging = null, pairingHint = null, scanning = false, statusNote = null,
+            )
+
+        /**
          * Pure classification of a COMPLETED (HISTORY_COMPLETE) offload, extracted from exitBackfilling
          * so it's unit-testable without a live GATT stack. Mirrors Swift
          * `BLEManager.classifyCompletedOffload`.
@@ -706,8 +732,12 @@ class WhoopBleClient(
         }
     }
 
-    // MARK: Published state — the single source of truth the UI observes.
-    private val _state = MutableStateFlow(LiveState())
+    // MARK: Published state — the single source of truth the UI observes. Seeded with the PERSISTED
+    // last-sync time (PR #556 reimpl) so a freshly-recreated client doesn't show "Never" when this
+    // install has actually synced before; a 0 (never) leaves it null, unchanged.
+    private val _state = MutableStateFlow(
+        LiveState(lastSyncAt = NoopPrefs.lastSyncAt(context).takeIf { it > 0L }),
+    )
     val state: StateFlow<LiveState> = _state.asStateFlow()
 
     // MARK: Multi-WHOOP (additive — inert on the single-WHOOP path; MW-2/MW-3 parity with iOS BLEManager).
@@ -1372,6 +1402,42 @@ class WhoopBleClient(
     }
 
     /**
+     * H3 (#520): fully RELEASE the strap when the user REMOVES it from the Devices screen, so the band can
+     * enter pairing mode. Archiving the registry row alone left NOOP still holding the strap — the
+     * disconnect→3s-reconnect timer, the targeted-connect pin, and the persisted last-device address ALL
+     * still pointed at it, so it stayed connected and the user could never put it into pairing mode (a
+     * connected WHOOP can't show its blue pairing LEDs). This stops auto-reconnect, drops the live link,
+     * and clears EVERY reference that points at this strap so NOOP lets go for good — until the user
+     * deliberately reconnects (which clears intentionalDisconnect again via connect()). Kotlin twin of iOS
+     * `BLEManager.forgetDevice` (which iOS already wires from DevicesView's Remove). Runs on the main looper.
+     */
+    fun releaseStrap() {
+        handler.post {
+            intentionalDisconnect = true     // defuse the disconnect→3s-reconnect loop's guard
+            handler.removeCallbacks(scanTimeoutRunnable)
+            handler.removeCallbacks(scanFallbackRunnable)
+            stopScan()
+            // Clear the targeting that could re-grab this strap: the #52 pin and the remembered last device.
+            preferredAddress = null          // back to "connect to the first WHOOP found" (single-WHOOP default)
+            lastDevice = null                // don't fast-path reconnect to it (onBluetoothRadioOn / auto-reconnect)
+            pinnedBondRefusals = 0
+            // Drop the persisted last-device pin so a relaunch / radio-on doesn't auto-reconnect to it (#67).
+            NoopPrefs.clearLastDevice(context)
+            // Drop the live BLE link so the strap is free to enter pairing mode. disconnect() can throw on a
+            // dead binder; tear down directly if so (the #314 path).
+            try {
+                gatt?.disconnect()           // onConnectionStateChange(DISCONNECTED) does the teardown + close
+            } catch (t: Throwable) {
+                log("releaseStrap: gatt.disconnect() threw ${t.javaClass.simpleName}; tearing down directly")
+                teardownAfterGattFailure()
+            }
+            _state.value = releasedLiveState(_state.value)
+            log("Device removed — released the strap: stopped auto-reconnect, dropped the link, cleared " +
+                "targeting. Put it in pairing mode (blue LEDs) to re-pair if you want it back. (#520)")
+        }
+    }
+
+    /**
      * Re-point which device id live WHOOP samples store under, when the active WHOOP changes (a
      * WHOOP↔WHOOP switch via the registry). Only the [SourceCoordinator] calls this, and only when a
      * DIFFERENT registered WHOOP becomes active — the single-WHOOP path leaves the seeded "my-whoop" id in
@@ -1681,6 +1747,66 @@ class WhoopBleClient(
                 }
             } catch (t: Throwable) {
                 log("Stress check-in: check failed (${t.message})")
+            }
+        }
+    }
+
+    /**
+     * On-device SHORT-NAP detection (reimplemented from @cbarrado's PR #569 under NoopApp identity).
+     *
+     * Read-only hook on the natural offload completion — the SAME instant [maybeNudgeStress] /
+     * [maybeBuzzInactivity] run, so it adds NO cadence of its own. Over the freshly-offloaded daytime
+     * window it runs the pure, unit-tested [NapDetector] (dense-gravity eligibility gate → tri-state
+     * NAP / NONE / INCONCLUSIVE) and, ONLY on a confident NAP, queues the candidate for review via
+     * [NapStore]. It NEVER auto-writes a sleep session: a confirmed nap goes through the user's review
+     * card → `addManualNap` (#508), the same overlap-guarded path a hand-corrected nap uses. Honest by
+     * construction: an INCONCLUSIVE window queues nothing.
+     *
+     * Self-gates on the NapPrefs toggle (default OFF, opt-in), so it's fully inert until enabled.
+     */
+    private fun maybeDetectNaps() {
+        if (!NapPrefs.enabled(context)) return   // cheap master gate before any DB work
+        ioScope.launch {
+            try {
+                val nowSec = System.currentTimeMillis() / 1000L
+                // Look back over the freshly-offloaded daytime window (the same lookback the inactivity /
+                // stress hooks read), so a brief afternoon nap that just landed gets judged.
+                val from = nowSec - INACTIVITY_LOOKBACK_S
+                val grav = runCatching { repository.gravitySamples(deviceId, from, nowSec) }.getOrDefault(emptyList())
+                if (grav.isEmpty()) return@launch
+                val hr = runCatching { repository.hrSamples(deviceId, from, nowSec) }.getOrDefault(emptyList())
+                // Honest resting band: the newest daily metric's resting HR, or null (the engine then
+                // leans on motion alone at lower confidence — it never fabricates a band).
+                val restingHr = runCatching {
+                    repository.days(deviceId).mapNotNull { it.restingHr }.lastOrNull()
+                }.getOrNull()
+
+                // High-water mark: never surface a nap whose window ended before nap detection first ran
+                // (a deep first-offload backlog would otherwise dredge up days of old naps). Seeded to
+                // "now" on the first read.
+                val highWater = NapPrefs.highWaterOrSeed(context, nowSec)
+
+                val decision = NapDetector.evaluate(
+                    gravity = grav,
+                    hr = hr.map { HrRow(it.ts, it.bpm) },
+                    restingHr = restingHr,
+                    config = NapPrefs.config(context),
+                )
+                if (decision.verdict == NapVerdict.NAP && decision.candidate != null &&
+                    decision.candidate.end > highWater
+                ) {
+                    val queued = NapStore.enqueue(context, decision.candidate, nowSec)
+                    // Advance the mark past this nap's window so the same window isn't re-judged on the next
+                    // overlapping offload — whether or not it newly queued (a dup the user already saw or
+                    // dismissed is still "past"). NapStore's own dedup is the belt to this braces.
+                    NapPrefs.setHighWaterTs(context, decision.candidate.end)
+                    if (queued) {
+                        val mins = decision.candidate.durationS / 60
+                        log("Nap detection: queued a ~$mins-min nap for review.")
+                    }
+                }
+            } catch (t: Throwable) {
+                log("Nap detection: check failed (${t.message})")
             }
         }
     }
@@ -2454,7 +2580,10 @@ class WhoopBleClient(
                   // body so a bad frame drops ONE frame and the link stays up. (log() is itself total.)
                   try {
                     noteWhoop5R22Telemetry(frame, backfilling && isOffloadFrame(frame, connectedFamily))  // #174
-                    handleFrame(frame)              // UI (always) — port of router.handle(frame:)
+                    // A frame replayed as part of the historical offload (type 47/48/… during a backfill)
+                    // must not drive LIVE-only state (the charging pill). Mirrors iOS, where the offload
+                    // path skips the live router entirely. (PR #568 reimpl)
+                    handleFrame(frame, replayedOffload = backfilling && isOffloadFrame(frame, connectedFamily))
 
                     // Capture the strap's newest stored record from a GET_DATA_RANGE reply, feeding
                     // the liveness watchdog. The response command byte is family-dependent: @6 on
@@ -2577,7 +2706,7 @@ class WhoopBleClient(
      * Pure decode→state router for one COMPLETE frame.
      * Direct port of `FrameRouter.handle(frame:)`.
      */
-    private fun handleFrame(frame: ByteArray) {
+    private fun handleFrame(frame: ByteArray, replayedOffload: Boolean = false) {
         val parsed = Framing.parseFrame(frame, connectedFamily)
         if (!parsed.ok) return
         // Reject frames that failed their checksum — never let bad bytes drive state.
@@ -2650,18 +2779,15 @@ class WhoopBleClient(
                             _state.value = _state.value.copy(lastEvent = ev)
                         }
                         // Charging flag — wire observation: BATTERY_LEVEL u8 bit0 (4.0 @26 / 5.0 @30).
-                        // handleFrame also sees replayed HISTORICAL events during a backfill (old ts),
-                        // so gate exactly like the gestures below: live ungated, backfill only if fresh —
-                        // an old replayed charging=1 must not light the pill mid-sync.
-                        if (ev.startsWith("BATTERY_LEVEL")) {
-                            val ts = (parsed.parsed["event_timestamp"] as? Int)?.toLong()
-                            val nowSec = System.currentTimeMillis() / 1000L
-                            val fresh = !backfilling || (ts != null && ts > 0 &&
-                                kotlin.math.abs(nowSec - ts) <= LIVE_GESTURE_WINDOW_SECONDS)
-                            if (fresh) {
-                                (parsed.parsed["battery_charging"] as? Int)?.let {
-                                    _state.value = _state.value.copy(charging = it != 0)
-                                }
+                        // PR #568 reimpl: drop the old 45s time-freshness gate (which suppressed the bolt
+                        // for the first ~45s of every connect on a strap with a stale RTC). The only thing
+                        // we must still exclude is a HISTORICAL BATTERY_LEVEL event replayed mid-backfill —
+                        // and that's exactly [replayedOffload], the same offload discriminator iOS relies on
+                        // by skipping its live router. A genuine live battery event now lights the pill
+                        // immediately, regardless of its event_timestamp.
+                        if (ev.startsWith("BATTERY_LEVEL") && shouldApplyChargingFromBatteryEvent(replayedOffload)) {
+                            (parsed.parsed["battery_charging"] as? Int)?.let {
+                                _state.value = _state.value.copy(charging = it != 0)
                             }
                         }
                     } else {
@@ -3581,6 +3707,9 @@ class WhoopBleClient(
                     "consecutive empty syncs = ${emptySyncTracker.consecutiveEmptySyncs}.",
             )
         }
+        // PR #556 reimpl: persist the HISTORY_COMPLETE instant so "Last synced N ago" survives a BLE-client
+        // recreation / process restart and stops reverting to "Never".
+        if (reason == "HISTORY_COMPLETE") NoopPrefs.setLastSyncAt(context, nowSec)
         _state.value = when (reason) {
             "HISTORY_COMPLETE" -> _state.value.copy(
                 backfilling = false,
@@ -3611,6 +3740,10 @@ class WhoopBleClient(
             // L3 stress check-in (v5): same read-only hook — fire the StressOnsetDetector over the live
             // R-R buffer. Self-gates on the BiofeedbackPrefs master/auto toggles (inert when off).
             maybeNudgeStress()
+            // On-device short-nap detection (PR #569 reimpl): same read-only hook — judge the freshly
+            // offloaded daytime window and queue a confident nap for review. Self-gates on NapPrefs (OFF
+            // by default); never auto-writes a sleep session.
+            maybeDetectNaps()
         }
         // Success-side summary (#150 forensics): we logged failures (decoded-to-0) but never successes,
         // so a strap log couldn't tell a banking strap from a broken one. Emit the per-session persistence

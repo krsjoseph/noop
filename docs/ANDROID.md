@@ -43,6 +43,7 @@ the same analytics so results match macOS.)
 - [The protocol module (Kotlin port of `WhoopProtocol`)](#the-protocol-module-kotlin-port-of-whoopprotocol)
 - [Android BLE layer](#android-ble-layer)
 - [Storage with Room](#storage-with-room)
+- [Raw capture import (`capture.json`)](#raw-capture-import-capturejson)
 - [Analytics](#analytics)
 - [Compose UI](#compose-ui)
 - [Permissions and the no-internet posture](#permissions-and-the-no-internet-posture)
@@ -62,7 +63,7 @@ re-implements the same observable behavior in idiomatic Kotlin:
 | `WhoopProtocol` — BLE framing, CRC, command/event/packet decode | `com.noop.protocol` (Kotlin) | shipped — framing/CRC, `parseFrame`, enums |
 | `WhoopStore` — GRDB/SQLite persistence | `com.noop.data` (Room) | shipped — entities, DAOs, database |
 | `StrandAnalytics` — HRV / recovery / strain / sleep math | `com.noop.analytics` | shipped — RMSSD / zones / illness-watch + scorers |
-| `StrandImport` — WHOOP CSV + Apple Health importers | `com.noop.data` importers | shipped — WHOOP CSV + Apple Health |
+| `StrandImport` — WHOOP CSV + Apple Health importers | `com.noop.data` / `com.noop.ingest` importers | shipped — WHOOP CSV, Apple Health, Health Connect, raw `capture.json` (see [Raw capture import](#raw-capture-import-capturejson)) |
 | `StrandDesign` — SwiftUI design system | Jetpack Compose theme | shipped — `Theme.NOOP` tokens + components |
 | `Strand/` macOS app (CoreBluetooth + UI) | `com.noop.ui` + `com.noop.ble` (Compose + `BluetoothGatt`) | shipped — Compose screens + BLE pipeline |
 
@@ -500,6 +501,66 @@ ported.
 
 The database is created **without** an `INTERNET` permission and lives entirely in the app's private
 storage; nothing is uploaded.
+
+---
+
+## Raw capture import (`capture.json`)
+
+**Settings → Data Sources → "Raw capture (.json)"** imports a strap offload that was captured on
+*another* device — most usefully the Linux `tools/linux-capture/whoop_sync.py` tool, whose `export`
+subcommand writes exactly this format. It lets you pull a strap's history on a laptop (no phone, no
+WHOOP app) and then fold it into NOOP on the phone. Fully offline; nothing leaves the device.
+
+**File format.** A JSON array of frame objects, one per stored BLE notify frame:
+
+```json
+[ {"hex": "aa50…", "char": "61080003-…", "ts_ms": 1718000000000, "hr": 75}, … ]
+```
+
+- `hex` — the raw strap frame, hex-encoded.
+- `char` — the notify-characteristic UUID; its family marker selects the decoder (`6108…` → WHOOP 4,
+  `fd4b…` → WHOOP 5/MG). Frames with an unrecognised `char` are skipped.
+- `ts_ms` / `hr` — informational only; decoding uses each record's own embedded unix timestamp.
+
+The format is identical to the macOS app's frame-export hook, so captures are interchangeable across
+platforms and feed the one decoder of record.
+
+**Pipeline** (`com.noop.ingest.CaptureImporter`, a self-contained object with `CaptureImporterTest`
+covering the pure parts). The Data Sources screen wires it with a single call —
+`CaptureImporter.importCapture(context, uri, repo, RawHistoryArchive(context))`, then sizes the
+post-import rescore via `CaptureImporter.analyzeWindowDays(firstDay, today)`:
+
+1. **Parse — streamed and bounded.** A `capture.json` for a multi-day offload is tens of MB and
+   hundreds of thousands of frames; loading it whole into a `String` + `JSONArray` OOMs a phone.
+   Instead a small `JsonArrayScanner` pulls one top-level array element at a time off the SAF input
+   stream (respecting strings, escapes and nested braces), handing each object to `org.json` for field
+   parsing. Because the file is **untrusted user input**, the scan is bounded — a cap on bytes read, a
+   cap on frames kept (excess flagged, not crashed), a per-frame hex-length ceiling, and strict hex
+   validation — so a malformed or oversized file is rejected cleanly. Peak memory is the per-family
+   frame lists plus one element substring — not the whole file.
+2. **Decode — reuses the live path.** Frames are filtered to offload frames and run through the SAME
+   `extractHistoricalStreams` decoder the live BLE offload uses (`clockRef 0/0`, since historical
+   records carry their own unix). There is no second decoder to drift, and the live BLE analyze path is
+   untouched.
+3. **Insert.** Decoded streams go through `WhoopRepository.insert(batch, "my-whoop")` — the same
+   natural-key-deduped write as the live offload, so re-importing the same file is idempotent.
+4. **Archive the rest.** Frames the current decoder can't yet map are reject-archived (via
+   `RawHistoryArchive`) so a future release can recover them — exactly as the live offload archives
+   undecodable history before acking.
+5. **Recompute.** Raw samples are stored, but the dashboard reads *computed* recovery / strain / sleep,
+   produced by `IntelligenceEngine`. The screen fires one scoring pass right after the import, widening
+   the look-back via `analyzeWindowDays` to cover the import's oldest day so an old historical capture
+   is scored, not just the recent window.
+
+**Caveats.**
+
+- **Recovery needs ≥7 baseline nights** (`ReadinessEngine`), so a short capture imports sleep / strain
+  / HRV / resting-HR but leaves `recovery` null until enough history accumulates — expected, not a bug.
+- **WHOOP 4 SpO₂ / skin-temp** historical records carry raw PPG counts (`red`/`ir`) and a raw temp int,
+  not calibrated `%`/`°C`; the engine does not derive daily SpO₂ / skin-temp from them, so those daily
+  fields stay null on a 4.0 import.
+
+See `tools/linux-capture/README.md` for the capture/export side that produces these files.
 
 ---
 

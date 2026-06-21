@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "6.0.3"
+    static let currentVersion = "6.1.0"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,19 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "6.1.0",
+            title: "A big one: smarter sleep, naps, more devices, and a load of fixes",
+            date: "June 2026",
+            items: [
+                "**Sleep got smarter and more honest.** A night split by a wake-up is now counted in full instead of just one fragment. A bad-clock strap can no longer pass off a 12-hour block as one night. A still morning right after you wake is no longer mistaken for a second sleep. And when the deep/REM split can't be trusted on a quiet night, NOOP says so instead of guessing. Your own hand-edits to a night also win over an imported value now.",
+                "**Naps, spotted on your device.** Opt in and NOOP notices a likely nap from your motion and offers it for a one-tap add. Nothing is logged automatically, and it never touches your real sleep scores. Thanks @cbarrado.",
+                "**WHOOP 4.0 sleep on older firmware.** Straps on an older offload layout that used to bank nothing now hand over the motion NOOP needs to stage sleep. Thanks airtonzanon for the captures.",
+                "**More at a glance.** A new 2x2 Android home-screen widget shows Charge, Effort and Rest together, plus optional morning-recap and post-workout notifications, both off by default and no AI involved.",
+                "**Caffeine cutoff and per-day alarms.** Set a \"no caffeine after\" time with a gentle late-intake nudge (thanks @mvanhorn), and set different smart-alarm wake times per weekday (thanks @MumiZed).",
+                "**WHOOP 4.0 gets more.** Broadcast your heart rate out from a 4.0, not just a 5.0; a clearer steps calibration; and honest \"what your strap can and can't read\" copy instead of bare dashes. On Android, removing a device now properly releases the Bluetooth link so the band can re-pair.",
+                "**Polish and fixes.** Fixed the iPhone score-ring overlap, a battery-friendly skip of the idle background re-score (thanks @ryanbr), last-synced time that survives a restart (thanks @tavelli), a charging bolt on the Live screen, a Linux raw-capture import, and German is now fully translated.",
+            ]),
         Release(
             version: "6.0.3",
             title: "Date-hygiene fix for straps with a bad clock",

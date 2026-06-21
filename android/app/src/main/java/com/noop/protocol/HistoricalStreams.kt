@@ -338,8 +338,9 @@ private fun decodeWhoop5Historical(frame: ByteArray): Map<String, Any?>? {
  * PPG-derived on-device), so the win here is the waveform itself, which [PpgHr] turns into HR.
  *
  * Returns the record's wall-second [unix] and the 24 raw ADC [samples], or null when the frame is not
- * a v26 HISTORICAL_DATA record or the waveform region is truncated. The bytes before [27]
- * (header + optical-channel index @21) and the footer after [75] are intentionally not mapped here.
+ * a v26 HISTORICAL_DATA record or the waveform region is truncated. The bytes before [27] (header +
+ * the raw per-burst counter @21 — `burst_index`, NOT a channel id; PR#553) and the footer after [75]
+ * are intentionally not mapped here: the Android offload path needs only [unix] + the waveform for HR.
  */
 private data class V26Record(val unix: Int, val samples: List<Int>)
 

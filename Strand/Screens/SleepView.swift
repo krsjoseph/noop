@@ -533,33 +533,95 @@ struct SleepView: View {
     private func stageCard(_ night: Night, intervals: [SleepInterval]) -> some View {
         let s = night.stages
         let isPersisted = (night.realSegments?.count ?? 0) >= 2
-        ChartCard(
-            title: "Stage breakdown",
-            subtitle: "\(durationText(night.timeInBed)) in bed · \(efficiencyText(night)) efficiency"
-                + (isPersisted ? " · stages approximate (on-device)" : ""),
-            trailing: durationText(s.asleep),
-            height: NoopMetrics.chartHeight,
-            tint: StrandPalette.restColor,
-            chart: {
-                if intervals.count >= 2 {
-                    Hypnogram(intervals: intervals,
-                              height: NoopMetrics.chartHeight,
-                              showsStageAxis: true,
-                              nightStart: night.onsetDate,
-                              showsTimeAxis: true)
-                } else {
-                    stageBar(s)
+        VStack(alignment: .leading, spacing: 8) {
+            ChartCard(
+                title: "Stage breakdown",
+                subtitle: "\(durationText(night.timeInBed)) in bed · \(efficiencyText(night)) efficiency"
+                    + (isPersisted ? " · stages approximate (on-device)" : ""),
+                trailing: durationText(s.asleep),
+                height: NoopMetrics.chartHeight,
+                tint: StrandPalette.restColor,
+                chart: {
+                    if intervals.count >= 2 {
+                        Hypnogram(intervals: intervals,
+                                  height: NoopMetrics.chartHeight,
+                                  showsStageAxis: true,
+                                  nightStart: night.onsetDate,
+                                  showsTimeAxis: true)
+                    } else {
+                        stageBar(s)
+                    }
+                },
+                footer: {
+                    ChartFooter([
+                        ("REM",   "\(durationText(s.rem)) · \(pct(s.rem, s.total))%"),
+                        ("Deep",  "\(durationText(s.deep)) · \(pct(s.deep, s.total))%"),
+                        ("Light", "\(durationText(s.light)) · \(pct(s.light, s.total))%"),
+                        ("Awake", "\(durationText(s.awake)) · \(pct(s.awake, s.total))%"),
+                    ])
                 }
-            },
-            footer: {
-                ChartFooter([
-                    ("REM",   "\(durationText(s.rem)) · \(pct(s.rem, s.total))%"),
-                    ("Deep",  "\(durationText(s.deep)) · \(pct(s.deep, s.total))%"),
-                    ("Light", "\(durationText(s.light)) · \(pct(s.light, s.total))%"),
-                    ("Awake", "\(durationText(s.awake)) · \(pct(s.awake, s.total))%"),
-                ])
+            )
+            // H9 — when the engine's Rest confidence flags this night's staging as low-confidence (a
+            // high-efficiency night whose deep+REM share is implausibly low → a likely staging miss, not
+            // a real night with no restorative sleep), say so honestly under the breakdown rather than
+            // presenting the suspect split as fact. Read straight from `ScoreConfidence.rest(...)` — the
+            // SAME engine call the daily pass uses — so the badge can never disagree with the score.
+            if stageStagingIsLowConfidence(night) {
+                stageLowConfidenceNote
             }
-        )
+        }
+    }
+
+    /// H9 — true when this night's staging is LOW-CONFIDENCE: a high-efficiency night (lots of measured
+    /// sleep) whose restorative (deep+REM) share is implausibly low, which the EEG-free classifier is far
+    /// more likely to have mis-staged than a genuine night with no deep or REM. Delegates to the engine's
+    /// pure `ScoreConfidence.rest(...)` H9 overload (efficiency in [0,1], seconds for the totals) so the UI
+    /// and the persisted Rest confidence agree by construction. Needs staged sleep + a real efficiency
+    /// reading; a pooled/no-stage or unknown-efficiency night is never flagged (its base tier already
+    /// reads honestly). (#H9)
+    private func stageStagingIsLowConfidence(_ night: Night) -> Bool {
+        let s = night.stages
+        guard let effPct = efficiencyPct(night) else { return false }
+        return SleepView.isStagingLowConfidence(
+            asleepMin: s.asleep, deepMin: s.deep, remMin: s.rem, efficiency: effPct / 100.0)
+    }
+
+    /// Pure H9 gate (unit-testable without a live view) — true when a night's staging is low-confidence:
+    /// a high-efficiency night whose deep+REM share is below the restorative floor. Built on the engine's
+    /// own `ScoreConfidence.rest(...)` so the UI flag and the persisted Rest confidence agree. `asleepMin`,
+    /// `deepMin`, `remMin` are minutes; `efficiency` is asleep/in-bed in [0,1]. Returns false for an unstaged
+    /// or zero-asleep night (no staging to doubt). Mirror EXACTLY in Kotlin. (#H9)
+    static func isStagingLowConfidence(asleepMin: Double, deepMin: Double, remMin: Double,
+                                       efficiency: Double) -> Bool {
+        guard asleepMin > 0 else { return false }
+        let restorativeMin = max(0, deepMin) + max(0, remMin)
+        let tier = ScoreConfidence.rest(
+            hasSession: true,
+            hasStagedSleep: restorativeMin > 0,
+            asleepSeconds: asleepMin * 60.0,
+            restorativeSeconds: restorativeMin * 60.0,
+            efficiency: efficiency)
+        // The H9 overload only DOWNGRADES solid → building on the suspicious case; a genuinely
+        // low-restorative-AND-low-efficiency night keeps its honest base tier and isn't flagged here.
+        return tier == .building
+            && (restorativeMin / asleepMin) < ScoreConfidence.restorativeLowConfidenceShare
+            && efficiency >= ScoreConfidence.highEfficiencyThreshold
+    }
+
+    /// The H9 low-confidence note shown beneath the stage breakdown — a warning-tinted badge plus a
+    /// one-line honest explanation. No faked stages, no tanked score; just a clear "treat this split with
+    /// care" so a user doesn't read a likely staging miss as a real deep/REM drought. (#H9)
+    private var stageLowConfidenceNote: some View {
+        HStack(alignment: .top, spacing: 8) {
+            SourceBadge("Low confidence", tint: StrandPalette.statusWarning)
+            Text("This night scored high efficiency but very little deep or REM — more likely a staging estimate miss than a real restorative shortfall. The totals are kept as-is; read the split with care.")
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Low confidence staging. This night scored high efficiency but very little deep or REM, more likely an estimate miss than a real restorative shortfall.")
     }
 
     /// The night's clock window — when you fell asleep and when you woke — as its own clearly

@@ -762,4 +762,116 @@ final class SleepStagerTests: XCTestCase {
         XCTAssertEqual(SleepStager.findPeaks(x, distance: 5, height: 0.5), [2],
                        "equal-height peaks within distance keep the lowest index")
     }
+
+    // MARK: - H4 physiological in-bed span cap (#547/#531/#509 tail)
+
+    func testDetectSleepClampsOverlongBadClockBlock() {
+        // A frozen-still 18 h "night" (a bad-clock artefact) exceeds the 16 h physiological cap → DROPPED,
+        // so it can never report a 12 h+ sleep. Anchored at a night hour with low HR so ONLY the span cap
+        // can reject it (the duration floor + HR confirmation both pass).
+        let start = nightStart(22)
+        let dur = 18 * 60 * 60                     // 18 h > maxMainSleepSpanS (16 h)
+        let grav = stillGravity(start: start, durationS: dur)
+        let hr = hrStream(start: start, durationS: dur, bpm: 50)
+        XCTAssertTrue(SleepStager.detectSleep(hr: hr, gravity: grav).isEmpty,
+                      "an 18 h still block is a bad-clock artefact and is dropped by the span cap")
+    }
+
+    func testDetectSleepKeepsLongButPlausibleNight() {
+        // A genuinely long but plausible night (just under the 16 h cap) is KEPT — the cap only drops the
+        // clock-artefact range, never a real recovery/lie-in night.
+        let start = nightStart(21)
+        let dur = 15 * 60 * 60                     // 15 h ≤ cap
+        let grav = stillGravity(start: start, durationS: dur)
+        let hr = hrStream(start: start, durationS: dur, bpm: 50)
+        XCTAssertEqual(SleepStager.detectSleep(hr: hr, gravity: grav).count, 1,
+                       "a 15 h night is below the cap and survives")
+    }
+
+    // MARK: - H7 morning-stillness nap suppression (#531) — pure guard
+
+    /// A daytime Period helper (center lands in the [11,20) band at tzOffset 0).
+    private func daytimePeriod(_ startHour: Int, durMin: Int) -> SleepStager.Period {
+        let s = startAtHour(startHour)
+        return SleepStager.Period(stage: "sleep", start: s, end: s + durMin * 60)
+    }
+
+    func testMorningStillnessRejectedNearOvernightWake() {
+        // A 120-min daytime block at 09:00 that clears the ORDINARY daytime guard (resting 74 ≤ 0.95×80=76)
+        // but NOT the stronger re-onset bar (74 > 0.90×80=72), beginning right after a 08:00 overnight wake,
+        // is REJECTED as morning residual stillness.
+        let p = daytimePeriod(9, durMin: 120)
+        let wakeEnd = startAtHour(8)               // overnight chain woke at 08:00, ~1 h before p
+        XCTAssertFalse(
+            SleepStager.passesMorningStillnessGuard(p, restingHR: 74, baseline: 80, morningWakeEnd: wakeEnd),
+            "a still block right after the overnight wake with no clear re-onset dip is rejected")
+    }
+
+    func testMorningStillnessKeptOnStrongReonsetDip() {
+        // Same morning window, but a clear cardiac dip (resting 70 ≤ 0.90×80=72) → a genuine second sleep
+        // is KEPT.
+        let p = daytimePeriod(9, durMin: 120)
+        let wakeEnd = startAtHour(8)
+        XCTAssertTrue(
+            SleepStager.passesMorningStillnessGuard(p, restingHR: 70, baseline: 78, morningWakeEnd: wakeEnd),
+            "a clear re-onset HR dip keeps a genuine morning second sleep")
+    }
+
+    func testMorningStillnessGuardNoOpOutsideWindow() {
+        // A nap hours later (no overnight wake nearby → morningWakeEnd nil) faces only the ordinary daytime
+        // guard, unchanged.
+        let p = daytimePeriod(14, durMin: 120)     // 14:00 afternoon nap
+        XCTAssertTrue(
+            SleepStager.passesMorningStillnessGuard(p, restingHR: 70, baseline: 80, morningWakeEnd: nil),
+            "outside the morning window the guard is the ordinary daytime bar")
+    }
+
+    func testMorningStillnessRescuedByBandSleepState() {
+        // The strap's OWN banked band sleep_state reads predominantly "asleep" (2) over the block → the H7
+        // guard KEEPS it even though the HR dip is borderline (74 > 0.90×80=72, would otherwise be rejected).
+        // CONSUME path.
+        let p = daytimePeriod(9, durMin: 120)
+        let wakeEnd = startAtHour(8)
+        // 80% of in-block samples are state 2 (asleep) ≥ the 0.6 fraction.
+        var band: [(ts: Int, state: Int)] = []
+        let n = 100
+        for i in 0..<n { band.append((ts: p.start + i * 60, state: i < 80 ? 2 : 1)) }
+        XCTAssertTrue(
+            SleepStager.passesMorningStillnessGuard(p, restingHR: 74, baseline: 80,
+                                                    morningWakeEnd: wakeEnd, bandSleepState: band),
+            "the strap's own 'asleep' band rescues a borderline-HR morning re-onset")
+        // Without the band anchor the same borderline-HR block is rejected (74 > 0.90×80=72).
+        XCTAssertFalse(
+            SleepStager.passesMorningStillnessGuard(p, restingHR: 74, baseline: 80, morningWakeEnd: wakeEnd))
+    }
+
+    func testBandStateConfirmsAsleepFractionGate() {
+        let p = daytimePeriod(9, durMin: 60)
+        // 50% asleep < 0.6 → NOT confirmed.
+        var half: [(ts: Int, state: Int)] = []
+        for i in 0..<100 { half.append((ts: p.start + i * 30, state: i < 50 ? 2 : 0)) }
+        XCTAssertFalse(SleepStager.bandStateConfirmsAsleep(p, bandSleepState: half))
+        // Empty band → never confirmed (no fabricated reading).
+        XCTAssertFalse(SleepStager.bandStateConfirmsAsleep(p, bandSleepState: []))
+    }
+
+    // MARK: - H8 per-epoch motion (persisted beside stagesJSON)
+
+    func testSessionEpochMotionGridsToStageEpochs() {
+        // 90-min still night → ~180 thirty-second epochs of near-zero motion, on the same grid as staging.
+        let start = nightStart(02)
+        let dur = 90 * 60
+        let grav = stillGravity(start: start, durationS: dur)
+        let motion = SleepStager.sessionEpochMotion(start: start, end: start + dur, grav: grav)
+        // 90 min / 30 s = 180 epochs.
+        XCTAssertEqual(motion.count, 180, "one motion value per 30 s epoch")
+        XCTAssertTrue(motion.allSatisfy { $0 >= 0 }, "motion magnitudes are non-negative |Δgravity| sums")
+        // A perfectly still stream has ~zero motion.
+        XCTAssertEqual(motion.reduce(0, +), 0, accuracy: 1e-6)
+    }
+
+    func testSessionEpochMotionEmptyWhenNoGravity() {
+        // Too little gravity to grid → [] so the caller persists NULL, never a fabricated zero series.
+        XCTAssertTrue(SleepStager.sessionEpochMotion(start: 0, end: 1800, grav: []).isEmpty)
+    }
 }

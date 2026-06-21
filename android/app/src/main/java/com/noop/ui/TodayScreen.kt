@@ -91,6 +91,7 @@ import android.app.DatePickerDialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.analytics.Baselines
 import com.noop.analytics.ReadinessEngine
+import com.noop.analytics.ScoreConfidence
 import com.noop.analytics.StrainScorer
 import com.noop.data.AppleDaily
 import com.noop.data.DailyMetric
@@ -2000,9 +2001,13 @@ private fun MetricGrid(
                 value = d?.recovery?.let { "${it.roundToInt()}%" }
                     ?: recoveryCalibration?.let { "$it/${Baselines.minNightsSeed}" }
                     ?: lastScoredCharge?.let { "${it.value.roundToInt()}%" } ?: NO_DATA,
+                // H10: cold-start Charge — when there's no score, no "N of 4" calibration count and nothing
+                // carried, fall back to the honest "Building, wear it tonight" hint (today only) instead of
+                // a captionless "No Data". Past days stay bare (buildingHint returns null off-today).
                 caption = d?.recovery?.let {
                     Palette.recoveryState(it).lowercase().replaceFirstChar { c -> c.uppercase() }
-                } ?: recoveryCalibration?.let { "Calibrating" } ?: lastScoredCharge?.caption,
+                } ?: recoveryCalibration?.let { "Calibrating" } ?: lastScoredCharge?.caption
+                    ?: buildingHint(KeyMetric.CHARGE, isToday),
                 accent = d?.recovery?.let { Palette.recoveryColor(it) }
                     ?: lastScoredCharge?.let { Palette.recoveryColor(it.value) } ?: Palette.textTertiary,
                 spark = w.recovery,
@@ -2027,6 +2032,9 @@ private fun MetricGrid(
         KeyMetric.REST to { m ->
             // Unscored TODAY → "building, wear it tonight" instead of a lone dash, so a fresh user reads
             // "coming" not "broken" (#527); a scored day keeps its sleep caption, a past day stays bare.
+            // H9 — when the night IS scored but its staging is low-confidence (a high-efficiency night with
+            // implausibly low deep+REM, per the core's ScoreConfidence rule), badge it "Estimated" so the
+            // stage figures read honestly. Only shown alongside a real score; never on a "building" tile.
             SparkStatTile(
                 modifier = m,
                 label = "Rest",
@@ -2039,6 +2047,7 @@ private fun MetricGrid(
                 spark = w.sleepMin,
                 sparkColor = Palette.metricPurple,
                 onInfo = { onScoreInfo(ScoreSection.REST) },
+                badge = if (restScore != null && restStageLowConfidence(d)) "Estimated" else null,
             )
         },
         KeyMetric.HRV to { m ->
@@ -2076,7 +2085,10 @@ private fun MetricGrid(
                 modifier = m,
                 label = "Blood Oxygen",
                 value = carried?.let { String.format(Locale.US, "%.0f%%", it) } ?: NO_DATA,
-                caption = if (today != null) "SpO₂" else carried?.let { carriedVitalCaption },
+                // H10: with no reading today and nothing carried, say the overnight SpO₂ is still building
+                // (today only) rather than a captionless "No Data". A carried night keeps its date stamp.
+                caption = if (today != null) "SpO₂" else (carried?.let { carriedVitalCaption }
+                    ?: buildingHint(KeyMetric.BLOOD_OXYGEN, isToday)),
                 accent = carried?.let { Palette.metricCyan } ?: Palette.textTertiary,
                 spark = w.spo2,
                 sparkColor = Palette.metricCyan,
@@ -2108,11 +2120,13 @@ private fun MetricGrid(
                 modifier = m,
                 label = "Steps",
                 value = steps?.let { intString(it.toDouble()) } ?: NO_DATA,
-                // An estimated day reads "est." so the number is never taken as a measured count.
+                // An estimated day reads "est." so the number is never taken as a measured count. H10:
+                // with no count at all, say steps are still building today rather than a captionless
+                // "No Data" (today only; a past day with no steps stays a bare dash).
                 caption = when {
                     realSteps != null -> "steps"
                     estimatedStepsForDay != null -> "est."
-                    else -> null
+                    else -> buildingHint(KeyMetric.STEPS, isToday)
                 },
                 accent = steps?.let { Palette.metricCyan } ?: Palette.textTertiary,
                 spark = emptyList(),
@@ -2871,18 +2885,27 @@ private fun SparkStatTile(
     spark: List<Double> = emptyList(),
     sparkColor: Color = Palette.accent,
     onInfo: (() -> Unit)? = null,
+    badge: String? = null,
 ) {
     NoopCard(modifier = modifier.height(Metrics.tileHeight), padding = Metrics.space14) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Label row carries the overline and, for the three headline scores only, a trailing ⓘ
-            // that opens the scoring guide at this score. Other tiles render exactly as before.
-            if (onInfo != null) {
+            // Label row carries the overline, an optional low-confidence [badge] (H9 — e.g. "Estimated"
+            // stages), and, for the three headline scores only, a trailing ⓘ that opens the scoring guide
+            // at this score. Other tiles render exactly as before.
+            if (onInfo != null || badge != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Overline(label, modifier = Modifier.weight(1f))
-                    ScoreInfoButton(section = null, onClick = onInfo, compact = true)
+                    Overline(label)
+                    if (badge != null) {
+                        Spacer(Modifier.width(Metrics.space6))
+                        // A tertiary-tinted pill — honest "this is estimated, not measured" signal, the same
+                        // muted treatment as a provenance badge so it informs without alarming. (H9)
+                        SourceBadge(badge, tint = Palette.textTertiary)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (onInfo != null) ScoreInfoButton(section = null, onClick = onInfo, compact = true)
                 }
             } else {
                 Overline(label)
@@ -3047,17 +3070,58 @@ private fun restCaption(d: DailyMetric?): String? = when {
 }
 
 /**
- * Short "it's coming, not broken" caption for an unscored Effort/Rest tile on TODAY only (#527). Rest
- * fills in after a night's sleep; Effort fills in once cardio load is logged. Returns null off-today so
- * a navigated PAST day with no score honestly stays a bare dash (missing data, not mid-calibration) —
- * mirrors the recoveryCalibration today-only rule the Charge tile uses. Pure + unit-tested. Mirrors the
- * iOS buildingHint(_:). Call sites only reach here when the score is genuinely absent.
+ * H9 — whether THIS night's sleep STAGING is low-confidence, read from the core's existing
+ * [ScoreConfidence] rule (never fabricated). True exactly when the night has staged sleep (so the base
+ * Rest tier is SOLID) yet the H9 overload DOWNGRADES it — a high-efficiency night whose deep+REM share
+ * is implausibly low, far more likely a staging miss (the EEG-free classifier's weak spot) than a real
+ * night with almost no restorative sleep. We surface that honestly with a small "Stages estimated" badge
+ * rather than faking stages or tanking the Rest score. Reads only the day's banked stage figures
+ * (efficiency is the engine's 0..1 fraction; restorative = deep+REM), so it's the SAME decision the
+ * daily pass made into `restConfidence`. Returns false for a missing day, a calibrating/building base
+ * tier, or any night the core deems SOLID. Pure + unit-tested. Mirrors the iOS Sleep H9 badge gate.
+ */
+internal fun restStageLowConfidence(d: DailyMetric?): Boolean {
+    val asleepMin = d?.totalSleepMin ?: return false
+    val efficiency = d.efficiency ?: return false
+    val restorativeMin = (d.deepMin ?: 0.0) + (d.remMin ?: 0.0)
+    val hasStaged = restorativeMin > 0.0
+    // The base (pre-H9) tier: SOLID only when there's staged sleep. If the base isn't SOLID the badge
+    // doesn't apply — a calibrating/no-stage night has its own honest treatment, not a "stages off" flag.
+    if (ScoreConfidence.forRest(hasSession = true, hasStagedSleep = hasStaged) != ScoreConfidence.SOLID) {
+        return false
+    }
+    // The H9 overload: SOLID stays SOLID unless the high-efficiency / low-restorative staging-miss fires.
+    return ScoreConfidence.forRest(
+        hasSession = true,
+        hasStagedSleep = hasStaged,
+        asleepSeconds = asleepMin * 60.0,
+        restorativeSeconds = restorativeMin * 60.0,
+        efficiency = efficiency,
+    ) == ScoreConfidence.BUILDING
+}
+
+/**
+ * Short "it's coming, not broken" caption for an unscored tile on TODAY only (#527, extended for H10).
+ * Rest fills in after a night's sleep; Effort fills in once cardio load is logged; the overnight vitals
+ * (Blood Oxygen) and the on-device Steps fill in over the next few nights / today's wear; Charge needs a
+ * few nights to learn your baseline. Returns null off-today so a navigated PAST day with no score
+ * honestly stays a bare dash (missing data, not mid-calibration) — mirrors the recoveryCalibration
+ * today-only rule the Charge tile uses. Each call site only reaches here when the value is genuinely
+ * absent, so the hint never overwrites a real reading. No em-dashes (house style). Pure + unit-tested.
  */
 internal fun buildingHint(metric: KeyMetric, isToday: Boolean): String? {
     if (!isToday) return null
     return when (metric) {
         KeyMetric.REST -> "Building, wear it tonight"
         KeyMetric.EFFORT -> "Building, moves as you do"
+        // H10: an unscored Charge today that ISN'T mid-calibration and has nothing to carry — say what's
+        // needed rather than a bare "No Data". (The "Calibrating N of 4" copy still owns the calibrating
+        // case at the call site; this only shows once there's genuinely nothing.)
+        KeyMetric.CHARGE -> "Building, wear it tonight"
+        // H10: the overnight blood-oxygen reading builds from sleep, like the other in-sleep vitals.
+        KeyMetric.BLOOD_OXYGEN -> "Building, wear it tonight"
+        // H10: on-device steps fill in across today as you move (5/MG counter / imported HC).
+        KeyMetric.STEPS -> "Building, moves as you do"
         else -> null
     }
 }

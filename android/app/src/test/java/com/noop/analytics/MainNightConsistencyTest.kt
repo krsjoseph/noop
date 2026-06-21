@@ -628,4 +628,76 @@ class MainNightConsistencyTest {
             )
         }
     }
+
+    // ── #561 biphasic gap-bridge (mainNightGroupIndices) ─────────────────────────────────────────
+
+    /** Two overnight fragments split by a < 60-min wake gap → one group of BOTH. Mirrors Swift. */
+    @Test
+    fun groupIndicesBridgesTwoAdjacentFragments() {
+        val a = atHour(23) - 86_400L
+        val aEnd = a + 3 * 3600           // 23:00 → 02:00
+        val b = aEnd + 30 * 60            // 02:30 (30-min gap < 60-min bridge)
+        val blocks = listOf(
+            SleepStageTotals.NightBlock(a, aEnd),
+            SleepStageTotals.NightBlock(b, b + 3 * 3600),
+        )
+        assertEquals(listOf(0, 1), SleepStageTotals.mainNightGroupIndices(blocks, 0L))
+    }
+
+    /** A long wake gap is NOT bridged — only the winning main block is the group. */
+    @Test
+    fun groupIndicesDoesNotBridgeLongGap() {
+        val a = atHour(23) - 86_400L
+        val aEnd = a + 5 * 3600           // 5h overnight (the main night)
+        val b = aEnd + 5 * 3600           // 5h gap >> bridge
+        val blocks = listOf(
+            SleepStageTotals.NightBlock(a, aEnd),
+            SleepStageTotals.NightBlock(b, b + 2 * 3600),
+        )
+        assertEquals(listOf(0), SleepStageTotals.mainNightGroupIndices(blocks, 0L))
+    }
+
+    /** No gap → the group is exactly the single block mainNightIndex would pick (no regression). */
+    @Test
+    fun groupIndicesSingleBlockMatchesBareSelector() {
+        val s = atHour(0)
+        val blocks = listOf(SleepStageTotals.NightBlock(s, s + 7 * 3600))
+        assertEquals(listOf(0), SleepStageTotals.mainNightGroupIndices(blocks, 0L))
+        assertNull(SleepStageTotals.mainNightGroupIndices(emptyList(), 0L))
+    }
+
+    /** A bridged biphasic night (2h + gap + 2h) out-scores a lone 3h nap, returning BOTH its fragments. */
+    @Test
+    fun groupIndicesBridgedNightOutscoresLoneNap() {
+        val f1 = atHour(23) - 86_400L
+        val f1End = f1 + 2 * 3600
+        val f2 = f1End + 20 * 60
+        val f2End = f2 + 2 * 3600
+        val nap = atHour(13)
+        val blocks = listOf(
+            SleepStageTotals.NightBlock(f1, f1End),
+            SleepStageTotals.NightBlock(nap, nap + 3 * 3600),
+            SleepStageTotals.NightBlock(f2, f2End),
+        )
+        assertEquals(listOf(0, 2), SleepStageTotals.mainNightGroupIndices(blocks, 0L))
+    }
+
+    /** The stages-path seam SUMS the bridged biphasic group (analyzeDay parity), not the longest fragment. */
+    @Test
+    fun honoringEditsSumsBiphasicGroup() {
+        val a = atHour(23) - 86_400L
+        val aStages = """{"awake":8,"light":24,"deep":82,"rem":96}"""   // 202 asleep + 8 wake = 210 in-bed
+        val aInBedSec = 210 * 60
+        val b = a + aInBedSec + 20 * 60                                  // 20-min wake gap < 60-min bridge
+        val bStages = """{"awake":10,"light":20,"deep":90,"rem":70}"""   // 180 asleep
+        val r = SleepStageTotals.dailyAggregateHonoringEdits(
+            detected = listOf(a to aStages, b to bStages),
+            edited = emptyMap(),
+            onsetByStart = mapOf(a to a, b to b),
+            offsetSec = 0L,
+        )
+        assertNotNull(r)
+        assertEquals("the seam SUMS the bridged biphasic group", 382.0, r!!.sleep.totalSleepMin, 1e-6)
+        assertEquals(172.0, r.sleep.deepMin, 1e-6)   // 82 + 90
+    }
 }

@@ -671,7 +671,8 @@ fun DataSourcesScreen(vm: AppViewModel) {
             tint = DomainTheme.Effort.color,
             subtitle = "Re-share your live strap heart rate over Bluetooth as a standard heart-rate " +
                 "sensor, so a gym treadmill, bike, Zwift, Peloton or any fitness app nearby can read " +
-                "it. Local Bluetooth only. Nothing leaves your phone. Off by default.",
+                "it. Works on any WHOOP — 4.0 or 5.0/MG — because your phone does the broadcasting. " +
+                "Local Bluetooth only. Nothing leaves your phone. Off by default.",
         ) {
             if (hrBroadcast) {
                 val (label, tone) =

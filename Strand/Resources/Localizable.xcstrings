@@ -1,7 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "": {},
     "—": {
       "localizations": {
         "en": {
@@ -591,6 +590,12 @@
             "state": "translated",
             "value": "Aktivität"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actividad"
+          }
         }
       }
     },
@@ -1023,6 +1028,12 @@
             "state": "translated",
             "value": "Ø"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prom"
+          }
         }
       }
     },
@@ -1423,6 +1434,12 @@
             "state": "translated",
             "value": "Kalibrierung"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibrando"
+          }
         }
       }
     },
@@ -1566,6 +1583,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schließen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
           }
         }
       }
@@ -1871,6 +1894,12 @@
             "state": "translated",
             "value": "Verbunden"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado"
+          }
         }
       }
     },
@@ -2030,6 +2059,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Benutzerdefiniert…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizado…"
           }
         }
       }
@@ -2463,6 +2498,12 @@
             "state": "translated",
             "value": "Entdecken"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explorar"
+          }
         }
       }
     },
@@ -2687,6 +2728,12 @@
             "state": "translated",
             "value": "Verstanden"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido"
+          }
         }
       }
     },
@@ -2734,6 +2781,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gesundheit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salud"
           }
         }
       }
@@ -3087,6 +3140,12 @@
             "state": "translated",
             "value": "Importiere…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importando…"
+          }
         }
       }
     },
@@ -3375,6 +3434,12 @@
             "state": "translated",
             "value": "Live"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En vivo"
+          }
         }
       }
     },
@@ -3534,6 +3599,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Niedrig"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bajo"
           }
         }
       }
@@ -4735,6 +4806,12 @@
             "state": "translated",
             "value": "Punkte"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puntos"
+          }
         }
       }
     },
@@ -5247,6 +5324,12 @@
             "state": "translated",
             "value": "Ruhe"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descanso"
+          }
         }
       }
     },
@@ -5294,6 +5377,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ruhe-HF"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC en reposo"
           }
         }
       }
@@ -5358,6 +5447,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Läuft"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En curso"
           }
         }
       }
@@ -5583,6 +5678,12 @@
             "state": "translated",
             "value": "Einstellungen"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
         }
       }
     },
@@ -5710,6 +5811,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schlaf"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sueño"
           }
         }
       }
@@ -5903,6 +6010,12 @@
             "state": "translated",
             "value": "Schritte"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasos"
+          }
         }
       }
     },
@@ -6014,6 +6127,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrés"
           }
         }
       }
@@ -6384,6 +6503,12 @@
             "state": "translated",
             "value": "Heute"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy"
+          }
         }
       }
     },
@@ -6703,6 +6828,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gewicht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peso"
           }
         }
       }
