@@ -148,15 +148,6 @@ struct TrendsView: View {
         return "\(n) \(unit) · \(name(for: range))"
     }
 
-    /// A padded value range for a series so the line isn't flat against the axis.
-    private func valueRange(_ pts: [TrendPoint], fallback: ClosedRange<Double>, pad: Double = 0.12) -> ClosedRange<Double> {
-        let vals = pts.map(\.value)
-        guard let lo = vals.min(), let hi = vals.max() else { return fallback }
-        if hi <= lo { return (lo - 1)...(hi + 1) }
-        let span = hi - lo
-        return (lo - span * pad)...(hi + span * pad)
-    }
-
     private func mean(_ pts: [TrendPoint]) -> Double? {
         guard !pts.isEmpty else { return nil }
         return pts.map(\.value).reduce(0, +) / Double(pts.count)
@@ -366,16 +357,34 @@ struct TrendsView: View {
         let cap = recovery.caption
         let isWide = recovery.widened
         return VStack(alignment: .leading, spacing: NoopMetrics.space2) {
-            HStack {
-                SegmentedPillControl(Range.allCases, selection: $range) { $0.label }
-                Spacer()
-                Text(rangeSubtitle).strandOverline()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: NoopMetrics.space3) {
+                    rangePicker
+                    Spacer(minLength: NoopMetrics.space2)
+                    rangeSubtitleLabel
+                }
+                VStack(alignment: .leading, spacing: NoopMetrics.space2) {
+                    rangeSubtitleLabel
+                    rangePicker
+                }
             }
             Text(cap)
                 .font(StrandFont.footnote)
                 .foregroundStyle(isWide ? StrandPalette.statusWarning : StrandPalette.textTertiary)
                 .accessibilityLabel(cap)
         }
+    }
+
+    private var rangePicker: some View {
+        SegmentedPillControl(Range.allCases, selection: $range) { $0.label }
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var rangeSubtitleLabel: some View {
+        Text(rangeSubtitle)
+            .strandOverline()
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     // MARK: Hero — recovery over time
@@ -423,7 +432,11 @@ struct TrendsView: View {
         )
     }
 
-    // MARK: Small multiples — HRV / Resting HR / Day Strain
+    // MARK: Daily signals — Bevel-style status cards (mean + window trend + sparkline)
+    //
+    // The hero above carries the full Charge chart; the per-signal detail goes glance-first here as
+    // MetricStatusCard rows — the window mean as the big value, the period-change direction as a
+    // coloured status word, and the windowed series as a sparkline. Far denser than three full charts.
 
     private func smallMultiples(hrv: ResolvedMetric, rhr: ResolvedMetric, strain: ResolvedMetric) -> some View {
         let cols = [GridItem(.adaptive(minimum: 320), spacing: NoopMetrics.gap)]
@@ -435,92 +448,59 @@ struct TrendsView: View {
             // No trailing window label — the range bar's overline already states it.
             SectionHeader("Daily signals", overline: "Trends")
             LazyVGrid(columns: cols, alignment: .leading, spacing: NoopMetrics.gap) {
-                // HRV / Resting HR are Charge sub-signals → the Charge (green) card world, each line
-                // keeping its established metric hue for legibility. Effort is the WHOOP blue strain world.
-                metricChart(
-                    title: "Heart rate variability", unit: "ms",
-                    accessibilityTitle: "Heart rate variability",
-                    points: hrvPts,
-                    gradient: gradient(StrandPalette.metricPurple),
-                    tip: StrandPalette.metricPurple,
-                    tint: StrandPalette.chargeColor,
-                    higherIsBetter: true,
-                    range: valueRange(hrvPts, fallback: 20...120),
-                    fmt: { "\(Int($0.rounded()))" }
-                )
-                metricChart(
-                    title: "Resting heart rate", unit: "bpm",
-                    accessibilityTitle: "Resting heart rate",
-                    points: rhrPts,
-                    gradient: gradient(StrandPalette.metricRose),
-                    tip: StrandPalette.metricRose,
-                    tint: StrandPalette.chargeColor,
-                    higherIsBetter: false,
-                    range: valueRange(rhrPts, fallback: 40...80),
-                    fmt: { "\(Int($0.rounded()))" }
-                )
-                metricChart(
-                    // Plotted points + range stay on the stored 0–100 scale (line shape unchanged); only the
-                    // displayed numbers + unit follow the Effort-scale toggle, converted inside `fmt`. (#268)
-                    title: "Effort", unit: "/ \(UnitFormatter.effortScaleMax(effortScale))",
-                    accessibilityTitle: "Effort",
-                    points: strainPts,
-                    // WHOOP: Effort/Strain is always BLUE — a deep→bright blue line, not the amber ramp.
-                    gradient: gradient(StrandPalette.effortColor),
-                    tip: StrandPalette.effortColor,
-                    tint: StrandPalette.effortColor,
-                    higherIsBetter: nil,
-                    range: valueRange(strainPts, fallback: 0...100),
-                    fmt: { UnitFormatter.effortDisplay($0, scale: effortScale) }
-                )
+                // HRV up is good, resting HR down is good; Effort has no simple valence (neutral).
+                trendSignalCard(
+                    icon: "waveform.path.ecg", tint: StrandPalette.metricPurple,
+                    label: "Heart rate variability", unit: "ms",
+                    points: hrvPts, higherIsBetter: true,
+                    fmt: { "\(Int($0.rounded()))" })
+                trendSignalCard(
+                    icon: "heart.fill", tint: StrandPalette.metricRose,
+                    label: "Resting heart rate", unit: "bpm",
+                    points: rhrPts, higherIsBetter: false,
+                    fmt: { "\(Int($0.rounded()))" })
+                trendSignalCard(
+                    icon: "bolt.fill", tint: StrandPalette.effortColor,
+                    label: "Effort", unit: "/ \(UnitFormatter.effortScaleMax(effortScale))",
+                    points: strainPts, higherIsBetter: nil,
+                    // Display follows the Effort-scale toggle; the sparkline shape stays on stored 0–100.
+                    fmt: { UnitFormatter.effortDisplay($0, scale: effortScale) })
             }
         }
     }
 
+    /// One signal → `MetricStatusCard`: window mean as the value, the period change as a coloured
+    /// status word (glyph + direction + magnitude), and the windowed series as the sparkline.
     @ViewBuilder
-    private func metricChart(
-        title: LocalizedStringKey, unit: String,
-        // Plain-string series name for VoiceOver (the `title` is a LocalizedStringKey and can't be
-        // re-read as a String); supplied by callers so the line announces e.g. "HRV trend".
-        accessibilityTitle: String,
-        points pts: [TrendPoint],
-        subtitle: String? = nil,
-        gradient: Gradient,
-        tip: Color,
-        tint: Color,
-        higherIsBetter: Bool?,
-        range: ClosedRange<Double>,
-        fmt: @escaping (Double) -> String
-    ) -> some View {
+    private func trendSignalCard(icon: String, tint: Color, label: LocalizedStringKey, unit: String,
+                                 points pts: [TrendPoint], higherIsBetter: Bool?,
+                                 fmt: @escaping (Double) -> String) -> some View {
         let avg = mean(pts)
-        ChartCard(
-            title: title,
-            subtitle: subtitle,
-            trailing: avg.map(fmt),
-            height: NoopMetrics.chartHeight,
-            tint: tint,
-            chart: {
-                if pts.count >= 2 {
-                    glowChart(points: pts, gradient: gradient, valueRange: range,
-                              tip: tip, valueFormat: { "\(fmt($0)) \(unit)" },
-                              accessibilityLabel: "\(accessibilityTitle) trend")
-                } else {
-                    sparsePlaceholder
-                }
-            },
-            footer: {
-                HStack {
-                    ChartFooter([
-                        // Plain "MEAN" to match the bare MIN/MAX columns; the unit moves into
-                        // the value (e.g. "58 ms") so uppercasing can't render a shouty "MEAN MS".
-                        ("Mean", avg.map { "\(fmt($0)) \(unit)" } ?? "—"),
-                        ("Min", pts.map(\.value).min().map(fmt) ?? "—"),
-                        ("Max", pts.map(\.value).max().map(fmt) ?? "—"),
-                    ])
-                    changeChip(pts, higherIsBetter: higherIsBetter, fmt: fmt)
-                }
-            }
-        )
+        let s = trendSignalStatus(pts, unit: unit, higherIsBetter: higherIsBetter, fmt: fmt)
+        MetricStatusCard(
+            icon: icon, iconTint: tint, label: label,
+            value: avg.map(fmt) ?? "—", unit: avg != nil ? unit : nil,
+            statusText: s.0, statusGlyph: s.1, statusColor: s.2,
+            sparkline: pts.count > 1 ? pts.map(\.value) : nil, sparkColor: tint)
+    }
+
+    /// The window's period-change as a status tuple: "Up 4 ms" / "Down 2 bpm" / "Steady", a direction
+    /// glyph, and a colour by whether the move is good for THIS signal (`higherIsBetter`; neutral if nil
+    /// or flat). Mirrors `changeChip`'s valence, rendered as the card's status line.
+    private func trendSignalStatus(_ pts: [TrendPoint], unit: String, higherIsBetter: Bool?,
+                                   fmt: (Double) -> String) -> (String?, String?, Color) {
+        guard !pts.isEmpty else { return (nil, nil, StrandPalette.textTertiary) }
+        guard let d = periodChange(pts), abs(d) > 0.05 else {
+            return ("Steady", "equal", StrandPalette.textTertiary)
+        }
+        let up = d > 0
+        let text = "\(up ? "Up" : "Down") \(fmt(abs(d))) \(unit)".trimmingCharacters(in: .whitespaces)
+        let glyph = up ? "arrow.up.right" : "arrow.down.right"
+        let color: Color = {
+            guard let better = higherIsBetter else { return StrandPalette.textTertiary }
+            return up == better ? StrandPalette.statusPositive : StrandPalette.metricRose
+        }()
+        return (text, glyph, color)
     }
 
     // MARK: Year heat-strip
@@ -562,14 +542,6 @@ struct TrendsView: View {
     }
 
     // MARK: Shared bits
-
-    /// Single-color gradient (for metric lines that aren't a value ramp).
-    private func gradient(_ color: Color) -> Gradient {
-        Gradient(stops: [
-            .init(color: color.opacity(0.55), location: 0.0),
-            .init(color: color, location: 1.0),
-        ])
-    }
 
     /// A domain-tinted `TrendChart` with a crisp flat line and a bright end-cap dot at the latest
     /// point. WHOOP-flat: no underglow blur layer — the single crisp line carries the data and the

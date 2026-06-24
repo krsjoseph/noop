@@ -15,7 +15,11 @@ fix the screen.
 
 1. **Glance first, depth on demand.** Every screen answers its core question above the fold
    (Today → "how am I / should I push"; Sleep → "how did I sleep"; Trends → "which way am I
-   heading"). Detail and controls disclose progressively below.
+   heading"). Detail and controls disclose progressively below. The per-signal detail is
+   *glanceable* — Sleep's "Night detail" and Trends' "Daily signals" are `MetricStatusCard`s
+   (value + a coloured status word + sparkline), not full charts, with the hero carrying the one
+   deep chart. Settings is a native grouped-list: light section headers over glass row-groups, with
+   each section's explanation in a one-line group footer (no heavy per-card title + paragraph).
 2. **Group by intent, not by data type.** Cards cluster around a question the user is asking
    (verdict → why → activity → metrics), not around where a number came from.
 3. **One home per metric.** A value appears *once*, in its strongest context. Charge/Effort/Rest
@@ -145,6 +149,15 @@ Compose screens from these only:
 - **`ChartCard`** — header + fixed-height chart + optional `ChartFooter` (label/value columns).
 - **`InsightCard`** — category overline + coloured status headline + detail prose.
 - **`SegmentedPillControl`** — the *one* range/segmented control.
+- **`MetricStatusCard`** — the Bevel-style glanceable metric card: tinted icon + label, big tabular
+  value + unit, a status line (*glyph + word*, colour-coded — never colour alone), and a trailing
+  mini sparkline. Sizes to content and fills its grid cell (full-width rows on iPhone, two-up on
+  iPad). Home of Sleep's "Night detail" grid and Trends' "Daily signals".
+- **`SettingsGroup` / `SettingsRow`** — the grouped-list kit for Settings (the native iOS idiom): a
+  light overline header, one glass group of simple rows (tinted icon + label + optional subtitle +
+  trailing value/chevron/`Toggle`/segmented control), auto-inset dividers, and an optional grey
+  footnote `footer` (where a section's explanation lives — *not* a heavy per-card blurb). Free-form
+  blocks sit in a group via `.settingsRowInsets()`.
 - **`SourceBadge`** — provenance pill (`Whoop` / `Apple Health` / `On-device`).
 - **`ScoreStatePill`** — `.solid` / `.calibrating` status chip.
 - **Gauges & charts** — `GlowRing` (Today rings), `BevelGauge` (Sleep hero), `PipBar`, `Sparkline`,

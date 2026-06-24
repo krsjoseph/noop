@@ -32,9 +32,6 @@ struct SleepView: View {
     // leaf below (mirrors the Today leaf-scoping pattern), so a tick refreshes only that leaf.
     @EnvironmentObject var intelligence: IntelligenceEngine
 
-    // The standard tile grid: ONE adaptive column set, used for every tile group.
-    private let tileColumns = [GridItem(.adaptive(minimum: 168), spacing: NoopMetrics.gap)]
-
     /// Memoized snapshot of every expensive derivation (latest Night with its intervals
     /// resolved once, the seven metric series, the trend points, the typical means). Rebuilt
     /// only when the underlying repo data actually changes — NOT on hover/animation/1Hz HR
@@ -878,7 +875,7 @@ struct SleepView: View {
         .accessibilityLabel("\(stage.label): \(durationText(minutes)), \(percent) percent of the night")
     }
 
-    // MARK: - 2. Metric grid (UNIFORM fixed-height StatTiles, each with sparkline)
+    // MARK: - 2. Night detail — Bevel-style MetricStatusCard grid (value + status + sparkline)
 
     @ViewBuilder
     private func metricGrid(_ model: SleepModel) -> some View {
@@ -895,65 +892,91 @@ struct SleepView: View {
 
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Night detail", overline: "Metrics", trailing: "vs typical")
-            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: NoopMetrics.gap) {
-
-                StatTile(
-                    label: "Rest",
-                    value: pctValue(perf.latest),
-                    caption: vsTypical(perf.latest, perf.typical, suffix: "%"),
-                    accent: perf.latest.map { StrandPalette.recoveryColor($0) } ?? StrandPalette.textPrimary,
-                    sparkline: spark(perf.series),
-                    sparkColor: StrandPalette.restColor)
-
-                StatTile(
-                    label: "Efficiency",
-                    value: pctValue(eff.latest),
-                    caption: vsTypical(eff.latest, eff.typical, suffix: "%"),
-                    accent: StrandPalette.statusPositive,
-                    sparkline: spark(eff.series),
-                    sparkColor: StrandPalette.statusPositive)
-
-                StatTile(
-                    label: "Consistency",
-                    value: pctValue(cons.latest),
-                    caption: vsTypical(cons.latest, cons.typical, suffix: "%"),
-                    accent: cons.latest.map { StrandPalette.recoveryColor($0) } ?? StrandPalette.textPrimary,
-                    sparkline: spark(cons.series),
-                    sparkColor: StrandPalette.metricCyan)
-
-                StatTile(
-                    label: "Hours vs Needed",
-                    value: pctValue(need.latest),
-                    caption: vsTypical(need.latest, need.typical, suffix: "%"),
-                    accent: need.latest.map { StrandPalette.recoveryColor(min(100, $0)) } ?? StrandPalette.textPrimary,
-                    sparkline: spark(need.series),
-                    sparkColor: StrandPalette.restColor)
-
-                StatTile(
-                    label: "Restorative",
-                    value: pctValue(rest.latest),
-                    caption: vsTypical(rest.latest, rest.typical, suffix: "%"),
-                    accent: StrandPalette.sleepREM,
-                    sparkline: spark(rest.series),
-                    sparkColor: StrandPalette.sleepREM)
-
-                StatTile(
-                    label: "Respiratory",
-                    value: rrValue(resp.latest),
-                    caption: vsTypical(resp.latest, resp.typical, suffix: " rpm", decimals: 1),
-                    accent: StrandPalette.metricPurple,
-                    sparkline: spark(resp.series),
-                    sparkColor: StrandPalette.metricPurple)
-
-                StatTile(
-                    label: "Sleep Debt",
-                    value: debt.latest.map { durationText($0) } ?? "—",
-                    caption: debtCaption(debt.latest),
-                    accent: debtColor(debt.latest),
-                    sparkline: spark(debt.series),
-                    sparkColor: StrandPalette.metricRose)
+            // Wider cells than the old StatTile grid: full-width rows on iPhone, two-up on iPad —
+            // the Bevel "Sleep Trends" read, where each metric carries a status word + a sparkline.
+            LazyVGrid(columns: statusColumns, alignment: .leading, spacing: NoopMetrics.gap) {
+                sleepMetricCard(icon: "bed.double.fill", tint: StrandPalette.restColor, label: "Rest",
+                                pct: perf.latest, typical: perf.typical, higherIsBetter: true,
+                                series: perf.series)
+                sleepMetricCard(icon: "checkmark.seal.fill", tint: StrandPalette.statusPositive, label: "Efficiency",
+                                pct: eff.latest, typical: eff.typical, higherIsBetter: true,
+                                series: eff.series, sparkColor: StrandPalette.statusPositive)
+                sleepMetricCard(icon: "calendar", tint: StrandPalette.metricCyan, label: "Consistency",
+                                pct: cons.latest, typical: cons.typical, higherIsBetter: true,
+                                series: cons.series, sparkColor: StrandPalette.metricCyan)
+                sleepMetricCard(icon: "clock.fill", tint: StrandPalette.restColor, label: "Hours vs Needed",
+                                pct: need.latest, typical: need.typical, higherIsBetter: true,
+                                series: need.series)
+                sleepMetricCard(icon: "sparkles", tint: StrandPalette.sleepREM, label: "Restorative",
+                                pct: rest.latest, typical: rest.typical, higherIsBetter: true,
+                                series: rest.series, sparkColor: StrandPalette.sleepREM)
+                // Respiratory rate has no simple valence (a small nightly shift isn't "good"/"bad") —
+                // neutral status, purple sparkline.
+                sleepMetricCard(icon: "lungs.fill", tint: StrandPalette.metricPurple, label: "Respiratory",
+                                value: rrValue(resp.latest), unit: resp.latest != nil ? "rpm" : nil,
+                                status: vsTypicalStatus(resp.latest, resp.typical, suffix: " rpm",
+                                                        decimals: 1, higherIsBetter: nil),
+                                series: resp.series, sparkColor: StrandPalette.metricPurple)
+                // Sleep debt — lower is better; its own On-target / Below-need read + glyph.
+                sleepMetricCard(icon: "moon.zzz.fill", tint: StrandPalette.metricRose, label: "Sleep Debt",
+                                value: debt.latest.map { durationText($0) } ?? "—", unit: nil,
+                                status: (debt.latest.map { debtCaption($0) },
+                                         debt.latest.map { $0 < 15 ? "checkmark" : "arrow.up.right" },
+                                         debtColor(debt.latest)),
+                                series: debt.series, sparkColor: StrandPalette.metricRose)
             }
         }
+    }
+
+    /// Adaptive grid for the Bevel-style status cards — full-width rows on iPhone, two-up on iPad.
+    private let statusColumns = [GridItem(.adaptive(minimum: 320), spacing: NoopMetrics.gap)]
+
+    /// A percentage metric → `MetricStatusCard`: splits the value/unit, derives the coloured
+    /// vs-typical status (glyph + word) and renders the sparkline. Mirrors the old StatTile mapping.
+    @ViewBuilder
+    private func sleepMetricCard(icon: String, tint: Color, label: LocalizedStringKey,
+                                 pct latest: Double?, typical: Double?, higherIsBetter: Bool?,
+                                 series: [Double], sparkColor: Color = StrandPalette.restColor) -> some View {
+        let parts = pctParts(latest)
+        let s = vsTypicalStatus(latest, typical, suffix: "%", higherIsBetter: higherIsBetter)
+        MetricStatusCard(icon: icon, iconTint: tint, label: label, value: parts.0, unit: parts.1,
+                         statusText: s.0, statusGlyph: s.1, statusColor: s.2,
+                         sparkline: spark(series), sparkColor: sparkColor)
+    }
+
+    /// Free-form value/unit/status variant (Respiratory, Sleep Debt) — same card, caller supplies
+    /// the pre-formatted value, unit and status tuple.
+    @ViewBuilder
+    private func sleepMetricCard(icon: String, tint: Color, label: LocalizedStringKey,
+                                 value: String, unit: String?,
+                                 status: (String?, String?, Color),
+                                 series: [Double], sparkColor: Color) -> some View {
+        MetricStatusCard(icon: icon, iconTint: tint, label: label, value: value, unit: unit,
+                         statusText: status.0, statusGlyph: status.1, statusColor: status.2,
+                         sparkline: spark(series), sparkColor: sparkColor)
+    }
+
+    /// Split a percentage into (value, unit) for `MetricStatusCard`; "—"/nil when there's no reading.
+    private func pctParts(_ v: Double?) -> (String, String?) {
+        guard let v else { return ("—", nil) }
+        return ("\(Int(v.rounded()))", "%")
+    }
+
+    /// The vs-typical status for a metric: the signed caption + a direction glyph, coloured by whether
+    /// the move is good for THIS metric (`higherIsBetter`); neutral when flat or direction has no valence.
+    private func vsTypicalStatus(_ latest: Double?, _ typical: Double?, suffix: String,
+                                 decimals: Int = 0, higherIsBetter: Bool?) -> (String?, String?, Color) {
+        guard let latest, let typical, typical != 0 else { return (nil, nil, StrandPalette.textTertiary) }
+        let diff = latest - typical
+        let epsilon = decimals == 0 ? 0.5 : pow(10, -Double(decimals)) / 2
+        if abs(diff) < epsilon { return ("Typical", "equal", StrandPalette.textTertiary) }
+        let text = vsTypical(latest, typical, suffix: suffix, decimals: decimals)
+        let glyph = diff >= 0 ? "arrow.up.right" : "arrow.down.right"
+        let color: Color = {
+            guard let better = higherIsBetter else { return StrandPalette.textTertiary }
+            return (diff > 0) == better ? StrandPalette.statusPositive : StrandPalette.metricRose
+        }()
+        return (text, glyph, color)
     }
 
     // MARK: - 2b. Sleep-debt ledger (rolling 14-night running balance)
