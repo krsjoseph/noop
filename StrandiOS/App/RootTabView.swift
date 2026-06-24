@@ -23,41 +23,34 @@ struct RootTabView: View {
     @State private var selectedTab: Int = 0
 
     init() {
-        // Plain Titanium bar: pin the background to `surfaceBase` and clear the system
-        // selection-indicator tint so there is NO gold/accent pill behind the selected
-        // icon — the gold `.tint` below colours only the selected icon + label, nothing
-        // is filled behind it. (UIKit derives a selection-indicator fill from the tint
-        // unless it's explicitly cleared.)
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(StrandPalette.surfaceBase)
-        appearance.selectionIndicatorTintColor = .clear
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
+        // iOS 26+ renders the native Liquid Glass tab bar — leave its appearance untouched so the
+        // adaptive glass shows. Only on older OSes do we pin the opaque Titanium bar (surfaceBase fill,
+        // cleared selection tint so there's no stray pill behind the selected icon).
+        if #unavailable(iOS 26.0) {
+            let appearance = UITabBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = UIColor(StrandPalette.surfaceBase)
+            appearance.selectionIndicatorTintColor = .clear
+            UITabBar.appearance().standardAppearance = appearance
+            UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
     }
 
     var body: some View {
-        // The native TabView keeps every existing destination + system gesture; the signature
-        // raised gold FAB is overlaid on top, bottom-centre, floating ~20pt above the bar (a
-        // native TabView can't host a centre item that overflows the bar, so we float it).
-        ZStack(alignment: .bottom) {
-            // A custom floating bar — two frosted "glass" islands with the gold action button nested
-            // cleanly in the gap between them — replaces the native tab bar: no overlap, no glow. The
-            // native TabView still drives content + per-tab nav state; only its bar is hidden.
-            TabView(selection: $selectedTab) {
-                tab(TodayView(), "Today", "square.grid.2x2").tag(0)
-                tab(TrendsView(), "Trends", "chart.line.uptrend.xyaxis").tag(1)
-                tab(SleepView(), "Sleep", "bed.double").tag(2)
-                moreTab.tag(3)
-            }
-            .tint(StrandPalette.accent)
-            .toolbar(.hidden, for: .tabBar)
-            // Tab crossfade — README §Motion: ~240ms opacity swap between tab roots, global calm
-            // easing cubic-bezier(0.22,1,0.36,1).
-            .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.24), value: selectedTab)
-
-            FloatingTabBar(selection: $selectedTab)
+        // Native iOS 26 Liquid Glass tab bar: SwiftUI renders Apple's adaptive glass + selection pill
+        // automatically and the screens' content scrolls underneath it, so the bar genuinely refracts
+        // what's behind it (the custom FloatingTabBar couldn't — it sat on the flat opaque surface).
+        // On iOS < 26 this is the standard system tab bar.
+        TabView(selection: $selectedTab) {
+            tab(TodayView(), "Today", "square.grid.2x2").tag(0)
+            tab(TrendsView(), "Trends", "chart.line.uptrend.xyaxis").tag(1)
+            tab(SleepView(), "Sleep", "bed.double").tag(2)
+            moreTab.tag(3)
         }
+        .tint(StrandPalette.accent)
+        // Tab crossfade — README §Motion: ~240ms opacity swap between tab roots, global calm
+        // easing cubic-bezier(0.22,1,0.36,1).
+        .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.24), value: selectedTab)
         .task { await repo.refresh() }
         // Quick-action sheet presents with the calm easing (~0.42s) per the README sheet spec —
         // the easing is applied where `quickAction` is set (see `presentQuickAction`), keeping the
@@ -208,7 +201,6 @@ struct RootTabView: View {
                 .background(StrandPalette.surfaceBase.ignoresSafeArea())
                 .toolbar(.hidden, for: .navigationBar)
         }
-        .toolbar(.hidden, for: .tabBar)   // we draw our own FloatingTabBar
         .tabItem { Label(title, systemImage: icon) }
     }
 
@@ -255,7 +247,6 @@ struct RootTabView: View {
                     MoreRow("Support", "hands.clap.fill") { SupportView() }
                 }
             }
-            .toolbar(.hidden, for: .tabBar)   // we draw our own FloatingTabBar
         }
         .tabItem { Label("More", systemImage: "ellipsis.circle.fill") }
     }
@@ -421,75 +412,6 @@ private struct QuickActionSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Floating tab bar
-
-/// The signature bottom bar: two frosted "glass" islands (Today·Trends / Sleep·More) with the gold
-/// action button nested cleanly in the gap between them — no overlap, no glow. Real iOS 26 Liquid
-/// Glass where available, a `.ultraThinMaterial` fallback below. Replaces the hidden native tab bar.
-private struct FloatingTabBar: View {
-    @Binding var selection: Int
-
-    private struct Item: Identifiable { let title: LocalizedStringKey; let icon: String; let tag: Int; var id: Int { tag } }
-    private let nav = [Item(title: "Today", icon: "square.grid.2x2", tag: 0),
-                       Item(title: "Trends", icon: "chart.line.uptrend.xyaxis", tag: 1),
-                       Item(title: "Sleep", icon: "bed.double", tag: 2),
-                       Item(title: "More", icon: "ellipsis", tag: 3)]
-
-    var body: some View {
-        // One frosted glass bar, four evenly-spaced tabs. The quick-action "+" now lives in the
-        // top-right of each screen's header (balancing the profile avatar on the left).
-        HStack(spacing: 2) {
-            tabButton(nav[0])
-            tabButton(nav[1])
-            tabButton(nav[2])
-            tabButton(nav[3])
-        }
-        .padding(.vertical, 7)
-        .padding(.horizontal, 8)
-        .liquidGlass(in: Capsule())
-        .overlay(Capsule().strokeBorder(StrandPalette.hairline.opacity(0.6), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.10), radius: 12, x: 0, y: 5)
-        .padding(.horizontal, 22)
-        .padding(.bottom, 4)
-    }
-
-    private func tabButton(_ item: Item) -> some View {
-        let active = selection == item.tag
-        return Button {
-            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.24)) { selection = item.tag }
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 18, weight: active ? .semibold : .regular))
-                Text(item.title)
-                    .font(.system(size: 10, weight: active ? .semibold : .medium))
-            }
-            .foregroundStyle(active ? StrandPalette.accent : StrandPalette.textSecondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 3)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
-    }
-
-}
-
-// MARK: - Liquid Glass (iOS 26) with a Material fallback
-
-private extension View {
-    /// Real iOS 26 Liquid Glass where available; `.ultraThinMaterial` on iOS 17–25 — a clean
-    /// blended degrade so the bar stays modern on new OSes without breaking older ones.
-    @ViewBuilder func liquidGlass(in shape: some Shape) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
-        } else {
-            self.background(.ultraThinMaterial, in: shape)
-        }
     }
 }
 #endif
