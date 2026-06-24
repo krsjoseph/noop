@@ -66,6 +66,10 @@ struct StrandiOSApp: App {
                 // fixed-geometry tiles/gauges stay legible at the largest accessibility sizes rather than
                 // clipping; the common Larger-Text range still scales fully.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                // House face is SF Rounded app-wide (StrandFont). This cascades the rounded design to any
+                // Text that uses a raw system font without its own design, so screens that didn't route
+                // through StrandFont still read rounded. Explicit designs (SF Mono, charts) are unaffected.
+                .fontDesign(.rounded)
                 .onReceive(model.live.$heartRate) { _ in
                     let day = model.repo.days.last(where: { $0.recovery != nil })
                     liveActivity.update(

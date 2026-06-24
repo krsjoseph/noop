@@ -34,6 +34,9 @@ struct StrandApp: App {
                 // fixed-geometry tiles/gauges stay legible at the largest accessibility sizes rather than
                 // clipping; the common Larger-Text range still scales fully.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                // House face is SF Rounded app-wide (StrandFont). Cascade the rounded design to any Text
+                // using a raw system font without its own design; explicit designs (SF Mono, charts) stay.
+                .fontDesign(.rounded)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 820)
