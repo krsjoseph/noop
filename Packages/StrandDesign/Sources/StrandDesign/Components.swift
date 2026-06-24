@@ -87,18 +87,31 @@ public struct NoopCard<Content: View>: View {
     #if os(macOS)
     @State private var hover = false
     #endif
+    // When a parent (Today) sets `\.noopGlassSurface`, the card renders as iOS 26 Liquid Glass instead
+    // of the opaque frosted fill (see LiquidGlass.swift). Default false keeps every other screen identical;
+    // the glass path itself falls back to the frosted surface below iOS 26 / on macOS.
+    @Environment(\.noopGlassSurface) private var glassSurface
     public init(padding: CGFloat = NoopMetrics.cardPadding, tint: Color? = nil, @ViewBuilder content: @escaping () -> Content) {
         self.padding = padding; self.tint = tint; self.content = content
     }
-    public var body: some View {
-        content()
+    @ViewBuilder public var body: some View {
+        let inner = content()
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Hover chrome (fill + border + shadow) lives in the background so its animation is
-            // scoped to the card surface ONLY. It must never animate the content() subtree, or a
-            // chart inside re-animates its line every time the cursor crosses the card. (#104)
+        #if os(iOS)
+        if glassSurface {
+            // Liquid Glass clips + frosts the content directly (not a `.background` fill), refracting
+            // the scenic backdrop behind it. iOS has no hover, so there's no hover chrome to preserve.
+            inner.liquidGlassCard(tint: tint, cornerRadius: NoopMetrics.cardRadius)
+        } else {
+            inner.background { cardSurface }
+        }
+        #else
+        // Hover chrome (fill + border + shadow) lives in the background so its animation is
+        // scoped to the card surface ONLY. It must never animate the content() subtree, or a
+        // chart inside re-animates its line every time the cursor crosses the card. (#104)
+        inner
             .background { cardSurface }
-        #if os(macOS)
             .onHover { hover = $0 }
         #endif
     }

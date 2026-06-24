@@ -106,11 +106,13 @@ enum DashboardCard: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The default set when the user hasn't customised the dashboard: the original Stress / Fitness age /
-    /// Vitality trio plus HRV + Resting HR (per the task's "sensible default"). Cards with no value yet
-    /// simply render "—", so the default set is safe on a fresh install.
+    /// The default set when the user hasn't customised the dashboard. De-duped (2026 dashboard overhaul):
+    /// HRV + Resting HR now live ONLY in the Readiness "why" block, so the default "Your cards" strip is the
+    /// original Stress / Fitness age / Vitality trio — the explore-only scores that have no other home on
+    /// Today. The CUSTOMISE editor still lists every card (`canonicalOrder`), so HRV/RHR stay re-addable,
+    /// and an already-customised selection is honoured unchanged. Cards with no value yet render "—".
     static let defaultSelection: [DashboardCard] = [
-        .stress, .fitnessAge, .vitality, .hrv, .restingHr,
+        .stress, .fitnessAge, .vitality,
     ]
 
     /// Canonical order used to list the disabled remainder in the editor.

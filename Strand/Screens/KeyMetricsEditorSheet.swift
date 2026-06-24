@@ -31,9 +31,10 @@ struct KeyMetricsEditorSheet: View {
         _layoutRaw = layoutRaw
         let enabled = KeyMetricPrefs.decodeEnabled(layoutRaw.wrappedValue)
         let enabledSet = Set(enabled)
-        // Enabled tiles first (saved order), then the rest in the canonical default order.
+        // Enabled tiles first (saved order), then the rest in the canonical full order — so EVERY tile is
+        // listed and re-addable even though the de-duped default enables only a subset (dashboard overhaul).
         var working = enabled.map { Item(metric: $0, enabled: true) }
-        for m in KeyMetric.defaultOrder where !enabledSet.contains(m) {
+        for m in KeyMetric.fullOrder where !enabledSet.contains(m) {
             working.append(Item(metric: m, enabled: false))
         }
         _items = State(initialValue: working)
@@ -179,7 +180,11 @@ struct KeyMetricsEditorSheet: View {
     }
 
     private func resetToDefault() {
+        // The de-duped default enables only a subset; keep the rest listed (disabled) so they stay
+        // re-addable rather than vanishing from the editor after a reset (dashboard overhaul).
+        let defaults = Set(KeyMetric.defaultOrder)
         items = KeyMetric.defaultOrder.map { Item(metric: $0, enabled: true) }
+            + KeyMetric.fullOrder.filter { !defaults.contains($0) }.map { Item(metric: $0, enabled: false) }
     }
 
     /// Persist the enabled tiles in their current order. Disabled tiles are simply omitted from the

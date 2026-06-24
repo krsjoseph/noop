@@ -192,6 +192,18 @@ struct TodayView: View {
     // single-vs-two-column boundary and could collapse to one full-width column on a narrow phone.
     private let grid = [GridItem(.adaptive(minimum: 150), spacing: NoopMetrics.gap)]
 
+    /// Whether Today's cards render as iOS 26 Liquid Glass (vs the opaque frosted card). ON only on iOS
+    /// when the day-cycle scene is showing — glass needs something to refract, and over the flat canvas it
+    /// would be low-contrast, so scene-off (and macOS) keep the legible frosted surface. The glass surface
+    /// itself also falls back to frosted below iOS 26, so this is purely "do we want glass here".
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// The logical day the selector resolves to: offset 0 is today's logical day (rolls at 04:00 like
     /// `repo.today`), past offsets count back from it. Presentation-only — used to pick which stored row
     /// is on screen and to anchor the HR-trend window. Mirrors Android TodayScreen.selectedDay.
@@ -429,14 +441,20 @@ struct TodayView: View {
         TodayDerived(readiness: computeReadiness(), calibration: computeCalibration())
     }
 
-    /// Synthesis-card copy while the recovery baseline calibrates; nil otherwise. Built as
-    /// LocalizedStringKey literals so the String Catalog picks up the %lld patterns.
-    private var calibrationStatus: LocalizedStringKey? {
-        recoveryCalibration == nil ? nil : "Calibrating"
+    /// Whether the verdict hero has a real score to summarise — today's own Charge or the carried last
+    /// scored night. When false (first-run / calibrating / needs-strap), the hero suppresses its synthesis
+    /// read-out so the empty state isn't a third restatement of "Calibrating / No data" already carried by
+    /// the rings, the state pill and the "scores building" note above.
+    private var hasScoreToSummarize: Bool {
+        displayDay?.recovery != nil || lastScoredRecoveryDay != nil
     }
-    private var calibrationDetail: LocalizedStringKey? {
-        guard let n = recoveryCalibration else { return nil }
-        return "Learning your baseline, \(n) of \(Baselines.minNightsSeed) nights."
+
+    /// Whether the selected day (or the carried last-scored night) has ANY overnight vital to show. Gates
+    /// the Readiness "why" block so a first-run user sees nothing there rather than three blank "—" rows on
+    /// a tinted card, which reads as broken. Mirrors the row the vitals card itself reads from.
+    private var hasAnyOvernightVital: Bool {
+        let vd = lastScoredRecoveryDay ?? displayDay
+        return vd?.avgHrv != nil || vd?.restingHr != nil || vd?.respRateBpm != nil
     }
 
     /// The iOS tab is already labelled "Today", and "Control Center" collides with the OS feature of
@@ -696,44 +714,29 @@ struct TodayView: View {
                 // without tinting the rest of the dashboard. The day-cycle scene wash caps at ~0.42 opacity
                 // and fades top-down with a bottom dark scrim, no glow, so the white ring numbers + labels
                 // stay crisp and high-contrast.
-                #if os(iOS)
-                // Pull the rings up under the compact top bar — the full section gap left too much air
-                // above them now the big "Today's Synthesis" header is gone. The hero now sits over the
-                // day-cycle SCENE wash (picked by the local hour), which fades top-down behind the rings;
-                // the scene IS the atmosphere here, replacing the procedural time-of-day backdrop. It caps
-                // at ~0.42 opacity with a bottom dark scrim so the white ring numbers + labels stay crisp.
-                heroSection
-                    .padding(.vertical, NoopMetrics.space4)
-                    .frame(maxWidth: .infinity)
-                    // The dark hero CARD floats over the vivid day-scene so the rings + white numbers stay
-                    // crisp — the card does the contrast work, not a muted scene (Aaron 2026-06-23).
-                    .background(
-                        RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous)
-                            .fill(StrandPalette.surfaceBase.opacity(0.72))
-                    )
-                    .staggeredAppear(index: 0)
-                #else
-                heroSection
-                    .padding(.vertical, NoopMetrics.space4)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous)
-                            .fill(StrandPalette.surfaceBase.opacity(0.72))
-                    )
-                    .staggeredAppear(index: 0)
-                #endif
-                heartRateTrendSection.staggeredAppear(index: 1)
-                // Design Reset: rings -> Heart rate -> Your cards (the flat mockup order); the greeting +
-                // Synthesis read-out + vitals now sit below the pinned cards instead of crowding the hero.
-                yourCardsSection.staggeredAppear(index: 2)
-                synthesisSection.staggeredAppear(index: 3)
-                readinessSection.staggeredAppear(index: 4)
+                // Dashboard overhaul (2026): regroup the screen by INTENT, not data type, and de-dupe.
+                //   1 VERDICT  — the one answer "how am I / should I push", above the fold.
+                //   2 WHY      — readiness + the overnight vitals that drive it (their single home now).
+                //   3 ACTIVITY — today's live HR trend, then recent workouts.
+                //   4 METRICS  — the customisable explore strip + the Key-Metrics grid.
+                //   5 FOOTER   — suggestions, support, data sources.
+                // Every Today card on iOS renders as Liquid Glass over the day-cycle scene (see the
+                // `.environment(\.noopGlassSurface, …)` below); macOS / pre-iOS-26 / scene-off fall back to
+                // the opaque frosted card with no visual change.
+
+                // 1 VERDICT — three rings + greeting + state pill + synthesis read-out on one glass plate.
+                verdictHeroSection.staggeredAppear(index: 0)
+                // 2 WHY — readiness verdict + HRV / Resting HR / Respiratory (de-duped to live ONLY here).
+                readinessWhySection.staggeredAppear(index: 1)
+                // 3 ACTIVITY — live HR trend then the recent workouts.
+                heartRateTrendSection.staggeredAppear(index: 2)
+                workoutsSection.staggeredAppear(index: 3)
+                // 4 METRICS — the customisable explore strip (Stress / Fitness age / Vitality) then the
+                // Key-Metrics grid (SpO₂ / Steps / Weight / Calories by default; scores + vitals de-duped out).
+                yourCardsSection.staggeredAppear(index: 4)
                 metricsSection.staggeredAppear(index: 5)
-                workoutsSection.staggeredAppear(index: 6)
-                // Opt-in "looks like a workout?" suggestion (default OFF). Renders only when the
-                // Settings toggle is on AND the detector finds a recent unsaved, un-dismissed window.
+                // 5 FOOTER — opt-in workout suggestion (default OFF), the honest donation ask, then sources.
                 AutoWorkoutCard()
-                // Honest, dismissible 12-hourly donation ask — a card in the flow, never a modal.
                 DonationNudgeCard()
                 #if os(iOS)
                 // iOS entry point to Support (donate + contact). macOS opens the same sheet from the
@@ -743,6 +746,10 @@ struct TodayView: View {
                 #endif
                 sourcesSection
             }
+            // Liquid Glass for every Today card — ON only when the day-cycle scene is showing (glass needs
+            // something to refract; over the flat canvas it would be low-contrast, so scene-off keeps the
+            // opaque frosted card). No-op below iOS 26 / on macOS (the surface falls back to frosted).
+            .environment(\.noopGlassSurface, useGlassSurface)
         }
         // Reload when the data refreshes OR the selected day changes — the HR trend and Rest score are
         // day-scoped, so navigating must re-fetch them for the newly selected window.
@@ -971,15 +978,28 @@ struct TodayView: View {
 
     // MARK: Readiness — on-device training-readiness synthesis (HRV / resting-HR / load).
 
+    // MARK: (2) READINESS "WHY" — the verdict + the overnight vitals that drive it.
+    //
+    // Dashboard overhaul (2026): this section is now the SINGLE home for HRV / Resting HR / Respiratory
+    // (the `recoveryVitalsCard`), de-duped out of "Your cards" and the Key-Metrics grid — the vitals sit
+    // right under the readiness reasoning they explain. The readiness card itself only renders when there's
+    // enough data; the vitals card always shows (it's the de-duped home), so the section header is always
+    // present when either has something to say.
     @ViewBuilder
-    private var readinessSection: some View {
+    private var readinessWhySection: some View {
         let r = readiness
-        if r.level != .insufficient {
-            VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-                // When Readiness is anchored on the carried last-scored day (#543), the overline stamps
-                // its date so the prior read isn't passed off as today's; otherwise the usual prompt.
-                SectionHeader("Readiness",
-                              overline: lastScoredRecoveryDay.map { "\(carriedCaption($0))" } ?? "Should you push today?")
+        let showReadiness = r.level != .insufficient
+        let showVitals = hasAnyOvernightVital
+        // First-run / calibrating: with no readiness verdict AND no overnight vitals yet, the whole block
+        // would be just an empty header over three "—" rows, which reads as broken. Hide it entirely — the
+        // "scores building" note + the calibrating rings already explain that data is still landing.
+        if showReadiness || showVitals {
+        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+            // When Readiness is anchored on the carried last-scored day (#543), the overline stamps
+            // its date so the prior read isn't passed off as today's; otherwise the usual prompt.
+            SectionHeader("Readiness",
+                          overline: lastScoredRecoveryDay.map { "\(carriedCaption($0))" } ?? "Should you push today?")
+            if showReadiness {
                 NoopCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
@@ -1035,6 +1055,13 @@ struct TodayView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            // The vitals that drive recovery — HRV / Resting HR / Respiratory. Now their single home,
+            // sitting directly under the readiness reasoning that uses them. Hidden until a night has
+            // landed, so the empty state never shows three blank "—" rows.
+            if showVitals {
+                recoveryVitalsCard(displayDay)
+            }
+        }
         }
     }
 
@@ -1088,77 +1115,79 @@ struct TodayView: View {
         }
     }
 
-    // MARK: (a) HERO — three ring scores (Charge / Effort / Rest) over a scenic backdrop,
-    // then the green-tinted Synthesis coaching card. Bevel layout.
+    // MARK: (1) VERDICT HERO — the one answer "how am I", above the fold.
+    //
+    // Dashboard overhaul (2026): the three ring scores (Charge / Effort / Rest), the greeting + recovery
+    // state pill, and the Synthesis read-out — previously SPLIT across the hero and a separate "Synthesis"
+    // section below the fold — now sit together on ONE Liquid-Glass plate that leads the screen, so the
+    // headline insight ("HRV 39% over baseline — primed to push") is the first thing read. The overnight
+    // vitals that used to ride along here move to the Readiness "why" block (their single de-duped home).
 
     @ViewBuilder
-    private var heroSection: some View {
+    private var verdictHeroSection: some View {
         let d = displayDay
         let score = d?.recovery
-        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            // Recording status now lives as a colour-coded light in the header icon row, not a full-width
-            // banner sandwiched above the rings. The three clean rings lead the screen directly.
-            scoreHeroRow(d: d, score: score)
-
-            // Component 2 — when Charge has no real today value, an explained state with its detail +
-            // next step replaces a bare blank, sitting directly under the rings. The CALIBRATING case is
-            // already richly explained by the data-confidence pill + calibration Synthesis card + the ring
-            // overlay below, so the note shows for the two states the existing UI doesn't spell out a next
-            // step for — "Last night · <date>" (carry-over) and "Needs the strap" — keeping the hero from
-            // saying "calibrating" twice in two phrasings. `.scored` renders nothing (the ring has the
-            // value). TODAY-only: the "No data for today" copy would be wrong on a navigated past day, and
-            // a past day with no score is missing data the user can't act on now, so it keeps a bare ring.
-            if selectedDayOffset == 0 && !chargeScoreState.isCalibrating {
-                explainedScoreNote(chargeScoreState)
-            }
-
-        }
-    }
-
-    /// Design Reset: the greeting + gold Synthesis read-out + vitals, lifted OUT of the hero so Today
-    /// reads rings -> Heart rate -> Your cards (the flat mockup order). Same content + behaviour, it just
-    /// sits below the HR card and the pinned cards now instead of crowding directly under the rings.
-    @ViewBuilder
-    private var synthesisSection: some View {
-        let d = displayDay
-        let score = d?.recovery
-        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(greetingWord)
-                    .font(StrandFont.subhead)
-                    .foregroundStyle(StrandPalette.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 8)
-                recoveryStatePill(score: score)
-                    .layoutPriority(1)
-            }
-            .accessibilityElement(children: .combine)
-
-            InsightCard(
-                category: "Synthesis",
-                status: calibrationStatus ?? "\(synthesisCardStatus(d, score: score))",
-                detail: calibrationDetail ?? "\(synthesisCardDetail(d, score: score))",
-                statusColor: StrandPalette.textPrimary,
-                tint: StrandPalette.chargeColor
-            )
-
-            if let note = effortZeroNote {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(StrandFont.footnote)
-                        .foregroundStyle(StrandPalette.effortColor)
-                    Text(note)
-                        .font(StrandFont.footnote)
-                        .foregroundStyle(StrandPalette.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+        // One glass card. On iOS-with-scene this refracts the day-cycle backdrop; elsewhere it's the
+        // opaque frosted card (the env flag + surface fallback handle both — see useGlassSurface).
+        NoopCard(padding: 18) {
+            VStack(alignment: .leading, spacing: NoopMetrics.space4) {
+                // Greeting + recovery state pill — the one-glance "where am I".
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(greetingWord)
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    recoveryStatePill(score: score)
+                        .layoutPriority(1)
                 }
-                .padding(.horizontal, 2)
                 .accessibilityElement(children: .combine)
-            }
 
-            // HRV / Resting HR / Respiratory — the vitals that drive recovery.
-            recoveryVitalsCard(d)
+                // The three clean identity rings.
+                scoreHeroRow(d: d, score: score)
+
+                // Component 2 — when Charge has no real today value, an explained state with its detail +
+                // next step replaces a bare blank, sitting directly under the rings. The CALIBRATING case is
+                // already richly explained by the data-confidence pill + the synthesis read-out + the ring
+                // overlay, so the note shows only for the two states the rest of the UI doesn't spell out a
+                // next step for — "Last night · <date>" (carry-over) and "Needs the strap". TODAY-only.
+                if selectedDayOffset == 0 && !chargeScoreState.isCalibrating {
+                    explainedScoreNote(chargeScoreState)
+                }
+
+                // Synthesis read-out — the headline + one-line coaching the rings add up to. Rendered as
+                // plain text (not a nested InsightCard) so it doesn't box a card inside the hero card.
+                // Shown ONLY when there's a real score to summarise: in the first-run / calibrating / needs-
+                // strap state the rings ("Calibrating · N of 4" / "No data"), the state pill and the "scores
+                // building" note already carry the message, so repeating it here just padded the empty state.
+                if hasScoreToSummarize {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(synthesisCardStatus(d, score: score))")
+                            .font(StrandFont.rounded(24, weight: .bold))
+                            .foregroundStyle(StrandPalette.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\(synthesisCardDetail(d, score: score))")
+                            .font(StrandFont.subhead)
+                            .foregroundStyle(StrandPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+
+                if let note = effortZeroNote {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(StrandFont.footnote)
+                            .foregroundStyle(StrandPalette.effortColor)
+                        Text(note)
+                            .font(StrandFont.footnote)
+                            .foregroundStyle(StrandPalette.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
         }
     }
 
@@ -1395,9 +1424,9 @@ struct TodayView: View {
     private func recoveryStatePill(score: Double?) -> some View {
         if score != nil {
             ScoreStatePill(.solid)
-        } else if let n = recoveryCalibration {
-            ScoreStatePill(.calibrating, text: "Calibrating, \(n) of \(Baselines.minNightsSeed)")
         } else {
+            // Just "Calibrating" — the Charge ring already shows the "N of 4" progress, so the pill no
+            // longer repeats the count (it read as the same fact stated twice in the same card).
             ScoreStatePill(.calibrating)
         }
     }

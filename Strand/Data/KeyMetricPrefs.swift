@@ -45,8 +45,19 @@ enum KeyMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The original, hard-coded grid order — the default when the user hasn't customised the layout.
+    /// The default grid layout when the user hasn't customised it. De-duped (2026 dashboard overhaul):
+    /// Charge / Effort / Rest now live ONLY as the verdict-hero rings, and HRV / Resting HR / Respiratory
+    /// live ONLY in the Readiness "why" block — so the default grid carries just the metrics that have no
+    /// other home, keeping the screen short. The editor still lists EVERY `KeyMetric`, so a user can re-add
+    /// any of the de-duped tiles, and an already-customised layout is honoured unchanged.
     static let defaultOrder: [KeyMetric] = [
+        .bloodOxygen, .steps, .weight, .calories,
+    ]
+
+    /// The full grid order (every tile) — the canonical sequence the editor uses to list the disabled
+    /// remainder, and the order a re-added tile slots back into. Kept separate from `defaultOrder` so the
+    /// de-duped default doesn't lose the original ordering for the editor.
+    static let fullOrder: [KeyMetric] = [
         .charge, .effort, .rest, .hrv, .restingHr,
         .bloodOxygen, .respiratory, .steps, .weight, .calories,
     ]
