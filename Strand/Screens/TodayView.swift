@@ -1342,7 +1342,7 @@ struct TodayView: View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: 12) {
+            let row = HStack(spacing: 12) {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(tint.opacity(0.14))
                     .frame(width: 34, height: 34)
@@ -1365,8 +1365,16 @@ struct TodayView: View {
             }
             .padding(.horizontal, 13).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(FrostedCardSurface(cornerRadius: NoopMetrics.cardRadius))
-            .contentShape(Rectangle())
+            // Match the rest of Today: Liquid Glass when the scene is on (this row builds its own surface
+            // rather than going through NoopCard, so it needs the same treatment explicitly), neutral/no
+            // tint to stay uniform; frosted fallback otherwise (and below iOS 26 / macOS).
+            if useGlassSurface {
+                row.liquidGlassCard(tint: nil, cornerRadius: NoopMetrics.cardRadius)
+                    .contentShape(Rectangle())
+            } else {
+                row.background(FrostedCardSurface(cornerRadius: NoopMetrics.cardRadius))
+                    .contentShape(Rectangle())
+            }
         }
         .buttonStyle(.plain)
     }
