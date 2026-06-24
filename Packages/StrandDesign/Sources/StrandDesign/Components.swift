@@ -102,7 +102,11 @@ public struct NoopCard<Content: View>: View {
         if glassSurface {
             // Liquid Glass clips + frosts the content directly (not a `.background` fill), refracting
             // the scenic backdrop behind it. iOS has no hover, so there's no hover chrome to preserve.
-            inner.liquidGlassCard(tint: tint, cornerRadius: NoopMetrics.cardRadius)
+            // The per-domain `tint` is INTENTIONALLY dropped here: a screen of glass cards each washed a
+            // different hue (rose HR, amber workouts, green readiness…) read as too many colours. Every
+            // glass card uses the same neutral `.regular` glass; identity comes from the coloured CONTENT
+            // (numbers, sparklines, rings), not the card surface. (Frosted fallback keeps its tint.)
+            inner.liquidGlassCard(tint: nil, cornerRadius: NoopMetrics.cardRadius)
         } else {
             inner.background { cardSurface }
         }
