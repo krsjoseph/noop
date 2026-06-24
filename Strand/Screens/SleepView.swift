@@ -79,6 +79,19 @@ struct SleepView: View {
     /// when the sleep-performance score changes, exactly as TodayView drives its rings. Presentation-only.
     @State private var heroFraction: Double = 0
 
+    // Liquid Glass for the Sleep cards, matching Today. Sleep keeps its own NIGHT identity (the restHero's
+    // `.timeOfDayBackground(.night)`), so it does NOT add the day-cycle scene; the glass cards simply read
+    // as translucent neutral panels over the canvas. Gated on the scene toggle (the "glassy aesthetic"
+    // switch) for consistency with the other tabs; falls back to frosted below iOS 26 / macOS / toggle-off.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// Non-nil while the wake-time editor sheet is open. Carries the night's stable key (`startTs`) and
     /// current wake time so the editor seeds its picker; saving routes through `repo.editSleepWakeTime`,
     /// which marks the session `userEdited` so a later strap sync can't revert the correction. (#318)
@@ -213,6 +226,9 @@ struct SleepView: View {
                 }
             }
         }
+        // Liquid Glass for every Sleep card (cascades to the cards via the environment); neutral glass
+        // when on, frosted fallback otherwise (and below iOS 26 / macOS). restHero keeps its night look.
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - 0. REST HERO — scenic backdrop + sleep-performance gauge (Bevel)

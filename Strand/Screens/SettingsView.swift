@@ -104,6 +104,16 @@ struct SettingsView: View {
         UnitPrefs.resolveTemperature(system: unitSystem, override: temperatureRaw)
     }
 
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends so Settings reads as the same surface.
+    // Gated on the existing `showDayCycleBackground` toggle; glass falls back to frosted below iOS 26 / macOS.
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// Raw-sensor CSV export (experimental diagnostic, #308/#276/#322). Holds the last-written file so
     /// macOS can "Reveal in Finder" after a share, mirroring the puffin-capture export.
     @State private var rawCsvBusy = false
@@ -143,7 +153,10 @@ struct SettingsView: View {
 
     var body: some View {
         ScreenScaffold(title: "Settings",
-                       subtitle: "Your numbers, your strap, and how NOOP works. All on \(Platform.deviceNounPhrase).") {
+                       subtitle: "Your numbers, your strap, and how NOOP works. All on \(Platform.deviceNounPhrase).",
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 profilePhotoCard.staggeredAppear(index: 0)
                 profileCard.staggeredAppear(index: 1)
@@ -187,6 +200,9 @@ struct SettingsView: View {
             DiagnosticsSheet(onClose: { showDiagnostics = false })
         }
         #endif
+        // Liquid Glass for the Settings cards (SettingsSection → StrandCard, now glass-aware). Cascades
+        // via the environment; neutral glass when on, frosted fallback otherwise (below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - Profile photo (optional, on-device)

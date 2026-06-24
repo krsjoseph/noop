@@ -48,6 +48,18 @@ struct TrendsView: View {
     // own range picker; this just presents it with the loaded history.
     @State private var showingReport = false
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today so every tab reads as one surface.
+    // The scene sits behind the header band and fades above the cards; glass cards refract it. Gated on
+    // the same Settings toggle, and the glass surface itself falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     // Effort display scale (#268) — routes the Effort small-multiple's numbers + unit. Display-only.
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
@@ -201,7 +213,10 @@ struct TrendsView: View {
                        // alignment/spacing/header). The content is one inner eager VStack, so the staggered
                        // section reveal is unchanged; this only defers building that stack until it scrolls in.
                        onRefresh: { await repo.refresh() },
-                       lazy: true) {
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if repo.days.isEmpty {
                 ComingSoon(what: repo.loaded
                     ? "Trends need history to draw. Import your WHOOP export in Data Sources to see weeks, months and years instantly."
@@ -245,6 +260,9 @@ struct TrendsView: View {
         .sheet(isPresented: $showingReport) {
             TrendsReportSheet(days: repo.days)
         }
+        // Liquid Glass for every card on Trends (cascades down to the cards via the environment). Neutral
+        // glass when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: Week in Review — the Charge / Effort / Rest trio in pip language

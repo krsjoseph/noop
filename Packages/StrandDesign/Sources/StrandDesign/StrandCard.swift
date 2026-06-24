@@ -87,6 +87,10 @@ public struct StrandCard<Content: View>: View {
     public var cornerRadius: CGFloat
     public var tint: Color?
     @ViewBuilder public var content: () -> Content
+    // Glass-aware, exactly like NoopCard: when a parent sets `\.noopGlassSurface`, render as iOS 26
+    // Liquid Glass (neutral, no tint, to stay uniform) instead of the opaque frosted surface. Default
+    // false keeps every existing call site unchanged; the glass path falls back to frosted below iOS 26.
+    @Environment(\.noopGlassSurface) private var glassSurface
 
     public init(
         padding: CGFloat = 16,
@@ -100,12 +104,21 @@ public struct StrandCard<Content: View>: View {
         self.content = content
     }
 
-    public var body: some View {
-        content()
+    @ViewBuilder public var body: some View {
+        let inner = content()
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frostedCardSurface(tint: tint, cornerRadius: cornerRadius)
+        #if os(iOS)
+        if glassSurface {
+            inner.liquidGlassCard(tint: nil, cornerRadius: cornerRadius)
+        } else {
+            inner.frostedCardSurface(tint: tint, cornerRadius: cornerRadius)
+                .strandCardHover(cornerRadius: cornerRadius)
+        }
+        #else
+        inner.frostedCardSurface(tint: tint, cornerRadius: cornerRadius)
             .strandCardHover(cornerRadius: cornerRadius)
+        #endif
     }
 }
 
