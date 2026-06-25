@@ -46,6 +46,9 @@ public struct MetricStatusCard: View {
                     iconSquare
                     Text(label).strandOverline()
                     Spacer(minLength: NoopMetrics.space2)
+                    #if !os(watchOS)
+                    // `Sparkline` is excluded on watchOS (its hover/Charts chrome doesn't apply on the
+                    // tiny watch surface), so the inline trend mini-chart is iOS/macOS only.
                     if let sparkline, sparkline.count > 1 {
                         Sparkline(values: sparkline,
                                   gradient: Gradient(colors: [sparkColor.opacity(0.5), sparkColor]),
@@ -53,6 +56,7 @@ public struct MetricStatusCard: View {
                             .frame(width: 64, height: 26)
                             .accessibilityHidden(true)
                     }
+                    #endif
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(value)

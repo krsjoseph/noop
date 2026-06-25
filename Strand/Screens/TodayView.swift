@@ -170,10 +170,10 @@ struct TodayView: View {
     @State private var derived: TodayDerived?
     @State private var derivedKey: TodayInputKey?
 
-    // Support sheet (donate + contact) — opened from the home toolbar on macOS, and from an
-    // in-content control on iOS (a primary tab has no NavigationStack, so a `.toolbar` item never
-    // renders on iPhone — the affordance was dead there before this in-flow button + sheet, #185-class).
+    #if os(macOS)
+    // Support sheet (donate + contact) — opened from the home toolbar heart on macOS.
     @State private var showingSupport = false
+    #endif
 
     // "How your scores work" guide — presented at a specific score's section when the ⓘ on that
     // score (or the first-run card) is tapped. nil = not shown. ScoreSection is Identifiable, so
@@ -838,12 +838,6 @@ struct TodayView: View {
                 // 5 FOOTER — opt-in workout suggestion (default OFF), the honest donation ask, then sources.
                 AutoWorkoutCard()
                 DonationNudgeCard()
-                #if os(iOS)
-                // iOS entry point to Support (donate + contact). macOS opens the same sheet from the
-                // toolbar heart, but a primary tab on iPhone has no nav bar to host a `.toolbar` item,
-                // so the affordance lives in-content here and presents SupportView as an auto-sized sheet.
-                supportRow
-                #endif
                 sourcesSection
             }
             // Liquid Glass for every Today card — ON only when the day-cycle scene is showing (glass needs
@@ -898,8 +892,6 @@ struct TodayView: View {
         }
         .animation(.easeOut(duration: 0.18), value: showingSupport)
         #else
-        // iOS: present Support as an auto-sized sheet (sizes to the device, unlike the 560pt overlay).
-        .sheet(isPresented: $showingSupport) { SupportView() }
         // Profile/settings from the top-bar button.
         .sheet(isPresented: $showSettings) { settingsSheet }
         #endif
@@ -1035,46 +1027,6 @@ struct TodayView: View {
         // Press-down feedback for the tappable card surface.
         .strandPressable()
     }
-
-    #if os(iOS)
-    // MARK: Support entry point (iOS) — the in-content stand-in for the macOS toolbar heart.
-
-    /// An in-flow card that opens the Support sheet (donate + contact). The whole card is the tap
-    /// target; reuses the heart.fill + metricRose styling and the accessibility copy of the macOS
-    /// toolbar button so both platforms read identically. iOS-only — macOS keeps the toolbar item.
-    private var supportRow: some View {
-        Button {
-            StrandHaptic.selection.play()
-            showingSupport = true
-        } label: {
-            NoopCard {
-                HStack(spacing: 14) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(StrandPalette.metricRose)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Support NOOP")
-                            .font(StrandFont.headline)
-                            .foregroundStyle(StrandPalette.textPrimary)
-                        Text("Donate or get in touch — totally optional.")
-                            .font(StrandFont.subhead)
-                            .foregroundStyle(StrandPalette.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(StrandPalette.textTertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        // Press-down feedback for the full-card button surface.
-        .buttonStyle(StrandPressableButtonStyle())
-        .accessibilityLabel("Support NOOP — donate or get in touch")
-    }
-    #endif
 
     // MARK: Readiness — on-device training-readiness synthesis (HRV / resting-HR / load).
 

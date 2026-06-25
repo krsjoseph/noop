@@ -110,13 +110,17 @@ public struct NoopCard<Content: View>: View {
         } else {
             inner.background { cardSurface }
         }
-        #else
+        #elseif os(macOS)
         // Hover chrome (fill + border + shadow) lives in the background so its animation is
         // scoped to the card surface ONLY. It must never animate the content() subtree, or a
         // chart inside re-animates its line every time the cursor crosses the card. (#104)
         inner
             .background { cardSurface }
             .onHover { hover = $0 }
+        #else
+        // watchOS (and any other platform): a static frosted surface — there's no pointer to hover,
+        // and `hover` state isn't declared off macOS, so this branch must not reference it.
+        inner.background { cardSurface }
         #endif
     }
 
@@ -383,6 +387,11 @@ public struct SegmentedPillControl<T: Hashable>: View {
                 } label: {
                     Text(label(item))
                         .font(StrandFont.captionNumber)
+                        // Single line that scales down rather than wrapping mid-word ("Char ge") or
+                        // clipping ("ALL" off the card edge) when the control is squeezed — a 6-segment
+                        // range or a 4-segment outcome control is otherwise wider than an iPhone card.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         // Active segment is SELECTION CHROME, so it follows the accent: on dark a
                         // gold-gradient pill with gold-deep ink; on light a flat blue accent pill with
                         // white ink (so the light theme's selection matches its blue chrome, not gold).
@@ -391,8 +400,8 @@ public struct SegmentedPillControl<T: Hashable>: View {
                         // Fill the segment height so the selected pill has EQUAL margins to the track
                         // on every side. (The old compact pill inside a taller 44pt touch frame left
                         // more vertical margin than horizontal — it read as off-centre.)
-                        .frame(minWidth: 32, maxHeight: .infinity)
-                        .padding(.horizontal, 12)
+                        .frame(minWidth: 28, maxHeight: .infinity)
+                        .padding(.horizontal, 8)
                         .background(
                             // WHOOP selection chrome: a flat LIGHTER-grey pill on dark (white ink), a flat
                             // blue accent pill on light — no gold, no gradient.

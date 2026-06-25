@@ -19,6 +19,18 @@ enum AIProvider: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Short label for the segmented provider picker. The full `displayName`
+    /// ("Custom (OpenAI-compatible)") is too wide for a 4-segment control on iPhone — at its intrinsic
+    /// width it forces the whole setup column past the viewport, clipping the screen left and right.
+    var shortName: String {
+        switch self {
+        case .openAI:    return "OpenAI"
+        case .anthropic: return "Anthropic"
+        case .gemini:    return "Gemini"
+        case .custom:    return "Custom"
+        }
+    }
+
     var defaultModel: String {
         switch self {
         case .openAI:    return "gpt-4o-mini"

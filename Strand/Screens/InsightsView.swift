@@ -845,14 +845,13 @@ struct InsightsView: View {
         // `ranked` is memoized in @State (see recomputeRanked()); reading it
         // here does no expensive work per render.
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            // Header + the ONE segmented pill control for choosing the outcome.
-            HStack(alignment: .center) {
-                SectionHeader("Behaviour Effects",
-                              overline: "What moves your \(outcome.outcomeName.lowercased())")
-                Spacer()
-                SegmentedPillControl(Outcome.allCases, selection: $outcome) { $0.label }
-                    .accessibilityLabel("Outcome metric")
-            }
+            // Header and the outcome control each get their own row — sharing one HStack crushed
+            // the title ("Behavio​ur Effects") and the 4-segment pill ("Char​ge") on a narrow iPhone.
+            SectionHeader("Behaviour Effects",
+                          overline: "What moves your \(outcome.outcomeName.lowercased())")
+            SegmentedPillControl(Outcome.allCases, selection: $outcome) { $0.label }
+                .accessibilityLabel("Outcome metric")
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if ranked.isEmpty {
                 noEffects

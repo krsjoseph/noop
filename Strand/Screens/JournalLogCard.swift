@@ -32,9 +32,10 @@ struct JournalLogCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            HStack(alignment: .center) {
-                SectionHeader("Journal", overline: "Log")
-                Spacer()
+            // Title on its own row, the day-scope pills on a second row below it — sharing one HStack
+            // crushed the title ("Journ​al") and the "Tomorrow" pill on a narrow iPhone.
+            SectionHeader("Journal", overline: "Log")
+            HStack(spacing: 6) {
                 if editing {
                     pillButton("Done", selected: true) { editing = false }
                 } else {
@@ -43,6 +44,7 @@ struct JournalLogCard: View {
                     dayPill("Today", offset: 0)
                     dayPill("Yesterday", offset: 1)
                 }
+                Spacer(minLength: 0)
             }
             NoopCard(tint: StrandPalette.restColor) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -144,6 +146,7 @@ struct JournalLogCard: View {
         Button(action: action) {
             Text(label)
                 .font(StrandFont.footnote)
+                .lineLimit(1)
                 .foregroundStyle(selected ? StrandPalette.surfaceBase : StrandPalette.textSecondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
