@@ -80,6 +80,12 @@ struct SettingsView: View {
     /// Nothing is ever created automatically. Mirrors the Android `NoopPrefs.KEY_AUTO_DETECT_WORKOUTS`.
     @AppStorage(PuffinExperiment.autoDetectWorkoutsKey) private var autoDetectWorkoutsEnabled = false
 
+    /// Opt-in "Keep screen on during a workout" (default OFF, #703). When ON, the live-workout view
+    /// holds the screen awake while a manual recording is running so you can glance at your live HR
+    /// without the device dimming. The live-workout view reads this same key. The string is shared
+    /// verbatim with the Android twin (SharedPreferences "workoutKeepScreenOn").
+    @AppStorage("workoutKeepScreenOn") private var workoutKeepScreenOn = false
+
     /// The strap model the user last picked (same key the scan pickers write). Gates the WHOOP 4.0-only
     /// rename control in the strap card — renaming uses the Harvard command set, which a 5/MG doesn't share.
     @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
@@ -138,6 +144,11 @@ struct SettingsView: View {
     /// recording means, and where the provenance badges come from.
     @State private var showHowNoopWorks = false
 
+    /// "Set up Apple Watch" sheet: the honest watch onboarding flow (what it's great at, where
+    /// it's lighter, then the Health permission request). Presented from the About page's primary
+    /// action. iOS does the real HealthKit request; macOS reads as an iPhone-only step.
+    @State private var showAppleWatchSetup = false
+
     /// Steps-estimate calibration sheet (WHOOP 4.0). Reached from the Profile card's "Steps estimate"
     /// tap-through; explains the estimate, shows the current fit + a recent estimated-vs-phone table,
     /// and offers a manual coefficient override. See [StepsCalibrationSheet].
@@ -189,6 +200,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showHowNoopWorks) {
             HowNoopWorksView(onClose: { showHowNoopWorks = false })
+        }
+        .sheet(isPresented: $showAppleWatchSetup) {
+            AppleWatchSetupView(onClose: { showAppleWatchSetup = false })
         }
         .sheet(isPresented: $showStepsCalibration) {
             StepsCalibrationSheet(repo: model.repo, onClose: { showStepsCalibration = false })
@@ -778,6 +792,13 @@ struct SettingsView: View {
                     .accessibilityLabel("Auto-detect workouts")
                     .accessibilityHint("Offers to save a workout when it spots sustained elevated heart rate")
             }
+            SettingsRow(icon: "display", title: "Keep screen on during a workout",
+                        subtitle: "Holds the screen awake while you're recording so live heart rate stays visible. Only applies during a workout.") {
+                Toggle("", isOn: $workoutKeepScreenOn)
+                    .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
+                    .accessibilityLabel("Keep screen on during a workout")
+                    .accessibilityHint("Stops the screen dimming while a workout is recording")
+            }
         }
     }
 
@@ -1364,6 +1385,16 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("How your scores work")
 
+            // About Apple Watch data: what is supported when NOOP runs from Apple Watch data alone.
+            NavigationLink {
+                AppleWatchAboutView(onStartSetup: { showAppleWatchSetup = true })
+            } label: {
+                aboutRowLabel(icon: "applewatch", title: "About Apple Watch data",
+                              subtitle: "Use NOOP with just an Apple Watch. What it's great at, and where it's lighter than a strap.")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("About Apple Watch data")
+
             // Storage (#590) — on-device space breakdown + a one-tap clean-up.
             NavigationLink {
                 StorageView()
@@ -1389,6 +1420,13 @@ struct SettingsView: View {
                               subtitle: "GitHub — code, releases, issues and the wiki.", trailing: "arrow.up.right")
             }
             .accessibilityLabel("Project home and source code on GitHub")
+
+            // Mirror — noop.fans carries every release alongside GitHub, so users have a fallback.
+            Link(destination: URL(string: "https://noop.fans")!) {
+                aboutRowLabel(icon: "arrow.triangle.2.circlepath", title: "Mirror — noop.fans",
+                              subtitle: "Every release, mirrored. A fallback if GitHub is ever down.", trailing: "arrow.up.right")
+            }
+            .accessibilityLabel("Mirror at noop dot fans, a fallback if GitHub is down")
 
             // Medical disclaimer + attribution.
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
