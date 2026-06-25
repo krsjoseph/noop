@@ -150,6 +150,17 @@ struct MetricExplorerView: View {
     /// must paint immediately even before any series read returns (#199).
     @State private var probing = true
 
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends/Settings so Explore reads as the same
+    // surface. Gated on the existing toggle; glass falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         #if os(macOS)
         // macOS: Explore is a standalone detail pane, so it owns its NavigationStack.
@@ -167,13 +178,19 @@ struct MetricExplorerView: View {
     private var exploreScaffold: some View {
         // PERF (scroll): lazy column. Unlike most screens, Explore's content is a flat list of sibling
         // sections (the probe hint, the Deep Timeline row, then a long per-category ForEach of metric
-        // cards), so LazyVStack genuinely builds the off-screen category cards on demand. No
-        // `staggeredAppear` here and identical column alignment/spacing (20) + per-child bottom padding,
-        // so the layout is byte-identical to the eager VStack.
-        ScreenScaffold(title: "Explore", subtitle: "Every signal, one tap deep.", lazy: true) {
+        // cards), so LazyVStack genuinely builds the off-screen category cards on demand. The standard
+        // `.staggeredAppear(index:)` section reveal matches Settings/Trends (which also run lazy:true);
+        // column alignment/spacing (20) + per-child bottom padding are unchanged.
+        ScreenScaffold(title: "Explore", subtitle: "Every signal, one tap deep.",
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on
+                       // Today/Trends/Settings; glass cards refract it.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             // A quiet, non-blocking hint while the empty-dot probe runs its first pass. The rows below
             // render in full immediately regardless — this only reassures during the scan, and never
-            // leaves the screen reading as a bare/empty list before the probe lands (#199).
+            // leaves the screen reading as a bare/empty list before the probe lands (#199). Left ungrouped
+            // (no glass) so it reads as an inline note above the first section.
             if probing {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -196,80 +213,68 @@ struct MetricExplorerView: View {
             .simultaneousGesture(TapGesture().onEnded { StrandHaptic.selection.play() })
             #endif
             .padding(.bottom, NoopMetrics.sectionGap - 20)
+            .staggeredAppear(index: 0)
 
-            ForEach(MetricCatalog.categories, id: \.self) { category in
+            ForEach(Array(MetricCatalog.categories.enumerated()), id: \.element) { catIdx, category in
                 let metrics = MetricCatalog.inCategory(category)
                 if !metrics.isEmpty {
                     VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+                        // Keep the count badge: SettingsGroup's header is a bare overline with no
+                        // trailing slot, so the category header stays a SectionHeader over the glass group.
                         SectionHeader("\(category)", overline: "Category",
                                       trailing: "\(metrics.count)")
-                        NoopCard(padding: 0) {
-                            VStack(spacing: 0) {
-                                ForEach(Array(metrics.enumerated()), id: \.element.id) { idx, metric in
-                                    // Push the detail directly (closure-based), like every other More-tab
-                                    // screen. The old value + .navigationDestination(for:) pairing resolved
-                                    // against TWO registered destinations and double-pushed — the detail
-                                    // flashed then popped straight back (#38).
-                                    NavigationLink {
-                                        MetricDetailView(metric: metric)
-                                    } label: {
-                                        MetricRow(metric: metric,
-                                                  isEmpty: emptyByID[metric.id] ?? false)
-                                    }
-                                    // Full-row press-down feedback (square corners — the row spans the
-                                    // card edge-to-edge, dividers between).
-                                    .buttonStyle(StrandPressableButtonStyle(cornerRadius: 0))
-                                    #if os(iOS)
-                                    // Light selection tick on tap; the simultaneousGesture leaves the
-                                    // NavigationLink push intact.
-                                    .simultaneousGesture(TapGesture().onEnded {
-                                        StrandHaptic.selection.play()
-                                    })
-                                    #endif
-                                    if idx < metrics.count - 1 {
-                                        Divider().overlay(StrandPalette.hairline)
-                                            .padding(.leading, 56)
-                                    }
+                        // The locked grouped-list kit: NoopCard(padding:0) + inset auto-dividers, glass-aware.
+                        SettingsGroup {
+                            ForEach(metrics, id: \.id) { metric in
+                                // Push the detail directly (closure-based), like every other More-tab
+                                // screen. The old value + .navigationDestination(for:) pairing resolved
+                                // against TWO registered destinations and double-pushed — the detail
+                                // flashed then popped straight back (#38).
+                                NavigationLink {
+                                    MetricDetailView(metric: metric)
+                                } label: {
+                                    MetricRow(metric: metric,
+                                              isEmpty: emptyByID[metric.id] ?? false)
                                 }
+                                // Full-row press-down feedback (square corners — the row spans the
+                                // card edge-to-edge, dividers between).
+                                .buttonStyle(StrandPressableButtonStyle(cornerRadius: 0))
+                                #if os(iOS)
+                                // Light selection tick on tap; the simultaneousGesture leaves the
+                                // NavigationLink push intact.
+                                .simultaneousGesture(TapGesture().onEnded {
+                                    StrandHaptic.selection.play()
+                                })
+                                #endif
                             }
                         }
                     }
                     .padding(.bottom, NoopMetrics.sectionGap - 20)
+                    .staggeredAppear(index: catIdx + 1)
                 }
             }
         }
         // Rows push MetricDetailView directly (closure-based NavigationLink above) — no value/destination
         // pairing, which is what double-pushed (#38). Nothing else registers a MetricDescriptor destination.
+        // Liquid Glass cascades to every card/group via the environment; the modifier sits on the scaffold
+        // so it flows through the lazy column. Neutral glass when the scene is on; frosted fallback otherwise.
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
-    /// The hero entry that opens the Deep Timeline (#575). A full-bleed card, not a list row, so it reads
-    /// as the headline above the per-metric catalog.
+    /// The hero entry that opens the Deep Timeline (#575). The headline above the per-metric catalog,
+    /// restyled on the locked grouped-list kit: a single glass group with one SettingsRow (tinted icon
+    /// square + title + subtitle + chevron) — dropping the bespoke icon chip for SettingsRow's iconSquare.
+    /// Glass-aware via the cascaded environment flag. `action: nil` keeps the row plain so the parent
+    /// NavigationLink owns the push.
     private var deepTimelineRow: some View {
-        NoopCard {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(StrandPalette.metricRose.opacity(0.16))
-                    Image(systemName: "waveform.path.ecg")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(StrandPalette.metricRose)
-                }
-                .frame(width: 42, height: 42)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Deep Timeline")
-                        .font(StrandFont.body)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                    Text("Every second of your day, zoomable.")
-                        .font(StrandFont.footnote)
-                        .foregroundStyle(StrandPalette.textTertiary)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(StrandPalette.textTertiary)
-            }
+        SettingsGroup {
+            SettingsRow(
+                icon: "waveform.path.ecg",
+                iconTint: StrandPalette.metricRose,
+                title: "Deep Timeline",
+                subtitle: "Every second of your day, zoomable.",
+                showsChevron: true
+            )
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -322,46 +327,26 @@ private struct MetricRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(StrandPalette.surfaceInset)
-                Image(systemName: metric.icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(metricAccent(metric))
-            }
-            .frame(width: 34, height: 34)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(metric.title)
-                    .font(StrandFont.body)
-                    .foregroundStyle(StrandPalette.textPrimary)
-                Text(metric.sourceLabel)
-                    .font(StrandFont.footnote)
-                    .foregroundStyle(StrandPalette.textTertiary)
-            }
-
-            Spacer(minLength: 8)
-
-            if !unitLabel.isEmpty {
-                Text(unitLabel)
-                    .font(StrandFont.captionNumber)
-                    .foregroundStyle(StrandPalette.textSecondary)
-            }
-            // Faint trailing dot ONLY when this metric has no series at all.
+        // The locked grouped-list row: tinted icon square (category accent) + title + source subtitle,
+        // the unit chip in the trailing value slot, the empty-data dot as a trailing accessory, then the
+        // standard chevron. `action: nil` keeps the row PLAIN so the parent NavigationLink owns the push
+        // (#38/#199) — SettingsRow draws no Button of its own here.
+        SettingsRow(
+            icon: metric.icon,
+            iconTint: metricAccent(metric),
+            title: "\(metric.title)",
+            subtitle: "\(metric.sourceLabel)",
+            value: unitLabel.isEmpty ? nil : unitLabel,
+            showsChevron: true
+        ) {
+            // Faint trailing dot ONLY when this metric has no series at all (sits before the chevron).
             if isEmpty {
                 Text("•")
                     .font(StrandFont.caption)
                     .foregroundStyle(StrandPalette.textTertiary.opacity(0.5))
                     .accessibilityLabel("No data")
             }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(StrandPalette.textTertiary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(metric.title), \(unitLabel.isEmpty ? metric.category : unitLabel)\(isEmpty ? ", no data" : "")")
         .accessibilityAddTraits(.isButton)
@@ -391,6 +376,17 @@ struct MetricDetailView: View {
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
     private func fmt(_ v: Double) -> String {
         metric.format(v, system: unitSystem, temperature: temperatureUnit, effortScale: effortScale)
+    }
+
+    // Day-cycle scene + Liquid Glass, shared with the rest of the app so the dossier reads as the same
+    // surface. Gated on the existing toggle; glass falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
     }
 
     @State private var range: ExploreRange = .month
@@ -476,7 +472,11 @@ struct MetricDetailView: View {
         let effRange = effectiveRange
         let win = slice(for: effRange)
         let fellBack = effRange != range
-        return ScrollView {
+        // ScreenScaffold (title nil) so the scenic hero is the header — same compact-header pattern as
+        // Today. The shared day-cycle scene sits behind it; the glass env flag cascades to every card.
+        return ScreenScaffold(title: nil,
+                              topBackground: showDayCycleBackground
+                                  ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
                 if loaded && series.isEmpty {
                     // No data in the entire history — keep the range bar for context, then the
@@ -489,22 +489,23 @@ struct MetricDetailView: View {
                 } else {
                     // Scenic hero: the metric's current value as a layered ring gauge (0–100
                     // scores) or a big SF-Rounded headline, floated over the domain's starfield,
-                    // with the range pill. Then the frosted chart / stat tiles / correlations.
+                    // with the range pill. Then the neutral-glass chart / stat tiles / correlations.
                     heroHeader(effectiveRange: effRange, windowed: win, windowFellBack: fellBack)
                     heroChart(effectiveRange: effRange, windowed: win, windowFellBack: fellBack)
                     statRow(effectiveRange: effRange, windowed: win)
                     correlationCard
                 }
             }
-            .padding(NoopMetrics.screenPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(StrandPalette.surfaceBase)
         .navigationTitle(metric.title)
         .task(id: loadTaskID) { await load() }
         // Range changes the window, hence the correlation inputs — recompute the
         // cached scan rather than letting `correlationCard` run it inside body.
         .onChangeCompat(of: range) { _ in recomputeCorrelations() }
+        // Liquid Glass cascades to the chart / stat tiles / correlation card; neutral glass when the
+        // scene is on, frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     private func load() async {
@@ -544,16 +545,20 @@ struct MetricDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
 
             VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-                // Title + range control over the starfield.
-                HStack(alignment: .firstTextBaseline) {
+                // Title + range control over the starfield. On a narrow iPhone the 6-pill control is wide,
+                // so the title shrinks before it ever clips and the pill keeps its intrinsic width.
+                HStack(alignment: .firstTextBaseline, spacing: NoopMetrics.space3) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(metric.category.uppercased()).strandOverline()
                         Text(metric.title)
                             .font(StrandFont.title2)
                             .foregroundStyle(StrandPalette.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
-                    Spacer()
+                    Spacer(minLength: NoopMetrics.space2)
                     SegmentedPillControl(ExploreRange.allCases, selection: $range) { $0.label }
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 // The headline read-out: a ring gauge for 0–100 scores, else a big number.
@@ -619,15 +624,18 @@ struct MetricDetailView: View {
                                    windowed: windowed,
                                    windowFellBack: windowFellBack)
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: NoopMetrics.space3) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(metric.category.uppercased()).strandOverline()
                     Text(metric.title)
                         .font(StrandFont.title2)
                         .foregroundStyle(StrandPalette.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
-                Spacer()
+                Spacer(minLength: NoopMetrics.space2)
                 SegmentedPillControl(ExploreRange.allCases, selection: $range) { $0.label }
+                    .fixedSize(horizontal: true, vertical: false)
             }
             Text(caption)
                 .font(StrandFont.footnote)
@@ -665,8 +673,7 @@ struct MetricDetailView: View {
         return ChartCard(
             title: "\(metric.title)",
             subtitle: subtitle,
-            trailing: "\(heroValue) · \(asOf)",
-            tint: metricDomain(metric).color
+            trailing: "\(heroValue) · \(asOf)"
         ) {
             TrendChart(
                 points: trendPoints(windowed),
@@ -776,7 +783,7 @@ struct MetricDetailView: View {
 
     private var correlationCard: some View {
         let rows = correlationCache
-        return NoopCard(tint: metricDomain(metric).color) {
+        return NoopCard {
             VStack(alignment: .leading, spacing: NoopMetrics.gap) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("What correlates").strandOverline()
@@ -816,9 +823,11 @@ struct MetricDetailView: View {
                 Text(row.metric.title)
                     .font(StrandFont.body)
                     .foregroundStyle(StrandPalette.textPrimary)
+                    .lineLimit(1)
                 Text("\(row.metric.category) · n = \(row.n)")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
             HStack(spacing: 10) {

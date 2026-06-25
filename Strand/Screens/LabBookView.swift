@@ -41,6 +41,18 @@ struct LabBookView: View {
     /// Whether the first-use disclaimer sheet is open.
     @State private var showingDisclaimer = false
 
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends/Settings so Lab Book reads as the
+    // same surface. Gated on the existing `showDayCycleBackground` toggle; glass falls back to
+    // frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(
             title: "Lab Book",
@@ -50,18 +62,22 @@ struct LabBookView: View {
             // each carrying its own sparkline-bearing cards. The LazyVStack path builds the off-screen
             // categories on demand — byte-identical layout — so a logbook with many categories doesn't
             // render every section + sparkline up-front.
-            lazy: true
+            lazy: true,
+            // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today/Settings.
+            topBackground: showDayCycleBackground
+                ? AnyView(SceneScreenBackground().drawingGroup()) : nil
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
-                headerCard
-                importCard
+                headerCard.staggeredAppear(index: 0)
+                importCard.staggeredAppear(index: 1)
                 if !loaded {
                     ComingSoon(what: "Reading your logbook…", symbol: "books.vertical")
+                        .staggeredAppear(index: 2)
                 } else if markers.isEmpty {
-                    emptyState
+                    emptyState.staggeredAppear(index: 2)
                 } else {
-                    ForEach(orderedCategories, id: \.self) { category in
-                        categorySection(category)
+                    ForEach(Array(orderedCategories.enumerated()), id: \.element) { offset, category in
+                        categorySection(category).staggeredAppear(index: 2 + offset)
                     }
                 }
                 disclaimerNote
@@ -81,12 +97,15 @@ struct LabBookView: View {
         .sheet(isPresented: $showingDisclaimer) {
             LabBookDisclaimerView()
         }
+        // Liquid Glass for every NoopCard on the screen (cascades via the environment); neutral
+        // glass when on, frosted fallback otherwise (below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - Header (count + scope + actions)
 
     private var headerCard: some View {
-        NoopCard(tint: StrandPalette.metricCyan) {
+        NoopCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Image(systemName: "books.vertical.fill")
@@ -139,7 +158,7 @@ struct LabBookView: View {
     // user at Data Sources, where every file importer lives, rather than fabricating a flow.
 
     private var importCard: some View {
-        NoopCard(padding: 18, tint: StrandPalette.metricAmber) {
+        NoopCard(padding: 18) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     Image(systemName: "tray.and.arrow.down.fill")
@@ -192,14 +211,19 @@ struct LabBookView: View {
         .bloodPanel, .bloodPressure, .bodyMeasurement, .imaging, .appointmentNote, .other,
     ]
 
+    /// Adaptive grid: one full-width column on iPhone, two-up on iPad — matching Sleep/Trends.
+    private let markerColumns = [GridItem(.adaptive(minimum: 320), spacing: NoopMetrics.gap)]
+
     @ViewBuilder
     private func categorySection(_ category: LabMarkerCategory) -> some View {
         let keys = markerKeys(in: category)
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader(LocalizedStringKey(category.displayName),
                           overline: keys.count == 1 ? "1 marker" : "\(keys.count) markers")
-            ForEach(keys, id: \.self) { key in
-                markerRow(key)
+            LazyVGrid(columns: markerColumns, alignment: .leading, spacing: NoopMetrics.gap) {
+                ForEach(keys, id: \.self) { key in
+                    markerRow(key)
+                }
             }
         }
     }
@@ -210,46 +234,56 @@ struct LabBookView: View {
         return keys.sorted { displayName(for: $0) < displayName(for: $1) }
     }
 
-    /// One marker as a tappable card: name, latest reading + unit, a tiny sparkline, last-taken date.
+    /// One marker as a glanceable `MetricStatusCard`: tinted icon + name, the latest reading as the big
+    /// value (with its unit), a descriptive trend status (glyph + word, never a clinical verdict), and a
+    /// tiny sparkline. Tapping opens the detail sheet — same action as before.
     private func markerRow(_ key: String) -> some View {
         let series = readings(for: key)
         let numeric = series.compactMap { $0.value }
         let latest = series.last
-        return Button {
-            detailKey = key
-        } label: {
-            NoopCard {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(displayName(for: key))
-                            .font(StrandFont.headline)
-                            .foregroundStyle(StrandPalette.textPrimary)
-                            .lineLimit(1)
-                        Text(lastTakenCaption(latest))
-                            .font(StrandFont.footnote)
-                            .foregroundStyle(StrandPalette.textTertiary)
-                    }
-                    Spacer(minLength: 8)
-                    if numeric.count > 1 {
-                        Sparkline(values: numeric, gradient: Gradient(colors: [StrandPalette.metricCyan.opacity(0.5), StrandPalette.metricCyan]),
-                                  showsHover: false)
-                            .frame(width: 64, height: 28)
-                            .accessibilityHidden(true)
-                    }
-                    Text(latestLabel(latest, key: key))
-                        .font(StrandFont.number(18))
-                        .foregroundStyle(StrandPalette.textPrimary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(StrandPalette.textTertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
+        let parts = latestValueUnit(latest, key: key)
+        let trend = markerTrend(numeric)
+        return MetricStatusCard(
+            icon: "drop.fill",
+            iconTint: StrandPalette.metricCyan,
+            label: LocalizedStringKey(displayName(for: key)),
+            value: parts.0,
+            unit: parts.1,
+            statusText: trend.0,
+            statusGlyph: trend.1,
+            statusColor: trend.2,
+            sparkline: numeric.count > 1 ? numeric : nil,
+            sparkColor: StrandPalette.metricCyan,
+            onTap: { detailKey = key })
         .accessibilityLabel("\(displayName(for: key)), latest \(latestLabel(latest, key: key)), \(series.count) readings")
+    }
+
+    /// Latest reading split into (value, optional unit) for `MetricStatusCard`. Numeric readings split the
+    /// catalog-formatted number from the unit; a free-text reading shows verbatim with no unit; nothing
+    /// shows the honest "—". Mirrors `latestLabel` exactly so we never fabricate.
+    private func latestValueUnit(_ row: LabMarkerRow?, key: String) -> (String, String?) {
+        guard let row else { return ("—", nil) }
+        if let v = row.value {
+            let unit = row.unit.isEmpty ? nil : row.unit
+            return (LabBookFormat.value(v, key: key), unit)
+        }
+        return (row.valueText ?? "—", nil)
+    }
+
+    /// Descriptive trend tuple (status word, glyph, colour) from the numeric series — arithmetic only,
+    /// never a clinical reading. "Trending up/down" by first-vs-last of the shown points, "Holding steady"
+    /// when level, and an honest "No trend yet" until there are two numeric readings. The colour stays
+    /// NEUTRAL (textTertiary): a marker rising or falling is not "good" or "bad" — NOOP never imputes a
+    /// clinical valence (spec §"Non-clinical"). Direction is carried by the glyph alone.
+    private func markerTrend(_ numeric: [Double]) -> (String?, String?, Color) {
+        guard numeric.count >= 2, let last = numeric.last else {
+            return ("No trend yet", "minus", StrandPalette.textTertiary)
+        }
+        let shown = Array(numeric.suffix(3))
+        let first = shown.first ?? last
+        if last > first { return ("Trending up", "arrow.up.right", StrandPalette.textTertiary) }
+        if last < first { return ("Trending down", "arrow.down.right", StrandPalette.textTertiary) }
+        return ("Holding steady", "equal", StrandPalette.textTertiary)
     }
 
     // MARK: - Disclaimer (always visible footnote + link)
@@ -441,7 +475,7 @@ private struct MarkerDetailView: View {
     private var trendSection: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Trend", overline: "your readings over time")
-            NoopCard(tint: StrandPalette.metricCyan) {
+            NoopCard {
                 VStack(alignment: .leading, spacing: 10) {
                     let nums = numericReadings.compactMap { $0.value }
                     if nums.count > 1 {
@@ -587,10 +621,10 @@ private struct MarkerDetailView: View {
                     .foregroundStyle(StrandPalette.textPrimary)
                     .lineLimit(2)
                 Spacer(minLength: 6)
+                // One read-out (no duplicate "r =" numeral competing for width): the signed r value
+                // carries its +/− sign and a direction glyph in the chip; the colour carries strength.
+                // The strength/direction words still appear in the mandatory clause below.
                 TrendChip(text: LabBookSignals.signedR(c.r), color: tint)
-                Text("r = \(LabBookSignals.signedR(c.r))")
-                    .font(StrandFont.number(18))
-                    .foregroundStyle(tint)
             }
             Text(LabBookSignals.insightSentence(markerName: displayName,
                                                  signalName: signal?.title ?? "the signal",
@@ -639,6 +673,7 @@ private struct MarkerDetailView: View {
                     Text(note)
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

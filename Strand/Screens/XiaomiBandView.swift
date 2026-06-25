@@ -23,6 +23,15 @@ struct XiaomiBandView: View {
     /// Per-source partition key — matches `XiaomiImporter.deviceId`.
     private static let source = "xiaomi-band"
 
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     @State private var loaded = false
     @State private var series: [String: [(day: String, value: Double)]] = [:]
     @State private var range: RangeWindow = .quarter
@@ -105,7 +114,9 @@ struct XiaomiBandView: View {
 
     var body: some View {
         ScreenScaffold(title: "Mi Band", subtitle: spanSubtitle.map { "\($0)" },
-                       onRefresh: { await repo.refresh() }, lazy: loaded && hasAnyData) {
+                       onRefresh: { await repo.refresh() }, lazy: loaded && hasAnyData,
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if loaded && !hasAnyData {
                 ComingSoon(what: "Nothing imported yet. In Data Sources, choose your Mi Fitness export (a .zip of the Mi Fitness app folder from the Files app) to bring in your steps, heart rate, sleep stages, SpO₂ and stress.")
             } else if !loaded {
@@ -133,6 +144,7 @@ struct XiaomiBandView: View {
         .task(id: repo.refreshSeq) { await load() }
         .onChangeCompat(of: range) { _ in rebuildWindowCache() }
         .onPreferenceChange(ChartWidthKey.self) { w in if w > 1 { chartWidthPts = w } }
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// The page's chart cards as a flat, lazily-rendered list (headers interleaved). Modelled as
@@ -240,7 +252,7 @@ struct XiaomiBandView: View {
     }
 
     private var loadingState: some View {
-        NoopCard(tint: StrandPalette.metricAmber) {
+        NoopCard {
             HStack(spacing: 10) {
                 ConnectionDot(tone: .accent, pulsing: true)
                 Text("Reading your Mi Band history…")
@@ -420,6 +432,7 @@ struct XiaomiBandView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Latest reading").strandOverline()
             Text(fmt(value)).font(StrandFont.number(34)).foregroundStyle(accent)
+                .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

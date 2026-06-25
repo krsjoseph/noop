@@ -25,6 +25,18 @@ struct CoachView: View {
     @State private var customModelDraft: String = ""
     @FocusState private var composerFocused: Bool
 
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends/Settings so Coach reads as the same
+    // surface. Gated on the existing Settings toggle; the glass surface falls back to frosted below
+    // iOS 26 / on macOS (where useGlassSurface stays false so the cross-platform branch still builds).
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// Sentinel tag for the "Custom…" entry in the model Picker.
     private let customModelTag = "__custom__"
 
@@ -37,22 +49,30 @@ struct CoachView: View {
 
     var body: some View {
         ScreenScaffold(title: "Coach",
-                       subtitle: "Ask about your charge, effort, rest and workouts — grounded in your own numbers.") {
+                       subtitle: "Ask about your charge, effort, rest and workouts — grounded in your own numbers.",
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if coach.isConfigured {
-                connectedHeader
-                consentBar
-                // v5: a SECOND opt-in, only meaningful once data access is on — folds a summary of the
-                // new on-device signals (your strongest patterns + Lab Book) into the coach context.
-                if coach.dataConsent { onDeviceSignalsBar }
-                transcript
-                if let error = coach.errorText, !error.isEmpty {
-                    errorBanner(error)
+                VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                    connectedHeader.staggeredAppear(index: 0)
+                    consentBar.staggeredAppear(index: 1)
+                    // v5: a SECOND opt-in, only meaningful once data access is on — folds a summary of the
+                    // new on-device signals (your strongest patterns + Lab Book) into the coach context.
+                    if coach.dataConsent { onDeviceSignalsBar.staggeredAppear(index: 2) }
+                    transcript.staggeredAppear(index: 3)
+                    VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+                        if let error = coach.errorText, !error.isEmpty {
+                            errorBanner(error)
+                        }
+                        suggestionChips
+                        composer
+                    }
+                    .staggeredAppear(index: 4)
+                    privacyFootnote.staggeredAppear(index: 5)
                 }
-                suggestionChips
-                composer
-                privacyFootnote
             } else {
-                setupCard
+                setupCard.staggeredAppear(index: 0)
             }
         }
         .toolbar {
@@ -70,26 +90,22 @@ struct CoachView: View {
             }
         }
         .task(id: coach.dataConsent) { await coach.startBriefIfNeeded() }
+        // Liquid Glass for every card on this screen (NoopCard/StrandCard/SettingsGroup are glass-aware).
+        // Cascades via the environment; neutral glass when on, frosted fallback otherwise (below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// Explicit, revocable permission for the coach to read & send the user's data. Off by default.
-    /// A frosted Charge-tinted card so it reads as part of the green Coach world, not a flat panel.
+    /// Native grouped-list toggle row over glass — the on/off explanation lives in the row subtitle,
+    /// the open/closed-lock glyph carries the only data colour (accent), the chrome stays neutral.
     private var consentBar: some View {
-        NoopCard(padding: 14, tint: StrandPalette.chargeColor) {
-            HStack(spacing: 10) {
-                Image(systemName: coach.dataConsent ? "lock.open.fill" : "lock.fill")
-                    .foregroundStyle(coach.dataConsent ? StrandPalette.accent : StrandPalette.textTertiary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Let the coach use my data")
-                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
-                    Text(coach.dataConsent
-                         ? "On — your charge, rest, HRV and workouts are shared with the provider for tailored coaching."
-                         : "Off — the coach answers generally and sends none of your metrics.")
-                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
+        SettingsGroup(header: "Data access") {
+            SettingsRow(icon: coach.dataConsent ? "lock.open.fill" : "lock.fill",
+                        iconTint: coach.dataConsent ? StrandPalette.accent : StrandPalette.textTertiary,
+                        title: "Let the coach use my data",
+                        subtitle: coach.dataConsent
+                            ? "On — your charge, rest, HRV and workouts are shared with the provider for tailored coaching."
+                            : "Off — the coach answers generally and sends none of your metrics.") {
                 Toggle("", isOn: $coach.dataConsent)
                     .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
                     .accessibilityLabel("Let the coach use my data")
@@ -100,21 +116,13 @@ struct CoachView: View {
     /// The v5 second opt-in: include a SUMMARY of the new on-device signals (strongest n-of-1 patterns +
     /// Lab Book markers). Summary-only — never raw readings — so the no-raw-egress posture holds.
     private var onDeviceSignalsBar: some View {
-        NoopCard(padding: 14, tint: StrandPalette.chargeColor) {
-            HStack(spacing: 10) {
-                Image(systemName: coach.includeOnDeviceSignals ? "checklist.checked" : "checklist")
-                    .foregroundStyle(coach.includeOnDeviceSignals ? StrandPalette.accent : StrandPalette.textTertiary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Also share my patterns & Lab Book")
-                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
-                    Text(coach.includeOnDeviceSignals
-                         ? "On — a short summary of your strongest patterns and logged health numbers is added. Summaries only, never raw readings."
-                         : "Off — only your core metrics are shared, not your patterns or Lab Book.")
-                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
+        SettingsGroup(header: "Patterns & Lab Book") {
+            SettingsRow(icon: coach.includeOnDeviceSignals ? "checklist.checked" : "checklist",
+                        iconTint: coach.includeOnDeviceSignals ? StrandPalette.accent : StrandPalette.textTertiary,
+                        title: "Also share my patterns & Lab Book",
+                        subtitle: coach.includeOnDeviceSignals
+                            ? "On — a short summary of your strongest patterns and logged health numbers is added. Summaries only, never raw readings."
+                            : "Off — only your core metrics are shared, not your patterns or Lab Book.") {
                 Toggle("", isOn: $coach.includeOnDeviceSignals)
                     .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
                     .accessibilityLabel("Also share my patterns and Lab Book with the coach")
@@ -125,25 +133,14 @@ struct CoachView: View {
     // MARK: - Setup (no key yet)
 
     private var setupCard: some View {
-        StrandCard(padding: 20) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(StrandPalette.accent)
-                        .accessibilityHidden(true)
-                    Text("Connect a provider")
-                        .font(StrandFont.headline)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                }
-
-                Text("Coach uses your own API key. Pick a provider, paste a key, and choose a model. Your key is stored securely in the Keychain and never leaves \(Platform.deviceNounPhrase) except as the request you make.")
-                    .font(StrandFont.subhead)
-                    .foregroundStyle(StrandPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Provider
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Provider").strandOverline()
+        VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+            // PROVIDER — the segmented choice as a control row, then the per-provider fields and the
+            // action, all inset to the grouped-list grid. The intro copy is preserved as the group footer.
+            SettingsGroup(
+                header: "Provider",
+                footer: "Coach uses your own API key. Pick a provider, paste a key, and choose a model. Your key is stored securely in the Keychain and never leaves \(Platform.deviceNounPhrase) except as the request you make."
+            ) {
+                SettingsRow(icon: "sparkles", title: "Provider") {
                     Picker("Provider", selection: $coach.provider) {
                         ForEach(AIProvider.allCases) { p in
                             Text(p.displayName).tag(p)
@@ -151,6 +148,7 @@ struct CoachView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
+                    .fixedSize()
                     .accessibilityLabel("Provider")
                 }
 
@@ -159,14 +157,7 @@ struct CoachView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Server URL").strandOverline()
                         TextField("http://localhost:11434/v1", text: $coach.customBaseURL)
-                            .textFieldStyle(.plain)
-                            .font(StrandFont.body)
-                            .foregroundStyle(StrandPalette.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(StrandPalette.hairline, lineWidth: 1))
+                            .fieldWell()
                             .disableAutocorrection(true)
                             .accessibilityLabel("Server URL")
                         Text("Any OpenAI-compatible server — Ollama, LM Studio, llama.cpp, or your own gateway. Stays on your network; nothing leaves \(Platform.deviceNounPhrase).")
@@ -174,10 +165,11 @@ struct CoachView: View {
                             .foregroundStyle(StrandPalette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .settingsRowInsets()
                 }
 
                 // Model
-                modelSelector
+                modelSelector.settingsRowInsets()
 
                 // Key
                 VStack(alignment: .leading, spacing: 6) {
@@ -185,17 +177,11 @@ struct CoachView: View {
                     SecureField(coach.provider == .custom
                                 ? "Only if your server requires one"
                                 : "Paste your \(coach.provider.displayName) API key", text: $keyDraft)
-                        .textFieldStyle(.plain)
-                        .font(StrandFont.body)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(StrandPalette.hairline, lineWidth: 1))
+                        .fieldWell()
                         .onSubmit { coach.provider == .custom ? connectCustom() : saveKey() }
                         .accessibilityLabel("API key")
                 }
+                .settingsRowInsets()
 
                 HStack {
                     if coach.provider == .custom {
@@ -207,10 +193,10 @@ struct CoachView: View {
                     }
                     Spacer()
                 }
-
-                Divider().overlay(StrandPalette.hairline)
-                privacyFootnote
+                .settingsRowInsets()
             }
+
+            privacyFootnote
         }
     }
 
@@ -244,20 +230,13 @@ struct CoachView: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .fixedSize()
+            .lineLimit(1)
             .accessibilityLabel("Model")
 
             if customModel {
                 HStack(spacing: 8) {
                     TextField("Enter a model id", text: $customModelDraft)
-                        .textFieldStyle(.plain)
-                        .font(StrandFont.body)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(StrandPalette.hairline, lineWidth: 1))
+                        .fieldWell()
                         .onSubmit(applyCustomModel)
                         .accessibilityLabel("Custom model id")
 
@@ -371,7 +350,8 @@ struct CoachView: View {
             // LLM replies arrive as Markdown (bold, lists, headings, tables) —
             // rendered with the chat-bubble-sized Strand theme. User bubbles stay
             // verbatim `Text` so typed `*`/`#` never turn into surprise formatting.
-            // The reply sits on a frosted Charge-tinted surface — a card, not a flat box.
+            // The reply sits on a neutral frosted surface — a card, not a tinted box;
+            // colour belongs to the content, not the chrome.
             HStack {
                 Markdown(message.text)
                     .markdownTheme(.strand)
@@ -379,7 +359,7 @@ struct CoachView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
-                    .frostedCardSurface(tint: StrandPalette.chargeColor, cornerRadius: 16)
+                    .frostedCardSurface(cornerRadius: 16)
                     .frame(maxWidth: 560, alignment: .leading)
                 Spacer(minLength: 48)
             }
@@ -398,7 +378,7 @@ struct CoachView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .frostedCardSurface(tint: StrandPalette.chargeColor, cornerRadius: 16)
+        .frostedCardSurface(cornerRadius: 16)
         .frame(maxWidth: 320, alignment: .leading)
         .accessibilityLabel("Coach is thinking")
     }
@@ -541,5 +521,22 @@ struct CoachView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
+    }
+}
+
+private extension View {
+    /// The one inset text-field well used by the setup form (Server URL, API key, custom model id):
+    /// plain field on a `surfaceInset` fill with a single hairline border at a standard radius, so all
+    /// three fields share one token treatment instead of ad-hoc per-field chrome.
+    func fieldWell() -> some View {
+        self
+            .textFieldStyle(.plain)
+            .font(StrandFont.body)
+            .foregroundStyle(StrandPalette.textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(StrandPalette.hairline, lineWidth: 1))
     }
 }

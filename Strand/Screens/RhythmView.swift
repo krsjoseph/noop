@@ -267,6 +267,18 @@ struct RhythmView: View {
         enabled && RhythmConsent.isAccepted(acceptedVersion)
     }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep/Settings so every
+    // surface reads as one neutral glass world. Gated on the same Settings toggle; the glass surface
+    // itself falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         Group {
             if consentGiven {
@@ -281,6 +293,10 @@ struct RhythmView: View {
                 )
             }
         }
+        // Liquid Glass scopes both the visualization and the consent gate subtree (matching how
+        // Sleep/Trends attach it once at the screen root). Flips every StrandCard/StatTile/ChartCard
+        // to neutral glass; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: Visualization (post-consent)
@@ -308,20 +324,33 @@ struct RhythmView: View {
             // methodology card). The LazyVStack path builds the off-screen cards — including the scatter
             // plot's point set — on demand; byte-identical layout.
             lazy: true,
+            topBackground: showDayCycleBackground ? AnyView(SceneScreenBackground().drawingGroup()) : nil,
             trailing: { closeButton }
         ) {
-            SourceBadge("Experimental", tint: StrandPalette.restColor)
+            VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                SourceBadge("Experimental", tint: StrandPalette.restColor)
+                    .staggeredAppear(index: 0)
 
-            if allPoints.isEmpty {
-                emptyState
-            } else {
-                summaryCard
-                plotCard
-                statsCard
+                if allPoints.isEmpty {
+                    emptyState
+                        .staggeredAppear(index: 1)
+                    methodologyCard
+                        .staggeredAppear(index: 2)
+                    RhythmDisclaimerNote()
+                        .staggeredAppear(index: 3)
+                } else {
+                    summaryCard
+                        .staggeredAppear(index: 1)
+                    plotCard
+                        .staggeredAppear(index: 2)
+                    statsCard
+                        .staggeredAppear(index: 3)
+                    methodologyCard
+                        .staggeredAppear(index: 4)
+                    RhythmDisclaimerNote()
+                        .staggeredAppear(index: 5)
+                }
             }
-
-            methodologyCard
-            RhythmDisclaimerNote()
         }
     }
 
@@ -340,7 +369,7 @@ struct RhythmView: View {
     // MARK: Summary card — the neutral, plain-language headline (NO verdict)
 
     private var summaryCard: some View {
-        StrandCard(padding: 18, tint: StrandPalette.restColor) {
+        StrandCard(padding: 18) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("LAST NIGHT").strandOverline()
@@ -362,23 +391,24 @@ struct RhythmView: View {
     // MARK: Plot card — the Poincaré scatter + the "comet vs cloud" reading note
 
     private var plotCard: some View {
-        StrandCard(padding: 18, tint: StrandPalette.restColor) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("BEAT-TO-BEAT SCATTER").strandOverline()
+        ChartCard(
+            title: "BEAT-TO-BEAT SCATTER",
+            chart: {
                 ZStack {
                     ScenicHeroBackground(domain: .rest, starCount: 36)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     PoincarePlot(points: allPoints)
                         .padding(8)
                 }
-                .frame(height: NoopMetrics.chartHeight + 24)
-
+            },
+            footer: {
                 Text("Each dot pairs one heartbeat interval with the next. A tight line along the diagonal means a steady beat; a rounder, more spread-out cloud means the timing varied more.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
+        )
     }
 
     // MARK: Stats card — the descriptive numbers (equal-height tiles)
@@ -386,7 +416,12 @@ struct RhythmView: View {
     private var statsCard: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("The numbers", overline: "DESCRIPTIVE STATS")
-            HStack(spacing: NoopMetrics.gap) {
+            // Adaptive grid (min 150pt) so two tiles always fit a 320pt-wide iPhone column and an
+            // iPad can reflow to three-up — same StatTile language, heights and accents as before.
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: NoopMetrics.gap)],
+                spacing: NoopMetrics.gap
+            ) {
                 StatTile(label: "SHORT AXIS",
                          value: fmt(headlineWindow?.sd1, "%.0f"),
                          caption: "SD1 · ms",
@@ -395,8 +430,6 @@ struct RhythmView: View {
                          value: fmt(headlineWindow?.sd2, "%.0f"),
                          caption: "SD2 · ms",
                          accent: StrandPalette.restColor)
-            }
-            HStack(spacing: NoopMetrics.gap) {
                 StatTile(label: "CLOUD SHAPE",
                          value: fmt(headlineWindow?.sd1sd2, "%.2f"),
                          caption: "SD1:SD2 ratio",
@@ -405,8 +438,6 @@ struct RhythmView: View {
                          value: percent(headlineWindow?.normRmssd),
                          caption: "variation index",
                          accent: StrandPalette.metricPurple)
-            }
-            HStack(spacing: NoopMetrics.gap) {
                 StatTile(label: "EXTRA / SKIPPED",
                          value: percent(headlineWindow?.ectopicFraction),
                          caption: "of beats",

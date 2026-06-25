@@ -8,56 +8,55 @@ import StrandDesign
 /// Siri/Spotlight/Shortcuts, but nothing in-app advertised them — this is the iOS analogue of the
 /// Mac's strap-double-tap-runs-a-Shortcut feature. Apple's `SiriTipView`/`ShortcutsLink` (iOS 16+)
 /// do exactly that: tip the user on the spoken phrase and deep-link into the Shortcuts app, scoped to
-/// this app automatically.
+/// this app automatically. Native grouped-list idiom: light section headers + grey footers over glass.
 struct SiriShortcutsSettingsView: View {
-    var body: some View {
-        ScreenScaffold(title: "Siri & Shortcuts",
-                       subtitle: "Run NOOP actions hands-free.") {
-            tips
-            shortcutsCard
-        }
+    /// Day-cycle scene behind the header (shared with Today/Trends/Settings). Gates the glass surface.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+
+    /// Neutral Liquid Glass when the scene is on; frosted fallback below iOS 26. Always false on macOS.
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
     }
 
-    private var tips: some View {
-        StrandCard(padding: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "mic.fill")
-                        .foregroundStyle(StrandPalette.accent)
-                        .accessibilityHidden(true)
-                    Text("Ready-made actions")
-                        .font(StrandFont.headline)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                }
-                Text("Buzz your strap or mark a moment from Siri, Spotlight, the Shortcuts app, or a Back-Tap / automation — no setup needed.")
-                    .font(StrandFont.caption)
-                    .foregroundStyle(StrandPalette.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+    var body: some View {
+        ScreenScaffold(title: "Siri & Shortcuts",
+                       subtitle: "Run NOOP actions hands-free.",
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
+            VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                readyMadeGroup.staggeredAppear(index: 0)
+                buildYourOwnGroup.staggeredAppear(index: 1)
+            }
+        }
+        // Liquid Glass for the groups (SettingsGroup → NoopCard, glass-aware). Apple's own
+        // SiriTipView/ShortcutsLink keep their opaque chrome and sit on the glass, not become it.
+        .environment(\.noopGlassSurface, useGlassSurface)
+    }
+
+    /// The two ready-made intents, hosted as Apple's tip controls inside the grouped list.
+    private var readyMadeGroup: some View {
+        SettingsGroup(header: "Ready-made actions",
+                      footer: "Buzz your strap or mark a moment from Siri, Spotlight, the Shortcuts app, or a Back-Tap / automation — no setup needed.") {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 SiriTipView(intent: BuzzStrapIntent(), isVisible: .constant(true))
                     .siriTipViewStyle(.dark)
                 SiriTipView(intent: MarkMomentIntent(), isVisible: .constant(true))
                     .siriTipViewStyle(.dark)
             }
+            .settingsRowInsets()
         }
     }
 
-    private var shortcutsCard: some View {
-        StrandCard(padding: 20) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.stack.3d.up.fill")
-                        .foregroundStyle(StrandPalette.accent)
-                        .accessibilityHidden(true)
-                    Text("Build your own")
-                        .font(StrandFont.headline)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                }
-                Text("Wire NOOP's actions into a Back-Tap, a focus automation, or a longer Shortcut — for example, double-tap the back of your iPhone to buzz the strap.")
-                    .font(StrandFont.caption)
-                    .foregroundStyle(StrandPalette.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ShortcutsLink()
-            }
+    /// Deep-link into the Shortcuts app to wire these actions into automations.
+    private var buildYourOwnGroup: some View {
+        SettingsGroup(header: "Build your own",
+                      footer: "Wire NOOP's actions into a Back-Tap, a focus automation, or a longer Shortcut — for example, double-tap the back of your iPhone to buzz the strap.") {
+            ShortcutsLink()
+                .settingsRowInsets()
         }
     }
 }

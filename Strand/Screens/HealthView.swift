@@ -21,6 +21,19 @@ struct HealthView: View {
     // `HealthFirstRunContent` leaf, which owns `live`/`model` itself. The common path (history present)
     // branches purely on `repo.days`, so a live tick re-renders only the `HeartRateSection` hero leaf.
 
+    // The shared day-cycle scene sits behind the header band and fades above the cards; glass cards
+    // refract it. Gated on the same Settings toggle, and the glass surface itself falls back to frosted
+    // below iOS 26 / macOS. Set on the CONTENT root so every leaf section inherits glass via the
+    // environment — without making this parent observe `live` (the perf split above is preserved).
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -30,7 +43,10 @@ struct HealthView: View {
                        // alignment/spacing/header); builds the trailing vitals/skin-temp/age sections on
                        // demand instead of all up-front.
                        onRefresh: { await repo.refresh() },
-                       lazy: true) {
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if repo.days.isEmpty {
                 // First run / no history: whether to show the empty state or the full live stack depends
                 // on whether a strap is streaming live HR — a `live`-dependent choice. It's isolated to
@@ -43,6 +59,9 @@ struct HealthView: View {
                 HealthSectionsStack()
             }
         }
+        // Liquid Glass for every card on Health (cascades down to the section leaves via the environment).
+        // Neutral glass when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 }
 
@@ -602,6 +621,7 @@ private struct ContributorBar: View {
                 Text(detail)
                     .font(StrandFont.captionNumber)
                     .foregroundStyle(StrandPalette.textSecondary)
+                    .lineLimit(1)
             }
             // The signature count-up segmented bar. Flat, crisp, no glow; handles the cascade-in
             // and Reduce Motion internally. Calibrating (nil) reads as an empty 0 bar.
@@ -724,7 +744,8 @@ private struct FitnessAgeSection: View {
         let delta = Double(profile.age) - age        // +ve = fitness age younger than chronological
         let years = Int(abs(delta).rounded())
         let younger = delta >= 0
-        return VStack(alignment: .leading, spacing: NoopMetrics.space4) {
+        return NoopCard(padding: NoopMetrics.space5) {
+          VStack(alignment: .leading, spacing: NoopMetrics.space4) {
             // Tap the hero body to open the full "fitness_age" trend.
             Button { fitnessSheet = .trend } label: {
                 HStack(alignment: .center, spacing: NoopMetrics.space5) {
@@ -741,6 +762,8 @@ private struct FitnessAgeSection: View {
                              : "\(years) year\(years == 1 ? "" : "s") \(younger ? "younger" : "older") than your age")
                             .font(StrandFont.subhead)
                             .foregroundStyle(younger ? StrandPalette.statusPositive : StrandPalette.statusWarning)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                     if let vo2 = vo2max {
@@ -792,15 +815,8 @@ private struct FitnessAgeSection: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("How accurate is this? \(showReadiness ? "Hide" : "Show") the data behind your Fitness Age")
+          }
         }
-        .padding(NoopMetrics.space5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Apple-flat WHOOP card: a plain frosted surface tinted to the Charge (green) world —
-        // no scenic starfield / bloom, no gold border. Fill contrast carries the edge.
-        .background {
-            FrostedCardSurface(tint: StrandPalette.chargeColor, cornerRadius: NoopMetrics.cardRadius)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
     }
 
     /// Load the latest weekly Fitness Age (+ optional VO₂max) from the strap's metricSeries. Uses the
@@ -997,7 +1013,8 @@ private struct VitalitySection: View {
         let sorted = contributions.sorted { $0.lnHazard < $1.lnHazard }
         let best = sorted.first
         let worst = sorted.last
-        return VStack(alignment: .leading, spacing: NoopMetrics.space4) {
+        return NoopCard(padding: NoopMetrics.space5) {
+          VStack(alignment: .leading, spacing: NoopMetrics.space4) {
             HStack(alignment: .center, spacing: NoopMetrics.space5) {
                 VStack(alignment: .leading, spacing: NoopMetrics.space1) {
                     Text("Vitality").strandOverline()
@@ -1020,6 +1037,8 @@ private struct VitalitySection: View {
                          : "\(yrs) yr\(yrs == 1 ? "" : "s") \(younger ? "younger" : "older")")
                         .font(StrandFont.footnote)
                         .foregroundStyle(younger ? StrandPalette.statusPositive : StrandPalette.statusWarning)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
             if (best?.lnHazard ?? 0) < 0 || (worst?.lnHazard ?? 0) > 0 {
@@ -1035,15 +1054,9 @@ private struct VitalitySection: View {
             }
             Text("A wellness estimate from your habits — not a clinical biological age.")
                 .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+          }
         }
-        .padding(NoopMetrics.space5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Apple-flat WHOOP card: a plain frosted surface tinted to the Charge (green) world —
-        // no scenic starfield / bloom, no gold border. Fill contrast carries the edge.
-        .background {
-            FrostedCardSurface(tint: StrandPalette.chargeColor, cornerRadius: NoopMetrics.cardRadius)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
     }
 
     private func load() async {

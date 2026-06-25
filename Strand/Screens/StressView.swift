@@ -50,12 +50,26 @@ struct StressView: View {
     @State private var model: StressModel?
     @State private var modelSignature: StressInputs?
 
+    /// Liquid Glass opt-in — driven by the same Settings toggle as Today/Trends/Sleep.
+    /// On iOS the cards float as neutral glass over the day-cycle scene; on macOS the
+    /// surface falls back to frosted (useGlassSurface == false), matching the references.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(title: "Stress", subtitle: "Autonomic load from HRV and resting heart rate",
                        // PERF (scroll): lazy column — byte-identical layout (LazyVStack == eager VStack
                        // alignment/spacing/header). The content is one inner eager VStack, so the staggered
                        // section reveal is unchanged; this only defers building that stack until it scrolls in.
-                       lazy: true) {
+                       lazy: true,
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if let model {
                 content(model)
             } else if !loaded {
@@ -67,6 +81,7 @@ struct StressView: View {
         .onAppear { rebuildModelIfNeeded() }
         .onChangeCompat(of: repo.days) { _ in rebuildModelIfNeeded() }
         .task(id: repo.refreshSeq) { await load() }
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     private func load() async {
@@ -164,12 +179,16 @@ struct StressView: View {
             NoopCard(tint: StressRamp.calm) {
                 VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
                     HStack {
-                        Text("Autonomic load through the day").strandOverline()
-                        Spacer()
+                        Text("Autonomic load through the day")
+                            .strandOverline()
+                            .layoutPriority(1)
+                        Spacer(minLength: NoopMetrics.space2)
                         if let peak = day.peak, let lvl = peak.level {
                             Text("peak \(String(format: "%.1f", lvl)) · \(hourLabel(peak.hour))")
                                 .font(StrandFont.captionNumber)
                                 .foregroundStyle(StressRamp.color(lvl))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                     }
 
@@ -284,6 +303,8 @@ struct StressView: View {
                         .font(StrandFont.overline)
                         .tracking(StrandFont.overlineTracking)
                         .foregroundStyle(StressRamp.color(model.score))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 // The NOOP signature: a count-up PipBar on the 0…3 scale, band-tinted.
@@ -405,10 +426,10 @@ struct StressView: View {
                         ("Days", "\(points.count)"),
                     ])
                 }
-                // The one segmented control — full width, right-aligned.
+                // The one segmented control — sized to its content, right-aligned.
                 HStack {
                     Spacer()
-                    SegmentedPillControl(ExploreRange.allCases, selection: $range) { $0.label }
+                    rangePicker
                 }
             } else {
                 NoopCard(tint: StressRamp.calm) {
@@ -420,6 +441,13 @@ struct StressView: View {
                 }
             }
         }
+    }
+
+    /// The one trend range control, sized to its content so it never stretches
+    /// edge-to-edge — mirrors the Trends/Sleep rangePicker idiom.
+    private var rangePicker: some View {
+        SegmentedPillControl(ExploreRange.allCases, selection: $range) { $0.label }
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     /// The full daily proxy trend, sliced to the selected trailing window. Falls
@@ -462,7 +490,9 @@ struct StressView: View {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
                 Text(label).font(StrandFont.captionNumber).foregroundStyle(StrandPalette.textPrimary)
+                    .lineLimit(1)
                 Text(range).font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
+                    .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -952,9 +982,11 @@ struct StressTotalsBar: View {
                             Text(b.label)
                                 .font(StrandFont.captionNumber)
                                 .foregroundStyle(StrandPalette.textPrimary)
+                                .lineLimit(1)
                             Text(durationLabel(totals.hours(b.band)))
                                 .font(StrandFont.footnote)
                                 .foregroundStyle(StrandPalette.textTertiary)
+                                .lineLimit(1)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

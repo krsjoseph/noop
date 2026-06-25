@@ -31,6 +31,18 @@ struct AppleHealthView: View {
     // every other Apple Health metric is unit-agnostic. Display-only.
     @AppStorage(UnitPrefs.systemKey) private var unitSystemRaw = UnitSystem.metric.rawValue
     private var unitSystem: UnitSystem { UnitSystem(rawValue: unitSystemRaw) ?? .metric }
+
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends/Settings so Apple Health reads as the
+    // same surface. Gated on the existing `showDayCycleBackground` toggle; glass falls back to frosted
+    // below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
     /// kg value → the active mass unit, full string with label (e.g. "74.5 kg" / "164.2 lb").
     private func massLabel(_ kg: Double) -> String { UnitFormatter.massFromKilograms(kg, system: unitSystem) }
 
@@ -179,20 +191,24 @@ struct AppleHealthView: View {
                        // inner VStack(spacing: sectionGap=22) to preserve the 22pt inter-section spacing
                        // (the scaffold stack is 20pt), so the lazy win is partial until those sections are
                        // promoted to direct children — kept as one node here to stay pixel-identical.
-                       lazy: true) {
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if loaded && !hasAnyData {
                 #if os(iOS)
                 // No data yet, but iOS can grant live access right here — keep the Enable card above
                 // the (now live-aware) empty-state copy so the richer path isn't hidden behind a
                 // manual .zip export.
                 VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
-                    liveSyncCard
+                    liveSyncCard.staggeredAppear(index: 0)
                     // #348 — when the build can't carry the HealthKit entitlement there's no "Enable"
                     // button to tap, so the empty-state copy must point at the file/Shortcuts path
                     // instead of telling the user to tap a control that isn't shown.
                     ComingSoon(what: health.auth == .entitlementMissing
                                ? "Nothing here yet. This sideloaded install can't read Apple Health directly — import a Health export .zip in Data Sources, or turn on Shortcuts Export to bring your strap data into Health."
                                : "Nothing here yet. Tap Enable Apple Health above to read your data live, or import a Health export .zip in Data Sources.")
+                        .staggeredAppear(index: 1)
                 }
                 #else
                 ComingSoon(what: "Nothing imported yet. On an iPhone: Health app, tap your photo, Export All Health Data, then import the .zip here in Data Sources.")
@@ -202,19 +218,22 @@ struct AppleHealthView: View {
             } else {
                 VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
                     #if os(iOS)
-                    liveSyncCard
+                    liveSyncCard.staggeredAppear(index: 0)
                     #endif
-                    rangeControl
-                    tileGrid
-                    heartSection
-                    activitySection
-                    bodySection
-                    sleepSection
+                    rangeControl.staggeredAppear(index: 1)
+                    tileGrid.staggeredAppear(index: 2)
+                    heartSection.staggeredAppear(index: 3)
+                    activitySection.staggeredAppear(index: 4)
+                    bodySection.staggeredAppear(index: 5)
+                    sleepSection.staggeredAppear(index: 6)
                 }
             }
         }
         .task(id: repo.refreshSeq) { await load() }
         .onChangeCompat(of: range) { _ in rebuildWindowCache() }
+        // Liquid Glass for every card on the page (NoopCard/StatTile/ChartCard/StrandCard are glass-aware).
+        // Cascades via the environment; neutral glass when on, frosted fallback otherwise (below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// Rebuild the per-metric resolved-window cache from scratch. Called once after
@@ -328,7 +347,7 @@ struct AppleHealthView: View {
     }
 
     private var loadingState: some View {
-        NoopCard(tint: StrandPalette.metricCyan) {
+        NoopCard {
             HStack(spacing: 10) {
                 ConnectionDot(tone: .accent, pulsing: true)
                 Text("Reading your Apple Health history…")
@@ -347,7 +366,7 @@ struct AppleHealthView: View {
     #if os(iOS)
     @ViewBuilder
     private var liveSyncCard: some View {
-        StrandCard(padding: 20, tint: StrandPalette.metricCyan) {
+        StrandCard(padding: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Image(systemName: "heart.text.square.fill")
@@ -402,8 +421,7 @@ struct AppleHealthView: View {
                     } label: {
                         Label("Enable Apple Health", systemImage: "heart.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(StrandPalette.metricCyan)
+                    .buttonStyle(NoopButtonStyle(.primary))
                     if health.auth == .denied {
                         Text("If you don't see the prompt, enable NOOP under Settings › Health › Data Access & Devices.")
                             .font(StrandFont.footnote)
@@ -429,8 +447,7 @@ struct AppleHealthView: View {
                     } label: {
                         Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
                     }
-                    .buttonStyle(.bordered)
-                    .tint(StrandPalette.metricCyan)
+                    .buttonStyle(NoopButtonStyle(.secondary))
                     .disabled(health.syncing)
                 }
 

@@ -11,7 +11,24 @@ import StrandDesign
 /// works as a big glanceable visual timer (just without haptics).
 struct IntervalTimerView: View {
     @EnvironmentObject private var model: AppModel
-    @EnvironmentObject private var live: LiveState
+    // NOTE: deliberately does NOT observe LiveState at the type level. A bonded strap publishes
+    // `LiveState` ~1 Hz, and this screen already re-renders every second from its own ticker — an
+    // `@EnvironmentObject live` here would stack a second full-body re-render on each strap tick.
+    // The only two live.bonded reads (the buzz-cue StatePill and the unbonded hint) are pushed into
+    // tiny leaf subviews that each own their OWN `@EnvironmentObject live` (mirroring TodayView's
+    // RecordingStatusLight). `buzz(loops:)` reads bond state through the AppModel snapshot instead.
+
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends so every tab reads as one
+    // surface. Gated on the same Settings toggle; the glass surface falls back to frosted below
+    // iOS 26 / on macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
 
     // MARK: Config (persisted only in-view)
 
@@ -77,7 +94,7 @@ struct IntervalTimerView: View {
     }
 
     /// The active phase's reset token: WORK uses the Effort blue, REST the Rest blue-grey, DONE the
-    /// positive green. Tints the flat ring arc + the phase chip only (no glow).
+    /// positive green. Tints the ring arc only (the phase pill derives its own colour from phaseTone).
     private var phaseColor: Color {
         switch phase {
         case .work: return StrandPalette.effortColor
@@ -100,7 +117,9 @@ struct IntervalTimerView: View {
 
     var body: some View {
         ScreenScaffold(title: "Interval Timer",
-                       subtitle: "Silent haptic HIIT — the strap buzzes the transitions") {
+                       subtitle: "Silent haptic HIIT — the strap buzzes the transitions",
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 let cards: [AnyView] = [
                     AnyView(statusRow),
@@ -139,17 +158,17 @@ struct IntervalTimerView: View {
             }
         }
         #endif
+        // Liquid Glass for every card — ON only when the day-cycle scene is showing (glass needs
+        // something to refract). No-op below iOS 26 / on macOS (the surface falls back to frosted).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: Status row
 
     private var statusRow: some View {
         HStack(spacing: 10) {
-            if live.bonded {
-                StatePill("Buzz cues on", tone: .positive)
-            } else {
-                StatePill("Connect strap for buzz cues", tone: .warning)
-            }
+            // Reads live.bonded in its OWN leaf so a ~1 Hz strap publish doesn't re-render the timer.
+            BondCueStatePill()
             Spacer()
             if running {
                 StatePill("Running", tone: .accent, pulsing: true)
@@ -161,37 +180,42 @@ struct IntervalTimerView: View {
         }
     }
 
-    // MARK: Stage card — the countdown hero on a flat opaque surface
+    // MARK: Stage card — the countdown hero
 
-    /// The running timer is the hero: a clean flat phase-progress ring (GlowRing-style — visible
-    /// track, solid arc, NO glow/bloom) with the countdown at its centre, on a flat opaque
-    /// surfaceRaised card. Design Reset: no scenic backdrop, no tinted frost, no gauge gradient —
-    /// the active phase's reset token tints only the arc + chip, the card stays WHOOP-grey.
+    /// The running timer is the hero: a clean phase-progress ring (GlowRing-style — visible track,
+    /// solid arc, NO glow/bloom) with the countdown at its centre, on a Liquid Glass card that
+    /// refracts the day-cycle scene (uniform-neutral — no card wash). Colour belongs to the DATA:
+    /// the active phase's reset token tints only the arc + the phase pill, never the surface.
     private var stageCard: some View {
         StrandCard(padding: 24) {
             VStack(spacing: 18) {
-                // Phase chip + round chip line.
+                // Phase pill + round chip line.
                 HStack {
-                    phaseChip
+                    StatePill(phaseLabelKey, tone: phaseTone, showsDot: false)
                     Spacer()
                     roundChip
                 }
 
-                // The flat hero progress ring with the countdown at its centre.
+                // The hero progress ring with the countdown at its centre.
                 heroRing
                     .frame(maxWidth: .infinity)
                     .animation(.snappy, value: remaining)
 
                 controls
 
-                if !live.bonded {
-                    Label("Bond your strap on the Live screen to feel the transitions hands-free.",
-                          systemImage: "wave.3.right")
-                        .font(StrandFont.footnote)
-                        .foregroundStyle(StrandPalette.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
+                // Reads live.bonded in its OWN leaf so a ~1 Hz strap publish doesn't re-render the timer.
+                UnbondedHint()
             }
+        }
+    }
+
+    /// WORK / REST / DONE as a `LocalizedStringKey` literal per phase — StatePill takes a key, not a
+    /// plain `String`, so we can't forward `phase.label` (a `String` var) directly.
+    private var phaseLabelKey: LocalizedStringKey {
+        switch phase {
+        case .work: return "WORK"
+        case .rest: return "REST"
+        case .done: return "DONE"
         }
     }
 
@@ -234,19 +258,8 @@ struct IntervalTimerView: View {
         .accessibilityLabel(isFinished ? "Session done" : "\(remaining) seconds remaining in \(phase.label)")
     }
 
-    /// Frosted phase pill (WORK / REST / DONE) tinted to the active world.
-    private var phaseChip: some View {
-        Text(phase.label)
-            .font(StrandFont.rounded(15, weight: .heavy))
-            .tracking(2)
-            .foregroundStyle(phaseColor)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(phaseColor.opacity(0.16), in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).strokeBorder(phaseColor.opacity(0.35), lineWidth: 1))
-    }
-
-    /// Frosted round chip — "ROUND n / N".
+    /// Round chip — "ROUND n / N". A small composed neutral chip (surfaceInset + hairline), tabular
+    /// digits, reading quietly beside the tinted phase pill.
     private var roundChip: some View {
         HStack(spacing: 6) {
             Text("ROUND").strandOverline()
@@ -291,6 +304,8 @@ struct IntervalTimerView: View {
                     Text("\(timeString(elapsed)) / \(timeString(totalPlanned))")
                         .font(StrandFont.bodyNumber)
                         .foregroundStyle(StrandPalette.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
 
                 // Slim total-session progress as the NOOP signature segmented bar — it cascades up as the
@@ -317,8 +332,15 @@ struct IntervalTimerView: View {
 
     private func overviewStat(_ label: String, _ value: String, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased()).font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-            Text(value).font(StrandFont.number(18)).foregroundStyle(color)
+            Text(label.uppercased())
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+                .lineLimit(1)
+            Text(value)
+                .font(StrandFont.number(18))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -350,12 +372,14 @@ struct IntervalTimerView: View {
                 Text(title).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
                 Text("\(range.lowerBound)–\(range.upperBound)\(unit.map { " \($0)" } ?? "") · step \(step)")
                     .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
+                    .lineLimit(1)
             }
             Spacer()
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(value.wrappedValue)")
                     .font(StrandFont.number(24))
                     .foregroundStyle(tint)
+                    .lineLimit(1)
                     .frame(minWidth: 44, alignment: .trailing)
                 if let unit {
                     Text(unit).font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
@@ -465,8 +489,10 @@ struct IntervalTimerView: View {
 
     /// Fire a strap buzz (no-op when not bonded — `buzz` already guards, but we
     /// also skip the call entirely so this stays a pure visual tool when unbonded).
+    /// Reads bond state through the AppModel's `live` snapshot rather than observing
+    /// `LiveState` in the body (see the @EnvironmentObject note at the top of the type).
     private func buzz(loops: UInt8) {
-        guard live.bonded else { return }
+        guard model.live.bonded else { return }
         model.buzz(loops: loops)
     }
 
@@ -487,6 +513,41 @@ struct IntervalTimerView: View {
         let m = s / 60
         let r = s % 60
         return String(format: "%d:%02d", m, r)
+    }
+}
+
+// MARK: - LiveState leaves
+//
+// IntervalTimerView itself does NOT observe LiveState (see the @EnvironmentObject note at the top of
+// the type) — a connected strap publishes ~1 Hz, and the timer already re-renders every second from
+// its own ticker. These tiny leaves each hold their OWN `@EnvironmentObject live`, so a strap tick
+// re-renders only the pill / hint, never the hero ring, controls, overview or config. They render
+// byte-for-byte what the inline code did before the extraction.
+
+/// The buzz-cue status pill: "Buzz cues on" (bonded) or "Connect strap for buzz cues" (unbonded).
+private struct BondCueStatePill: View {
+    @EnvironmentObject private var live: LiveState
+    var body: some View {
+        if live.bonded {
+            StatePill("Buzz cues on", tone: .positive)
+        } else {
+            StatePill("Connect strap for buzz cues", tone: .warning)
+        }
+    }
+}
+
+/// The "bond your strap to feel the transitions" hint, shown under the controls only while no strap
+/// is bonded.
+private struct UnbondedHint: View {
+    @EnvironmentObject private var live: LiveState
+    var body: some View {
+        if !live.bonded {
+            Label("Bond your strap on the Live screen to feel the transitions hands-free.",
+                  systemImage: "wave.3.right")
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
     }
 }
 

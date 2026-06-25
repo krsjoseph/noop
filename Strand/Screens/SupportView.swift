@@ -6,101 +6,89 @@ struct SupportView: View {
     @State private var copied: String?
     @State private var selected = "BTC"
 
+    // Day-cycle scene + Liquid Glass, shared with Today/Trends/Settings so Support reads as the same
+    // surface. Gated on the existing `showDayCycleBackground` toggle; glass falls back to frosted below
+    // iOS 26 / on macOS (where the SupportModalOverlay panel keeps its own frosted chrome).
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(title: "Support",
-                       subtitle: "\(ProjectInfo.appName) is free and always will be. If it's useful to you, you can chip in to help with development and testing costs. Totally optional.") {
+                       subtitle: "\(ProjectInfo.appName) is free and always will be. If it's useful to you, you can chip in to help with development and testing costs. Totally optional.",
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
                     SectionHeader("Support the build", overline: "Optional")
                     donateCard
                 }
                 .staggeredAppear(index: 0)
-                VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
-                    SectionHeader("Help & Contact", overline: "Get in touch")
-                    contactCard
-                    builtOnCard
+                VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                    contactGroup
+                    builtOnGroup
                 }
                 .staggeredAppear(index: 1)
                 disclaimerCard
                     .staggeredAppear(index: 2)
             }
         }
+        // Liquid Glass for the donate card + Settings groups (NoopCard / SettingsGroup, glass-aware).
+        // Cascades via the environment; neutral glass when on, frosted fallback otherwise.
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
-    /// One hairline-divided row inside a grouped frosted card: a tinted leading glyph, a title +
-    /// detail stack, and a trailing accent chevron when the row taps through to an action.
-    @ViewBuilder
-    private func groupedRow(icon: String, tint: Color, title: LocalizedStringKey,
-                            detail: String, showsChevron: Bool) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
-                Text(detail).font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(StrandPalette.accent)
-                    .accessibilityHidden(true)
-            }
+    /// Help & contact — the native grouped-list idiom: one disclosure row that opens the user's mail
+    /// client, with the explanatory sentence relocated to the grey group footer.
+    private var contactGroup: some View {
+        SettingsGroup(
+            header: "Help & contact",
+            footer: "Questions, feedback, bugs — \(ProjectInfo.contactEmail)."
+        ) {
+            SettingsRow(icon: "envelope.fill", title: "Get in touch",
+                        action: {
+                            if let url = URL(string: "mailto:\(ProjectInfo.contactEmail)") { PlatformOpen.url(url) }
+                        })
+                .accessibilityLabel("Email \(ProjectInfo.contactEmail)")
+                .help("Email \(ProjectInfo.contactEmail)")
         }
     }
 
-    private var contactCard: some View {
-        NoopCard {
-            Button {
-                if let url = URL(string: "mailto:\(ProjectInfo.contactEmail)") { PlatformOpen.url(url) }
-            } label: {
-                groupedRow(icon: "envelope.fill", tint: StrandPalette.accent,
-                           title: "Get in touch",
-                           detail: "Questions, feedback, bugs — \(ProjectInfo.contactEmail)",
-                           showsChevron: true)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Email \(ProjectInfo.contactEmail)")
-            .help("Email \(ProjectInfo.contactEmail)")
-        }
-    }
-
-    private var builtOnCard: some View {
-        NoopCard {
+    /// Built on — the community reverse-engineering this stands on. A free-form inset block inside a
+    /// grouped card: repo names in SF Rounded (subhead), the per-line note in a muted footnote.
+    private var builtOnGroup: some View {
+        SettingsGroup(header: "Built on") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "hands.clap.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(StrandPalette.accent)
-                        .frame(width: 28, height: 28)
-                        .background(StrandPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .accessibilityHidden(true)
-                    Text("Built on").font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
-                }
                 Text("This stands on community reverse-engineering. Huge thanks:")
                     .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 ForEach(Array(ProjectInfo.attributions.enumerated()), id: \.element.repo) { index, a in
                     if index > 0 { Divider().overlay(StrandPalette.hairline) }
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(StrandPalette.accent).accessibilityHidden(true)
-                        Text(a.repo).font(StrandFont.mono(12)).foregroundStyle(StrandPalette.textPrimary)
-                        Text("· \(a.note)").font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-                        Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(StrandPalette.accent).accessibilityHidden(true)
+                            Text(a.repo).font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        Text(a.note).font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
+            .settingsRowInsets()
         }
     }
 
     private var donateCard: some View {
-        NoopCard(tint: StrandPalette.metricRose) {
+        NoopCard {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 10) {
                     Image(systemName: "heart.fill")
@@ -116,6 +104,7 @@ struct SupportView: View {
                     .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                // Privacy note — a plain inset row, not a card-in-card fill (it would fight the glass).
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "lock.shield.fill").foregroundStyle(StrandPalette.accent)
                         .font(.system(size: 13)).accessibilityHidden(true)
@@ -123,23 +112,11 @@ struct SupportView: View {
                         .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(NoopMetrics.space3).frame(maxWidth: .infinity, alignment: .leading)
-                .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Pick a coin → scan the QR or copy the address.
-                HStack(spacing: NoopMetrics.space2) {
-                    ForEach(ProjectInfo.donations) { coin in
-                        let on = selected == coin.symbol
-                        Button { withAnimation(.easeOut(duration: 0.15)) { selected = coin.symbol } } label: {
-                            Text(coin.symbol).font(StrandFont.rounded(12, weight: .bold))
-                                .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(Capsule().fill(on ? StrandPalette.accent : StrandPalette.surfaceInset))
-                                .foregroundStyle(on ? StrandPalette.surfaceBase : StrandPalette.textSecondary)
-                                .overlay(Capsule().strokeBorder(on ? Color.clear : StrandPalette.hairline, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Show \(coin.name) donation address")
-                    }
+                HStack(spacing: 0) {
+                    SegmentedPillControl(ProjectInfo.donations.map(\.symbol), selection: $selected) { $0 }
                     Spacer(minLength: 0)
                 }
 

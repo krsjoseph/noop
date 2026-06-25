@@ -35,6 +35,19 @@ struct WorkoutsView: View {
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep so every tab reads as one
+    // surface. The scene sits behind the header band and fades above the cards; glass cards refract it.
+    // Gated on the same Settings toggle, and the glass surface itself falls back to frosted below iOS 26 /
+    // macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// All loaded sessions, newest first. Seedable for previews.
     @State private var allRows: [WorkoutRow]
     @State private var loaded: Bool
@@ -85,7 +98,11 @@ struct WorkoutsView: View {
                        // zones card, and a row-per-session table). On a large imported history the eager
                        // VStack built every section + the whole table up-front; the LazyVStack path (which
                        // is byte-identical layout) builds the off-screen sections/rows on demand instead.
-                       lazy: true) {
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on
+                       // Today/Trends/Sleep. Glass cards refract it; frosted fallback when scene is off.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if allRows.isEmpty {
                 VStack(alignment: .leading, spacing: NoopMetrics.space4) {
                     ComingSoon(what: loaded
@@ -107,16 +124,28 @@ struct WorkoutsView: View {
                 let groups = sportGroups(from: windowRows)
                 let zonesSummary = WorkoutZones.summary(from: windowRows)
 
-                HStack { startLiveWorkoutButton; Spacer() }
-                rangeBar(rows: windowRows, effectiveRange: resolved)
-                if let postLogNote { postLogBanner(postLogNote) }
-                effortHero(rows: windowRows, effectiveRange: resolved, groups: groups)
-                summarySection(rows: windowRows, effectiveRange: resolved, groups: groups)
-                breakdownSection(groups: groups, rows: windowRows)
-                if let z = zonesSummary {
-                    zonesSection(z, totalSessions: windowRows.count)
+                // Each top-level section fades + rises in sequence on first appear (Reduce-Motion safe),
+                // matching Today/Trends/Sleep. The start-live button rides the range bar's index-0 block.
+                VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: NoopMetrics.space2) {
+                        HStack { startLiveWorkoutButton; Spacer() }
+                        rangeBar(rows: windowRows, effectiveRange: resolved)
+                        if let postLogNote { postLogBanner(postLogNote) }
+                    }
+                    .staggeredAppear(index: 0)
+                    effortHero(rows: windowRows, effectiveRange: resolved, groups: groups)
+                        .staggeredAppear(index: 1)
+                    summarySection(rows: windowRows, effectiveRange: resolved, groups: groups)
+                        .staggeredAppear(index: 2)
+                    breakdownSection(groups: groups, rows: windowRows)
+                        .staggeredAppear(index: 3)
+                    if let z = zonesSummary {
+                        zonesSection(z, totalSessions: windowRows.count)
+                            .staggeredAppear(index: 4)
+                    }
+                    sessionsSection(rows: windowRows)
+                        .staggeredAppear(index: 5)
                 }
-                sessionsSection(rows: windowRows)
             }
         }
         .task(id: repo.refreshSeq) {
@@ -183,6 +212,9 @@ struct WorkoutsView: View {
                 showLiveWorkout = true
             }
         }
+        // Liquid Glass for every Workouts card (cascades to the cards via the environment). Neutral glass
+        // when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// Present the read-only detail for a tapped row. The primary affordance; the ••• menu stays the
@@ -217,24 +249,22 @@ struct WorkoutsView: View {
         }
     }
 
-    /// The transient "personal pattern" caption — an Effort-tinted frosted strip with a chart glyph.
+    /// The transient "personal pattern" caption — a neutral glass card with an Effort-tinted chart glyph
+    /// (colour rides the data, never the surface).
     private func postLogBanner(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(StrandPalette.effortColor)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(StrandFont.footnote)
-                .foregroundStyle(StrandPalette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        NoopCard(padding: NoopMetrics.space3) {
+            HStack(alignment: .top, spacing: NoopMetrics.space2) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(StrandPalette.effortColor)
+                    .accessibilityHidden(true)
+                Text(text)
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
         }
-        .padding(NoopMetrics.space3)
-        .background(StrandPalette.effortColor.opacity(0.10),
-                    in: RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous)
-            .strokeBorder(StrandPalette.effortColor.opacity(0.22), lineWidth: 1))
         .transition(.opacity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
@@ -378,15 +408,15 @@ struct WorkoutsView: View {
         let strains = rows.compactMap(\.strain)
         let avgStrain = strains.isEmpty ? 0 : strains.reduce(0, +) / Double(strains.count)
         let totalTimeH = rows.compactMap(\.durationS).reduce(0, +) / 3600.0
-        NoopCard(padding: 20, tint: StrandPalette.effortColor) {
+        NoopCard(padding: NoopMetrics.space5) {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 24) {
+                HStack(alignment: .center, spacing: NoopMetrics.space6) {
                     effortHeroGauge(avgStrain: avgStrain, hasData: !strains.isEmpty)
                     effortHeroStats(rows: rows, effectiveRange: effectiveRange,
                                     groups: groups, totalTimeH: totalTimeH)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                VStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .center, spacing: NoopMetrics.space4) {
                     effortHeroGauge(avgStrain: avgStrain, hasData: !strains.isEmpty)
                     effortHeroStats(rows: rows, effectiveRange: effectiveRange,
                                     groups: groups, totalTimeH: totalTimeH)
@@ -437,7 +467,7 @@ struct WorkoutsView: View {
     private func effortHeroStats(rows: [WorkoutRow], effectiveRange: Range,
                                  groups: [SportGroup], totalTimeH: Double) -> some View {
         let modal = modalSport(from: groups)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: NoopMetrics.space3) {
             Text("Effort this \(effectiveRange.heroWord)")
                 .font(StrandFont.headline)
                 .foregroundStyle(StrandPalette.textPrimary)
@@ -532,12 +562,13 @@ struct WorkoutsView: View {
     }
 
     private func sportCard(_ g: SportGroup, zones: WorkoutZones.Summary?) -> some View {
-        // Frosted Effort-tinted card with the sport glyph in the Effort world, an HR-zone mini-bar when
-        // the sessions carry imported zones, and the bright "now" end-cap on its busiest zone.
-        NoopCard(tint: StrandPalette.effortColor) {
-            VStack(alignment: .leading, spacing: 12) {
+        // Neutral glass card — the sport glyph in the Effort world, an HR-zone mini-bar when the sessions
+        // carry imported zones, and the bright "now" end-cap on its busiest zone. Colour rides the data
+        // (glyph / count / zone bars), never the card surface.
+        NoopCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 // Identical header for every card.
-                HStack(spacing: 10) {
+                HStack(spacing: NoopMetrics.space2) {
                     Image(systemName: sportIcon(g.sport))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(StrandPalette.effortColor)
@@ -608,8 +639,8 @@ struct WorkoutsView: View {
             SectionHeader("HR Zones",
                           overline: "Whoop import",
                           trailing: "\(z.sessionsWithZones) of \(totalSessions) session\(totalSessions == 1 ? "" : "s")")
-            NoopCard(tint: StrandPalette.effortColor) {
-                VStack(alignment: .leading, spacing: 12) {
+            NoopCard {
+                VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                     // Proportional stacked bar — same construction as SleepView's stage bar, with the
                     // busiest zone carrying a crisp bright end-cap stroke so it reads as a chart. No glow.
                     let busiest = z.minutes.indices.max(by: { z.minutes[$0] < z.minutes[$1] }) ?? 0

@@ -14,6 +14,18 @@ struct IntelligenceView: View {
 
     @State private var range: IntelRange = .month
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep/Settings so every tab
+    // reads as one surface. The scene sits behind the header band and fades above the cards; glass cards
+    // refract it. Gated on the same Settings toggle; the glass surface falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     // Effort display scale (#268) — routes every Effort value/label on this screen. Display-only.
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
@@ -24,60 +36,90 @@ struct IntelligenceView: View {
         // the app when ALL was tapped (#345); LazyVStack only materialises what's on screen.
         ScreenScaffold(title: "Intelligence",
                        subtitle: "NOOP scores your charge, effort and rest itself — on-device, no cloud.",
-                       lazy: true) {
-            if let f = forecast { forecastCard(f) }
-            explainerCard
-            if intelligence.computing {
-                NoopCard(padding: 20, tint: StrandPalette.chargeColor) {
-                    HStack(spacing: NoopMetrics.rowSpacing) {
-                        ProgressView().controlSize(.small)
-                        Text("Crunching your raw streams…").font(StrandFont.subhead)
-                            .foregroundStyle(StrandPalette.textSecondary)
-                    }
+                       // Pull-to-refresh mirrors the toolbar Recompute (the button stays for discoverability).
+                       onRefresh: { await intelligence.analyzeRecent() },
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today/Trends.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
+            // One section rhythm (22–24pt) for the upper, fixed-count sections — matching
+            // Today/Trends/Sleep/Settings. The By-Day `ForEach` is deliberately kept as a DIRECT child
+            // of the scaffold's `LazyVStack` (NOT inside this eager VStack) so day cards still
+            // materialise on demand — wrapping it would rebuild the eager-VStack #345 freeze on ALL.
+            VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                if let f = forecast {
+                    forecastCard(f)
+                        .staggeredAppear(index: 0)
                 }
-            } else if let note = intelligence.note {
-                NoopCard(padding: 20, tint: StrandPalette.chargeColor) {
-                    HStack(alignment: .top, spacing: NoopMetrics.rowSpacing) {
-                        Image(systemName: "moon.zzz.fill").foregroundStyle(StrandPalette.chargeColor)
-                            .accessibilityHidden(true)
-                        Text(note).font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                explainerCard
+                    .staggeredAppear(index: 1)
+                if intelligence.computing {
+                    NoopCard(padding: 20) {
+                        HStack(spacing: NoopMetrics.rowSpacing) {
+                            ProgressView().controlSize(.small)
+                            Text("Crunching your raw streams…").font(StrandFont.subhead)
+                                .foregroundStyle(StrandPalette.textSecondary)
+                        }
                     }
-                }
-            } else if intelligence.results.isEmpty {
-                // While the strap is mid-offload, say so — "no days" reads as final otherwise (#77). The
-                // note owns the `LiveState` observation in its own leaf so the chunk count ticks without
-                // re-rendering Intelligence (identical output to the prior inline check).
-                IntelSyncingNote()
-                DataPendingNote(
-                    title: "Building from your strap",
-                    message: "This builds from the strap as it syncs. Effort and rest appear after you have worn it and slept a night. Charge needs about a week of nights to learn your baseline, or import your WHOOP export to skip the wait.",
-                    symbol: "brain.head.profile"
-                )
-            } else {
-                // Header row: section label left, range control right. Narrows the per-day
-                // list to a recent window (lexicographic yyyy-MM-dd compare == chronological).
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Recent").strandOverline()
-                        Text("By Day").font(StrandFont.title2).foregroundStyle(StrandPalette.textPrimary)
+                    .staggeredAppear(index: 2)
+                } else if let note = intelligence.note {
+                    NoopCard(padding: 20) {
+                        HStack(alignment: .top, spacing: NoopMetrics.rowSpacing) {
+                            Image(systemName: "moon.zzz.fill").foregroundStyle(StrandPalette.chargeColor)
+                                .accessibilityHidden(true)
+                            Text(note).font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    Spacer()
-                    SegmentedPillControl(IntelRange.allCases, selection: $range) { $0.label }
+                    .staggeredAppear(index: 2)
+                } else if intelligence.results.isEmpty {
+                    // While the strap is mid-offload, say so — "no days" reads as final otherwise (#77). The
+                    // note owns the `LiveState` observation in its own leaf so the chunk count ticks without
+                    // re-rendering Intelligence (identical output to the prior inline check).
+                    IntelSyncingNote()
+                        .staggeredAppear(index: 2)
+                    DataPendingNote(
+                        title: "Building from your strap",
+                        message: "This builds from the strap as it syncs. Effort and rest appear after you have worn it and slept a night. Charge needs about a week of nights to learn your baseline, or import your WHOOP export to skip the wait.",
+                        symbol: "brain.head.profile"
+                    )
+                    .staggeredAppear(index: 3)
+                } else {
+                    // Header: section label + range control. Narrows the per-day list to a recent
+                    // window (lexicographic yyyy-MM-dd compare == chronological). The day count folds
+                    // into the SectionHeader trailing; the 6-segment pill wraps below the title on a
+                    // narrow iPhone via the ViewThatFits horizontal→vertical fallback.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: NoopMetrics.space3) {
+                            SectionHeader("By Day", overline: "Recent",
+                                          trailing: "\(filtered.count) \(filtered.count == 1 ? "day" : "days")")
+                            SegmentedPillControl(IntelRange.allCases, selection: $range) { $0.label }
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        VStack(alignment: .leading, spacing: NoopMetrics.space2) {
+                            SectionHeader("By Day", overline: "Recent",
+                                          trailing: "\(filtered.count) \(filtered.count == 1 ? "day" : "days")")
+                            SegmentedPillControl(IntelRange.allCases, selection: $range) { $0.label }
+                        }
+                    }
+                    .staggeredAppear(index: 2)
                 }
-                Text("\(filtered.count) \(filtered.count == 1 ? "day" : "days")")
-                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // By-Day list. When the window is empty, one note; otherwise the day cards stay DIRECT
+            // children of the scaffold's `LazyVStack` so an 800+ day "ALL" history materialises on
+            // demand instead of building every card up-front (#345).
+            if !intelligence.computing, intelligence.note == nil, !intelligence.results.isEmpty {
                 if filtered.isEmpty {
-                    NoopCard(padding: 18, tint: StrandPalette.chargeColor) {
+                    NoopCard(padding: 18) {
                         Text("No scored days in this window. Widen the range or import more history.")
                             .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .staggeredAppear(index: 3)
                 } else {
                     ForEach(Array(filtered.enumerated()), id: \.element.id) { index, day in
                         dayCard(day)
-                            .staggeredAppear(index: index)
+                            .staggeredAppear(index: index + 3)
                     }
                 }
             }
@@ -91,6 +133,9 @@ struct IntelligenceView: View {
                 .disabled(intelligence.computing)
             }
         }
+        // Liquid Glass for every card on Intelligence (cascades down via the environment). Neutral glass
+        // when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// The day list narrowed to the selected window. `nil` cutoff (ALL) shows everything.
@@ -136,7 +181,7 @@ struct IntelligenceView: View {
         let frac = min(max(f.charge / 100.0, 0), 1)
         return VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Tomorrow's Charge", overline: "Evening forecast", trailing: "Estimate")
-            NoopCard(padding: 20, tint: StrandPalette.chargeColor) {
+            NoopCard(padding: 20) {
                 VStack(spacing: 14) {
                     GlowRing(
                         fraction: frac,
@@ -180,7 +225,7 @@ struct IntelligenceView: View {
     }
 
     private var explainerCard: some View {
-        NoopCard(padding: 20, tint: StrandPalette.chargeColor) {
+        NoopCard(padding: 20) {
             VStack(alignment: .leading, spacing: NoopMetrics.space4) {
                 HStack(spacing: NoopMetrics.rowSpacing) {
                     Image(systemName: "brain.head.profile").foregroundStyle(StrandPalette.chargeColor)
@@ -229,7 +274,7 @@ struct IntelligenceView: View {
     }
 
     private func dayCard(_ d: IntelligenceEngine.Computed) -> some View {
-        NoopCard(padding: 18, tint: StrandPalette.chargeColor) {
+        NoopCard(padding: 18) {
             VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
                 HStack {
                     Text(d.day).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
@@ -243,7 +288,11 @@ struct IntelligenceView: View {
                     SourceBadge("\(d.source.badge)",
                                 tint: d.source == .computed ? StrandPalette.chargeColor : StrandPalette.accent)
                 }
-                HStack(spacing: 0) {
+                // Five compact per-day values. An adaptive grid so they reflow to 2–3 rows on a narrow
+                // iPhone instead of cramming five columns into one tight row (each stat still clamps
+                // with lineLimit(1)+minimumScaleFactor(0.6)).
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: NoopMetrics.space3, alignment: .leading)],
+                          alignment: .leading, spacing: NoopMetrics.space3) {
                     stat("Charge", d.recovery.map { "\(Int($0.rounded()))%" } ?? "—",
                          d.recovery.map { StrandPalette.recoveryColor($0) } ?? StrandPalette.textSecondary)
                     stat("Effort", d.strain.map { UnitFormatter.effortDisplay($0, scale: effortScale) } ?? "—",

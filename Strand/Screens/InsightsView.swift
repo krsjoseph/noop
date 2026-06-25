@@ -103,6 +103,19 @@ struct InsightsView: View {
 
     @State private var outcome: Outcome = .recovery
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends so every tab reads as one
+    // surface. The scene sits behind the header band and fades above the cards; glass cards refract it.
+    // Gated on the same Settings toggle, and the glass surface itself falls back to frosted below
+    // iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     // MARK: Personal-experiment state (LOCAL ONLY — UserDefaults-backed, single user)
     //
     // A running n-of-1 plan: one behaviour, one outcome, a short window. All five
@@ -161,43 +174,59 @@ struct InsightsView: View {
                        // PERF (scroll): lazy column — byte-identical layout (LazyVStack == eager VStack
                        // alignment/spacing/header). The content is one inner eager VStack, so any nested
                        // staggered reveals are unchanged; this only defers building that stack on scroll-in.
-                       lazy: true) {
+                       onRefresh: { await repo.refresh() },
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today/Trends.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if !loaded {
                 ComingSoon(what: "Reading your journal and outcomes…")
             } else {
                 VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
-                    // v5: a single row into the "What moves you" hub — the lag-aware ranked-effect feed
-                    // + alcohol/caffeine dose-response. Reachable as its own destination too; this is the
-                    // honest in-Insights entry point.
-                    whatMovesYouLink
-                    // Native logging — always reachable: the account-free way into Insights.
-                    JournalLogCard(importedQuestions: importedQuestions,
-                                   answers: dayAnswers,
-                                   dayOffset: $journalDayOffset,
-                                   onChanged: { Task { await load() } })
-                    // Mind — daily mood check-in + mood↔body correlations.
-                    // Self-contained (owns its own load/state); sits with the
-                    // journal card so the two daily-logging surfaces read as one
-                    // "log today" block above the derived insights.
-                    MindSection()
-                    // Caffeine window (#526) — log an intake + a rough on-device "still active" hint.
-                    // Self-contained (owns its own UserDefaults-backed store); sits in the same
-                    // "log today" block. Opt-in: shows nothing until the user logs an intake.
-                    CaffeineLogCard()
-                    experimentSection
-                    if behaviours.isEmpty {
-                        // No journal yet — explain, without dead-ending on a paid export.
-                        NoopCard {
-                            Text("Log behaviours above — after a few days of answers, NOOP ranks how each one moves your charge, HRV and rest. Importing a WHOOP export (which includes its journal) backfills history instantly.")
-                                .font(StrandFont.subhead)
-                                .foregroundStyle(StrandPalette.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                    // The section list ripples in once on appear (Reduce-Motion safe), matching Today/Trends.
+                    Group {
+                        // v5: a single row into the "What moves you" hub — the lag-aware ranked-effect feed
+                        // + alcohol/caffeine dose-response. Reachable as its own destination too; this is the
+                        // honest in-Insights entry point.
+                        whatMovesYouLink
+                            .staggeredAppear(index: 0)
+                        // Native logging — always reachable: the account-free way into Insights.
+                        JournalLogCard(importedQuestions: importedQuestions,
+                                       answers: dayAnswers,
+                                       dayOffset: $journalDayOffset,
+                                       onChanged: { Task { await load() } })
+                            .staggeredAppear(index: 1)
+                        // Mind — daily mood check-in + mood↔body correlations.
+                        // Self-contained (owns its own load/state); sits with the
+                        // journal card so the two daily-logging surfaces read as one
+                        // "log today" block above the derived insights.
+                        MindSection()
+                            .staggeredAppear(index: 2)
+                        // Caffeine window (#526) — log an intake + a rough on-device "still active" hint.
+                        // Self-contained (owns its own UserDefaults-backed store); sits in the same
+                        // "log today" block. Opt-in: shows nothing until the user logs an intake.
+                        CaffeineLogCard()
+                            .staggeredAppear(index: 3)
+                        experimentSection
+                            .staggeredAppear(index: 4)
+                        if behaviours.isEmpty {
+                            // No journal yet — explain, without dead-ending on a paid export.
+                            NoopCard {
+                                Text("Log behaviours above — after a few days of answers, NOOP ranks how each one moves your charge, HRV and rest. Importing a WHOOP export (which includes its journal) backfills history instantly.")
+                                    .font(StrandFont.subhead)
+                                    .foregroundStyle(StrandPalette.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .staggeredAppear(index: 5)
+                        } else {
+                            behaviourSection
+                                .staggeredAppear(index: 5)
                         }
-                    } else {
-                        behaviourSection
+                        activityCostSection
+                            .staggeredAppear(index: 6)
+                        relationshipsSection
+                            .staggeredAppear(index: 7)
                     }
-                    activityCostSection
-                    relationshipsSection
                 }
             }
         }
@@ -206,12 +235,15 @@ struct InsightsView: View {
         // (behaviours / outcomeByKey change only at load, which calls
         //  recomputeRanked() directly, so keying on `outcome` is sufficient.)
         .onChangeCompat(of: outcome) { _ in recomputeRanked() }
+        // Liquid Glass for every card on Insights (cascades to the cards via the environment). Neutral
+        // glass when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     /// The deep-link row into the v5 "What moves you" hub.
     private var whatMovesYouLink: some View {
         Button { router.openInsightsHub() } label: {
-            NoopCard(tint: StrandPalette.chargeColor) {
+            NoopCard {
                 HStack(spacing: 12) {
                     Image(systemName: "wand.and.sparkles")
                         .font(.system(size: 16, weight: .semibold))
@@ -534,17 +566,15 @@ struct InsightsView: View {
     private func experimentField<Content: View>(_ title: LocalizedStringKey,
                                                 @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: NoopMetrics.space2) {
-            Text(title)
-                .font(StrandFont.overline)
-                .tracking(StrandFont.overlineTracking)
-                .foregroundStyle(StrandPalette.textTertiary)
+            Text(title).strandOverline()
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(NoopMetrics.space3)
         .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
-        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(StrandPalette.hairline, lineWidth: 1))
+        // Carved inset well (consistent with PipBar/chart tracks), continuous corners.
+        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(StrandPalette.hairline, lineWidth: 1))
     }
 
     private func experimentMeasure(_ label: LocalizedStringKey,
@@ -569,8 +599,9 @@ struct InsightsView: View {
         }
         .padding(NoopMetrics.space3)
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(StrandPalette.hairline, lineWidth: 1))
+        // Carved inset well (consistent with PipBar/chart tracks), continuous corners.
+        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(StrandPalette.hairline, lineWidth: 1))
     }
 
     /// Behaviours the user actually has data for: distinct logged journal questions
@@ -870,24 +901,27 @@ struct InsightsView: View {
         // copy and the accessibility label (was computed twice per card).
         let sentence = BehaviorInsights.sentence(e)
 
-        // The card wash reads as the OUTCOME's colour world (so the whole Behaviour
-        // Effects section sits in one world), while the dot / StatTile accents stay
-        // sign-aware to flag the good/bad direction.
-        return NoopCard(tint: outcome.domain.color) {
+        // Uniform neutral glass surface; colour stays on the data — the sign-aware dot
+        // and StatTile accents flag the good/bad direction without washing the chrome.
+        return NoopCard {
             VStack(alignment: .leading, spacing: NoopMetrics.gap) {
 
                 // Header: behaviour name + significance pill.
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     HStack(spacing: 8) {
                         Circle().fill(tintColor).frame(width: 8, height: 8)
+                        // A long imported journal question truncates rather than shoving the pill
+                        // off-screen on a narrow iPhone.
                         Text(e.behavior)
                             .font(StrandFont.headline)
                             .foregroundStyle(StrandPalette.textPrimary)
+                            .lineLimit(2)
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     StatePill(e.significant ? "SIGNIFICANT" : "EXPLORATORY",
                               tone: e.significant ? .positive : .neutral,
                               showsDot: false)
+                        .layoutPriority(1)
                 }
 
                 // Plain-English sentence.
@@ -976,7 +1010,7 @@ struct InsightsView: View {
         let scoreState: ScoreState = cost.confidence == .solid ? .solid : .building
         let pointsLabel = String(format: "%@%.0f", cost.delta >= 0 ? "−" : "+", abs(cost.delta))
 
-        return NoopCard(tint: accent) {
+        return NoopCard {
             VStack(alignment: .leading, spacing: NoopMetrics.gap) {
                 HStack(alignment: .center, spacing: 8) {
                     Image(systemName: sportSymbol(cost.sport))
@@ -1032,9 +1066,10 @@ struct InsightsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                // Every curated relationship terminates in Charge, so the card sits in
-                // the Charge (green) colour world via a faint wash.
-                NoopCard(tint: DomainTheme.charge.color) {
+                // One neutral glass card holding the row list; colour stays on the data
+                // (the r-bar fill + p-value pill). Auto-inset hairline dividers between rows
+                // match the grouped-list treatment used across Settings.
+                NoopCard {
                     VStack(spacing: 0) {
                         ForEach(Array(rels.enumerated()), id: \.element.id) { idx, rel in
                             relationshipRow(rel)
@@ -1104,14 +1139,17 @@ struct InsightsView: View {
         // the accessibility label (was computed twice per row).
         let sentence = relationshipSentence(rel)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                // On the narrowest width the title truncates so r + the p-value pill never clip.
                 Text(rel.title)
                     .font(StrandFont.headline)
                     .foregroundStyle(StrandPalette.textPrimary)
-                Spacer()
+                    .lineLimit(1)
+                Spacer(minLength: 8)
                 Text(String(format: "r = %+.2f", r))
                     .font(StrandFont.number(16))
                     .foregroundStyle(strength)
+                    .fixedSize()
                 StatePill(rel.corr.pApprox < 0.05 ? "p < 0.05" : "n.s.",
                           tone: rel.corr.pApprox < 0.05 ? .accent : .neutral,
                           showsDot: false)

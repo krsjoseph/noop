@@ -37,6 +37,18 @@ struct LiveView: View {
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep/Settings so every tab reads
+    // as one surface. The scene sits behind the header band and fades above the cards; glass cards refract
+    // it. Gated on the same Settings toggle, and the glass surface itself falls back to frosted on macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     /// Smoothed, spike-filtered live HR from AppModel (median over a short window).
     private var displayHR: Int? { model.bpm }
     private var activeConnection: Bool { live.connected && live.bonded }
@@ -80,40 +92,56 @@ struct LiveView: View {
 
     var body: some View {
         ScreenScaffold(title: "Live Body Console",
-                       subtitle: "Current physiology, strap trust, and session controls in one working view.") {
+                       subtitle: "Current physiology, strap trust, and session controls in one working view.",
+                       // Shared day-cycle scene behind the header band (flattened to one GPU layer), as on
+                       // Today/Trends — so the focal HR ring's hrTint reads over the living gradient and the
+                       // neutral glass cards have something to refract.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
                 consoleHeader
+                    .staggeredAppear(index: 0)
                 // Can't-connect-at-all guidance: the strap wiped its bond (firmware update / WHOOP app
                 // re-bond), so connects loop on "Peer removed pairing information". Show the re-pair steps
                 // right here instead of silently retrying. (5/MG firmware reset, 2026-06)
-                if let guide = live.reconnectGuide { reconnectGuideBanner(guide) }
+                if let guide = live.reconnectGuide {
+                    reconnectGuideBanner(guide).staggeredAppear(index: 1)
+                }
                 // Bond-refused guidance, shown right here on Live where people actually connect (it
                 // also appears in Settings). A 5/MG strap still bonded to the WHOOP app refuses pairing
                 // with "Encryption is insufficient" — this tells the user to free it and re-pair.
-                if let hint = live.pairingHint { pairingHintBanner(hint) }
+                if let hint = live.pairingHint {
+                    pairingHintBanner(hint).staggeredAppear(index: 1)
+                }
                 // Primary Connect affordance, surfaced ABOVE the fold whenever there's no link. The real
                 // Scan & Connect control otherwise lives in `controls` (below the Signal Trust grid), so
                 // an offline user saw only inert copy up top. Gated purely on `!live.connected`, so it
                 // disappears the instant the radio connects. Shared with macOS — it reuses `scanButton`,
                 // which the wide layout already renders in `controls`.
-                if !live.connected { offlineConnectCallout }
+                if !live.connected { offlineConnectCallout.staggeredAppear(index: 2) }
                 bodyConsole
+                    .staggeredAppear(index: 3)
                 // Low-bandwidth fallback note (#80): the radio couldn't sustain the WHOOP 4 R10/R11 raw
                 // realtime burst, so live HR is riding the standard BLE Heart-Rate profile instead. Live HR
                 // still works — this is informational, not an error — so it sits right under the readout in
                 // a calm accent treatment rather than the amber warning banners above.
                 if Self.shouldShowStandardHRNote(live.standardHRMode) {
-                    standardHRNote(live.standardHRMode ?? "")
+                    standardHRNote(live.standardHRMode ?? "").staggeredAppear(index: 4)
                 }
                 signalTrustRail
+                    .staggeredAppear(index: 5)
                 sessionConsole
+                    .staggeredAppear(index: 6)
                 // Show the strap picker whenever we're not actively streaming, so a user with both a
                 // WHOOP 4 and a 5/MG can switch between them. (It used to hide once `bonded`, which is
                 // sticky across disconnects — so after the first pairing the picker vanished for good.)
-                if !activeConnection { modelPicker }
+                if !activeConnection { modelPicker.staggeredAppear(index: 7) }
                 controls
+                    .staggeredAppear(index: 8)
                 manageDevicesRow
+                    .staggeredAppear(index: 9)
                 logCard
+                    .staggeredAppear(index: 10)
             }
         }
         .onAppear { refreshLiveSession() }
@@ -153,6 +181,9 @@ struct LiveView: View {
                 .environmentObject(model)
                 .environmentObject(live)
         }
+        // Liquid Glass for every card on Live (cascades down to the cards via the environment). Neutral
+        // glass when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - Console header
@@ -248,19 +279,24 @@ struct LiveView: View {
         return HStack(spacing: 8) {
             Circle().fill(color).frame(width: 9, height: 9)
             Text(label).font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(StrandPalette.surfaceRaised, in: Capsule())
+        // Neutral inline chip (surfaceInset) — the coloured status dot + word carry the state, not a
+        // tinted surface, so it sits cleanly on the glass console header without competing as a card.
+        .background(StrandPalette.surfaceInset, in: Capsule())
     }
 
     // MARK: - Body console (focal HR + live physiology)
 
     /// The console's centrepiece: a pulsing focal HR ring beside a live-physiology stack (R-R strip,
     /// rolling RMSSD, last frame/event). Side-by-side on a wide window (Mac), stacked on a narrow one
-    /// (iPhone) via ViewThatFits. The whole console floats over an Effort-tinted scenic hero so the live
-    /// readout reads like a Bevel hero, and the card carries the Effort wash.
+    /// (iPhone) via ViewThatFits. The console rides the same neutral Liquid Glass as every other card —
+    /// the colour world comes from the focal ring's hrTint (zone / Effort) over the day-cycle scene, not
+    /// a card wash (DESIGN §2).
     private var bodyConsole: some View {
-        NoopCard(padding: NoopMetrics.space5, tint: StrandPalette.effortColor) {
+        NoopCard(padding: NoopMetrics.space5) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: NoopMetrics.space6) {
                     heartReadout
@@ -275,10 +311,6 @@ struct LiveView: View {
                     physiologyStack
                 }
             }
-        }
-        .background {
-            ScenicHeroBackground(domain: .effort)
-                .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
         }
     }
 
@@ -616,7 +648,9 @@ struct LiveView: View {
     }
 
     private func activeWorkoutCard(_ w: AppModel.ActiveWorkout) -> some View {
-        NoopCard(tint: StrandPalette.effortColor) {
+        // Neutral glass — the RECORDING rose dot/label + the effort-tinted stat carry the state, not a
+        // card wash (DESIGN §2).
+        NoopCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Circle().fill(StrandPalette.metricRose).frame(width: 8, height: 8)
@@ -681,45 +715,41 @@ struct LiveView: View {
     }
 
     private func reconnectGuideBanner(_ guide: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(StrandPalette.statusWarning)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Can't connect — your strap's pairing was reset")
-                    .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
-                Text(guide)
-                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        NoopCard {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(StrandPalette.statusWarning)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Can't connect — your strap's pairing was reset")
+                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                    Text(guide)
+                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
-        .padding(NoopMetrics.space3)
-        .background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(StrandPalette.statusWarning.opacity(0.5), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Reconnect help: \(guide)")
     }
 
     private func pairingHintBanner(_ hint: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(StrandPalette.statusWarning)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Live HR works — free the strap to unlock buzz, alarms & sync")
-                    .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
-                Text(hint)
-                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        NoopCard {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(StrandPalette.statusWarning)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Live HR works — free the strap to unlock buzz, alarms & sync")
+                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                    Text(hint)
+                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
-        .padding(NoopMetrics.space3)
-        .background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(StrandPalette.statusWarning.opacity(0.5), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Pairing help: \(hint)")
     }
@@ -737,26 +767,24 @@ struct LiveView: View {
     /// is NOT a warning — live HR is working — so it uses the accent (health-green) treatment with a signal
     /// glyph. Mirrors the banner layout (icon + headline + one-line explanation) for visual consistency.
     private func standardHRNote(_ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .foregroundStyle(StrandPalette.accent)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Standard HR mode (low bandwidth)")
-                    .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
-                Text(detail)
-                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Other metrics (R-R, frames, battery, history) need a full sync.")
-                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+        NoopCard {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(StrandPalette.accent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Standard HR mode (low bandwidth)")
+                        .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                    Text(detail)
+                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Other metrics (R-R, frames, battery, history) need a full sync.")
+                        .font(StrandFont.footnote).foregroundStyle(StrandPalette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
-        .padding(NoopMetrics.space3)
-        .background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(StrandPalette.accent.opacity(0.4), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Standard HR mode, low bandwidth. \(detail)")
     }
@@ -810,7 +838,9 @@ struct LiveView: View {
     /// up top instead of burying it past the Signal Trust grid. Shared with macOS — the wide layout
     /// shows it stacked above the console, and `scanButton` already styles full-width.
     @ViewBuilder private var offlineConnectCallout: some View {
-        NoopCard(tint: StrandPalette.accent) {
+        // Neutral glass — the accent antenna glyph + the primary scanButton carry the action's colour, not
+        // a card wash (DESIGN §2).
+        NoopCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Image(systemName: "antenna.radiowaves.left.and.right")
@@ -842,32 +872,30 @@ struct LiveView: View {
     /// macOS selects the Devices sidebar item, iOS presents the Devices screen.
     private var manageDevicesRow: some View {
         Button { router.openDevices() } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "badge.plus.radiowaves.right")
-                    .font(StrandFont.headline)
-                    .foregroundStyle(StrandPalette.accent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Manage devices")
-                        .font(StrandFont.subhead)
-                        .foregroundStyle(StrandPalette.textPrimary)
-                    Text(manageDevicesDetail)
+            NoopCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "badge.plus.radiowaves.right")
+                        .font(StrandFont.headline)
+                        .foregroundStyle(StrandPalette.accent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Manage devices")
+                            .font(StrandFont.subhead)
+                            .foregroundStyle(StrandPalette.textPrimary)
+                        Text(manageDevicesDetail)
+                            .font(StrandFont.footnote)
+                            .foregroundStyle(StrandPalette.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
                         .font(StrandFont.footnote)
-                        .foregroundStyle(StrandPalette.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(StrandPalette.textTertiary)
+                        .accessibilityHidden(true)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(StrandFont.footnote)
-                    .foregroundStyle(StrandPalette.textTertiary)
-                    .accessibilityHidden(true)
+                .contentShape(Rectangle())
             }
-            .padding(NoopMetrics.space3)
-            .background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(StrandPalette.hairline, lineWidth: 1))
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage devices")

@@ -37,13 +37,29 @@ struct InsightsHubView: View {
     /// The currently-selected outcome for the ranked feed (Charge / HRV / Rest / RHR).
     @State private var outcome: InsightsHubViewModel.Outcome = .recovery
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep/Settings so every tab
+    // reads as one surface. The scene sits behind the header band and fades above the cards; glass
+    // cards refract it. Gated on the same Settings toggle, and the glass surface itself falls back to
+    // frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(title: "Insights",
                        subtitle: "Patterns in your own data — association, not cause.",
+                       onRefresh: { await repo.refresh() },
                        // PERF (scroll): lazy column — byte-identical layout (LazyVStack == eager VStack
                        // alignment/spacing/header). The content is one inner eager VStack, so the staggered
                        // mover reveal is unchanged; this only defers building that stack until it scrolls in.
-                       lazy: true) {
+                       lazy: true,
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             if !model.loaded {
                 ComingSoon(what: "Reading your journal and outcomes…")
             } else {
@@ -56,6 +72,9 @@ struct InsightsHubView: View {
         }
         .task(id: repo.refreshSeq) { await model.load(repo: repo) }
         .onChangeCompat(of: outcome) { model.rankFor($0) }
+        // Liquid Glass for every card on this screen (cascades to the NoopCards via the environment).
+        // Neutral .regular glass over the day-cycle scene; identity comes from the coloured content.
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - What moves your Charge (ranked, lag-aware)
@@ -108,7 +127,7 @@ struct InsightsHubView: View {
         }()
 
         return NoopCard(tint: outcome.domain.color) {
-            VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+            VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
                 // Header: behaviour name + lead/lag chip + confidence pill.
                 HStack(alignment: .firstTextBaseline) {
                     HStack(spacing: 8) {
@@ -129,8 +148,9 @@ struct InsightsHubView: View {
                     .foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                // With / without means as uniform StatTiles.
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: NoopMetrics.gap)],
+                // With / without means as uniform StatTiles. Min 150 matches the forecast grid so the
+                // pair stays two-up on a narrow iPhone (2×150 + gap fits inside a glass card's content).
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: NoopMetrics.gap)],
                           alignment: .leading, spacing: NoopMetrics.gap) {
                     StatTile(label: "With",
                              value: outcome.format(e.meanWith),
@@ -273,7 +293,7 @@ private struct DoseResponseCardView: View {
     var body: some View {
         let r = card.response
         NoopCard(tint: domain.color) {
-            VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+            VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
                 header(r)
 
                 // The engine's honest read sentence (prior / yours / contradicts-prior).
@@ -340,7 +360,7 @@ private struct DoseResponseCardView: View {
         let projected = card.latestOutcome.map { max(0, min(card.outcomeCeiling, $0 + delta)) }
         let stepLabel = previewDose <= 1 ? "no extra" : "\(previewDose)\(card.dosePlusSuffix(previewDose))"
 
-        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+        VStack(alignment: .leading, spacing: NoopMetrics.cardInnerSpacing) {
             // Overline and the dose stepper each get their own row — sharing one HStack
             // compressed the 0/1/2/3+ stepper and truncated its segments on narrow widths.
             Text(card.forecastOverline).strandOverline()
@@ -384,6 +404,8 @@ private struct DoseResponseCardView: View {
     // MARK: Bits
 
     private func honestyBanner(_ text: String, tone: StrandTone) -> some View {
+        // On glass this is a plain glyph + footnote — no nested filled well, so it never reads as a
+        // card-inside-a-card. Colour stays in the glyph (tertiary for neutral, positive for contradicts).
         HStack(alignment: .top, spacing: NoopMetrics.space2) {
             Image(systemName: "info.circle.fill")
                 .font(.system(size: 12, weight: .semibold))
@@ -393,9 +415,7 @@ private struct DoseResponseCardView: View {
                 .foregroundStyle(StrandPalette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(NoopMetrics.space3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(StrandPalette.surfaceInset, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func signed(_ v: Double, suffix: String) -> String {

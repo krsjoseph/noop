@@ -150,17 +150,38 @@ private struct BreathingContent: View {
     /// The user's locked resonance pace, read fresh each render (set by the sweep).
     private var lockedBpm: Double? { BiofeedbackPrefs.lockedPace }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep/Settings so every tab reads
+    // as one surface. The scene sits behind the header band and fades above the cards; glass cards refract
+    // it. Gated on the same Settings toggle, and the glass surface falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(title: "Breathe",
-                       subtitle: "Haptic-paced breathing · find your pace · calm down") {
+                       subtitle: "Haptic-paced breathing · find your pace · calm down",
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
 
             modeSwitch
+                .staggeredAppear(index: 0)
             StressCheckInCard(center: nudgeCenter) { startOneMinuteCue() }
+                .staggeredAppear(index: 1)
 
             switch mode {
             case .breathe:   breatheMode
-            case .resonance: ResonanceModeView(controller: controller, live: live, lockedBpm: lockedBpm)
-            case .calm:      CalmModeView(controller: controller, live: live, model: model)
+            case .resonance:
+                ResonanceModeView(controller: controller, live: live, lockedBpm: lockedBpm)
+                    .staggeredAppear(index: 2)
+            case .calm:
+                CalmModeView(controller: controller, live: live, model: model)
+                    .staggeredAppear(index: 2)
             }
         }
         .onReceive(phaseTimer) { now in
@@ -184,6 +205,9 @@ private struct BreathingContent: View {
         }
         .onAppear { controllerBox.prepare(model: model, live: live) }
         .onDisappear { stop(); controller.stop() }
+        // Liquid Glass for every card on Breathe (cascades down via the environment). Neutral glass when the
+        // scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - Mode switch
@@ -198,12 +222,23 @@ private struct BreathingContent: View {
 
     @ViewBuilder private var breatheMode: some View {
         statusRow
+            .staggeredAppear(index: 0)
         orbCard
+            .staggeredAppear(index: 1)
         controlRow
-        if let line = outcomeLine { outcomeCard(line) }
+            .staggeredAppear(index: 2)
+        if let line = outcomeLine {
+            outcomeCard(line)
+                .staggeredAppear(index: 3)
+        }
         readoutRow
+            .staggeredAppear(index: 4)
         coherenceCard
-        if !live.bonded { hapticHint }
+            .staggeredAppear(index: 5)
+        if !live.bonded {
+            hapticHint
+                .staggeredAppear(index: 6)
+        }
     }
 
     /// Start a one-minute haptic breathing cue at the user's locked resonance pace (or 5.5 fallback) —
@@ -229,7 +264,7 @@ private struct BreathingContent: View {
                 StatePill("Visual only", tone: .warning, showsDot: true)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             HStack(spacing: 6) {
                 Text(timeString(sessionSeconds))
@@ -239,14 +274,17 @@ private struct BreathingContent: View {
                 Text("\(breathCount) breaths")
                     .font(StrandFont.captionNumber)
                     .foregroundStyle(StrandPalette.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
+            .layoutPriority(1)
         }
     }
 
     // MARK: - The orb
 
     private var orbCard: some View {
-        StrandCard(padding: 24, tint: StrandPalette.restColor) {
+        StrandCard(padding: 24) {
             VStack(spacing: 18) {
                 HStack {
                     Text(pace.label.uppercased()).strandOverline()
@@ -379,7 +417,7 @@ private struct BreathingContent: View {
     }
 
     private func outcomeCard(_ line: String) -> some View {
-        StrandCard(padding: 14, tint: StrandPalette.restColor) {
+        StrandCard(padding: 14) {
             HStack(spacing: 10) {
                 Image(systemName: "wind")
                     .font(.system(size: 14, weight: .semibold))
@@ -442,7 +480,7 @@ private struct BreathingContent: View {
 
     private func readoutTile(label: String, value: String, unit: String,
                              accent: Color, caption: String) -> some View {
-        StrandCard(padding: 14, tint: StrandPalette.restColor) {
+        StrandCard(padding: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(label.uppercased()).strandOverline()
                 Spacer(minLength: 6)
@@ -470,7 +508,7 @@ private struct BreathingContent: View {
     // MARK: - Coherence estimate
 
     private var coherenceCard: some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Coherence estimate").strandOverline()
@@ -478,22 +516,12 @@ private struct BreathingContent: View {
                     StatePill("\(coherenceLabel)", tone: coherenceTone, showsDot: true)
                 }
 
-                GeometryReader { geo in
-                    let frac = coherenceFraction
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(StrandPalette.surfaceInset)
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [StrandPalette.restDeep,
-                                             StrandPalette.restBright],
-                                    startPoint: .leading, endPoint: .trailing)
-                            )
-                            .frame(width: max(6, geo.size.width * frac))
-                            .animation(.easeInOut(duration: 0.5), value: frac)
-                    }
-                }
-                .frame(height: 10)
+                // Coherence as the NOOP signature segmented bar — matches the Resonance sweep card so the
+                // whole Rest world reads in one pip language.
+                PipBar(value: Double(coherenceFraction), range: 0...1, segments: 28,
+                       tint: StrandPalette.restColor, height: 10)
+                    .accessibilityLabel("Coherence estimate")
+                    .accessibilityValue("\(Int(coherenceFraction * 100)) percent")
 
                 Text("Estimate only — a higher RMSSD while paced usually means your parasympathetic \"rest\" branch is engaging. It is not a clinical reading; trends over a session matter more than any single number.")
                     .font(StrandFont.footnote)
@@ -530,22 +558,17 @@ private struct BreathingContent: View {
     // MARK: - Haptic hint
 
     private var hapticHint: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "applewatch.radiowaves.left.and.right")
-                .foregroundStyle(StrandPalette.statusWarning)
-            Text("Connect your strap for haptic guidance — you'll feel one pulse on the inhale, two on the exhale, so you can breathe with your eyes closed.")
-                .font(StrandFont.footnote)
-                .foregroundStyle(StrandPalette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        StrandCard(padding: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .foregroundStyle(StrandPalette.statusWarning)
+                Text("Connect your strap for haptic guidance — you'll feel one pulse on the inhale, two on the exhale, so you can breathe with your eyes closed.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
         }
-        .padding(14)
-        .background(StrandPalette.statusWarning.opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous)
-                .strokeBorder(StrandPalette.statusWarning.opacity(0.25), lineWidth: 1)
-        )
     }
 
     // MARK: - Session control (fixed-pace Breathe — unchanged)
@@ -719,7 +742,7 @@ private struct ResonanceModeView: View {
     }
 
     private var explainerCard: some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Find your resonance pace").strandOverline()
@@ -761,7 +784,7 @@ private struct ResonanceModeView: View {
     }
 
     private var sweepProgressCard: some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(controller.sweepLabel ?? "Sweeping…")
@@ -785,7 +808,7 @@ private struct ResonanceModeView: View {
     }
 
     private func resultCard(_ result: ResonanceEngine.SweepResult) -> some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(result.didLock ? "Your resonance pace" : "Couldn't lock today").strandOverline()
@@ -823,7 +846,7 @@ private struct ResonanceModeView: View {
     }
 
     private func lockedCard(_ bpm: Double) -> some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Your locked pace").strandOverline()
@@ -891,18 +914,17 @@ private struct ResonanceModeView: View {
     }
 
     private var connectHint: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "applewatch.radiowaves.left.and.right")
-                .foregroundStyle(StrandPalette.statusWarning)
-            Text("Connect your strap for the felt cue — the sweep paces you with one buzz on the inhale, two on the exhale.")
-                .font(StrandFont.footnote)
-                .foregroundStyle(StrandPalette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        StrandCard(padding: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .foregroundStyle(StrandPalette.statusWarning)
+                Text("Connect your strap for the felt cue — the sweep paces you with one buzz on the inhale, two on the exhale.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
         }
-        .padding(14)
-        .background(StrandPalette.statusWarning.opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
     }
 }
 
@@ -930,7 +952,7 @@ private struct CalmModeView: View {
     }
 
     private var explainerCard: some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Calm me").strandOverline()
@@ -978,7 +1000,7 @@ private struct CalmModeView: View {
     }
 
     private var liveCard: some View {
-        StrandCard(tint: StrandPalette.restColor) {
+        StrandCard {
             VStack(spacing: 14) {
                 HStack {
                     Text("Settling").strandOverline()
@@ -1027,7 +1049,7 @@ private struct CalmModeView: View {
     }
 
     private func outcomeCard(_ line: String) -> some View {
-        StrandCard(padding: 14, tint: StrandPalette.restColor) {
+        StrandCard(padding: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     Image(systemName: controller.calmDidNotFall ? "minus.circle" : "checkmark.circle")

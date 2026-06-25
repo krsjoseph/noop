@@ -116,6 +116,18 @@ struct CompareView: View {
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Sleep so every tab reads as one
+    // surface. The scene sits behind the header band and fades above the cards; glass cards refract it.
+    // Gated on the same Settings toggle, and the glass surface itself falls back to frosted below iOS 26 / macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     // Distinct, high-legibility series colors (avoid the recovery/strain ramps so
     // overlay lines read as categorical, not as a value gradient).
     private static let seriesPalette: [Color] = [
@@ -149,24 +161,34 @@ struct CompareView: View {
     var body: some View {
         ScreenScaffold(title: "Compare", subtitle: "Overlay signals, draw conclusions.",
                        // PERF (scroll): lazy column — byte-identical layout (LazyVStack == eager VStack
-                       // alignment/spacing/header). The content is one inner eager VStack; no staggered
-                       // reveals, and the only GeometryReaders are chart-local (.chartOverlay plot rects),
-                       // so nothing depends on eager layout of the scroll column.
-                       lazy: true) {
+                       // alignment/spacing/header). The content is one inner eager VStack whose sections
+                       // ripple in once on appear (matching Trends/Today); the only GeometryReaders are
+                       // chart-local (.chartOverlay plot rects), so nothing depends on eager layout of the
+                       // scroll column.
+                       onRefresh: { await repo.refresh() },
+                       lazy: true,
+                       // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today/Trends.
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
                 metricSection
+                    .staggeredAppear(index: 0)
 
                 if selected.count < minSelection {
                     ComingSoon(what: "Compare needs at least two metrics with history. Import your WHOOP export in Data Sources first.")
+                        .staggeredAppear(index: 1)
                 } else {
                     let series = activeSeries
                     if series.allSatisfy({ $0.rows.isEmpty }) {
                         ComingSoon(what: loadedOnce
                             ? "No data for these metrics in \(range.phrase). Widen the range or pick metrics you've logged."
                             : "Reading your history…")
+                            .staggeredAppear(index: 1)
                     } else {
                         overlaySection(series)
+                            .staggeredAppear(index: 1)
                         correlationSection(series)
+                            .staggeredAppear(index: 2)
                     }
                 }
             }
@@ -181,6 +203,9 @@ struct CompareView: View {
         .onChangeCompat(of: correlationKey(activeSeries)) { _ in
             refreshPairCache(activeSeries)
         }
+        // Liquid Glass for every card on Compare (cascades down to the cards via the environment). Neutral
+        // glass when the scene is on; frosted fallback otherwise (and below iOS 26 / macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     // MARK: - Selection key (re-loads when the set of metrics changes)
@@ -382,10 +407,10 @@ struct CompareView: View {
                 subtitle: anyWidened
                     ? "Min–max normalized · sparse series widened past \(range.phrase) · \(inspectHint)"
                     : "Each line min–max normalized within \(range.phrase) · \(inspectHint)",
-                trailing: "\(nonEmpty.count) series",
-                // Anchor the overlay card to the brand-green chrome world; each line keeps its own
-                // categorical series colour so the lines stay distinguishable against the wash.
-                tint: StrandPalette.accent
+                trailing: "\(nonEmpty.count) series"
+                // Neutral glass surface — colour lives in the data: each line keeps its own categorical
+                // series colour (and matching legend swatch), so the lines stay distinguishable without
+                // washing the card a hue.
             ) {
                 // The overlay is min–max NORMALIZED 0–1, so the Effort scale never touches the line shape;
                 // only the per-series hover read-outs convert (passed through to the tooltip). (#268)
@@ -406,11 +431,15 @@ struct CompareView: View {
                     Text(s.metric.title)
                         .font(StrandFont.subhead)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Spacer()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
                     // Real min/max labels honour the Effort scale (#268); other metrics are unchanged.
                     Text("\(s.metric.format(s.realMin, effortScale: effortScale)) – \(s.metric.format(s.realMax, effortScale: effortScale))")
                         .font(StrandFont.captionNumber)
                         .foregroundStyle(StrandPalette.textSecondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.vertical, 7)
                 .accessibilityElement(children: .combine)
@@ -507,9 +536,10 @@ struct CompareView: View {
     /// One pairwise correlation as its own NoopCard.
     private func pairCard(_ p: PairResult) -> some View {
         let tint = correlationColor(p.r)
-        // Frosted card washed by the relationship's own colour (green positive / rose negative), with a
-        // TrendChip surfacing the signed direction at a glance — the Today delta idiom, applied to r.
-        return NoopCard(tint: tint) {
+        // Neutral glass card — the relationship's colour lives in the DATA: the signed direction is carried
+        // by the TrendChip + the coloured `r = …` value + the strength/direction footnote, so colour stays
+        // on the data, never washing the surface (uniform Liquid Glass, matching the rest of the app).
+        return NoopCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     // Two color swatches for the pair.
@@ -520,11 +550,15 @@ struct CompareView: View {
                     Text("\(p.a.metric.title) ↔ \(p.b.metric.title)")
                         .font(StrandFont.headline)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Spacer()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Spacer(minLength: 8)
                     TrendChip(text: signedR(p.r), color: tint)
                     Text("r = \(signedR(p.r))")
                         .font(StrandFont.number(18))
                         .foregroundStyle(tint)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Text(insightSentence(p))
@@ -898,6 +932,13 @@ private func comparePreviewRepo() -> Repository {
     CompareView()
         .environmentObject(comparePreviewRepo())
         .frame(width: 920, height: 860)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Compare · iPhone") {
+    CompareView()
+        .environmentObject(comparePreviewRepo())
+        .frame(width: 390, height: 844)
         .preferredColorScheme(.dark)
 }
 #endif

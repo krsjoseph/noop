@@ -78,40 +78,63 @@ struct FusedRecordView: View {
     /// single-WHOOP user sees a plain record, not a manufactured multi-source experience.
     private var isMultiSource: Bool { record.contributingSourceCount > 1 }
 
+    // Day-cycle scene backdrop + Liquid Glass, shared with Today/Trends/Settings so every surface reads
+    // as one. The scene sits behind the header band; glass cards refract it. Gated on the same Settings
+    // toggle, and the glass surface itself falls back to frosted below iOS 26 / on macOS.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         ScreenScaffold(
             title: "Your Data, Fused",
-            subtitle: subtitle
+            subtitle: subtitle,
+            // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
+            topBackground: showDayCycleBackground
+                ? AnyView(SceneScreenBackground().drawingGroup()) : nil
         ) {
-            VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-                if isMultiSource { dayBadgeRow }
+            // A running section index so the staggered reveal stays contiguous whether or not the
+            // day badge is shown (single-source records skip it).
+            let badgeShown = isMultiSource
+            VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                if badgeShown {
+                    dayBadgeRow
+                        .staggeredAppear(index: 0)
+                }
 
-                if record.rows.isEmpty {
-                    DataPendingNote(
-                        title: "Nothing to fuse yet",
-                        message: "Import a WHOOP export, Apple Health or a second band and your best-sourced record builds here — on this device.",
-                        symbol: "square.stack.3d.up"
-                    )
-                } else {
-                    NoopCard(padding: 0) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(record.rows.enumerated()), id: \.element.id) { index, row in
+                Group {
+                    if record.rows.isEmpty {
+                        DataPendingNote(
+                            title: "Nothing to fuse yet",
+                            message: "Import a WHOOP export, Apple Health or a second band and your best-sourced record builds here — on this device.",
+                            symbol: "square.stack.3d.up"
+                        )
+                    } else {
+                        // The locked grouped-list kit: one glass-aware NoopCard with auto-inset
+                        // dividers between rows (no manual divider bookkeeping). FusedMetricRowView
+                        // stays the custom row content — richer than a plain SettingsRow.
+                        SettingsGroup {
+                            ForEach(record.rows) { row in
                                 FusedMetricRowView(
                                     row: row,
                                     showProvenance: isMultiSource,
                                     onCompare: { comparing = row }
                                 )
-                                if index < record.rows.count - 1 {
-                                    Divider().overlay(StrandPalette.hairline)
-                                        .padding(.leading, NoopMetrics.cardPadding)
-                                }
                             }
                         }
                     }
                 }
+                .staggeredAppear(index: badgeShown ? 1 : 0)
 
                 privacyNote
+                    .staggeredAppear(index: badgeShown ? 2 : 1)
                 disclaimerNote
+                    .staggeredAppear(index: badgeShown ? 3 : 2)
             }
         }
         // The conflict-compare detail: every source's value side by side, the winner labelled with its
@@ -124,6 +147,9 @@ struct FusedRecordView: View {
                 .frame(width: 480, height: 600)
                 #endif
         }
+        // Liquid Glass for every card on this screen (cascades to the SettingsGroup's NoopCard via the
+        // environment). Neutral glass when the scene is on; frosted fallback otherwise (and on macOS).
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 
     private var subtitle: LocalizedStringKey {
@@ -155,14 +181,17 @@ struct FusedRecordView: View {
                 Text("Today's scores owned by \(owner.displayName)")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("Scores still calibrating — no single day-owner yet")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 4)
+        // Align to the grouped-list header inset (space1) so the badge anchors the metric group.
+        .padding(.horizontal, NoopMetrics.space1)
         .accessibilityElement(children: .combine)
     }
 
@@ -175,10 +204,11 @@ struct FusedRecordView: View {
             Text("Fused on \(deviceNoun). Nothing leaves it — no account, no cloud.")
                 .font(StrandFont.footnote)
                 .foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 4)
+        // Align to the grouped-list footer inset (space1) so the footnotes read as the group's caption.
+        .padding(.horizontal, NoopMetrics.space1)
         .accessibilityElement(children: .combine)
     }
 
@@ -188,8 +218,7 @@ struct FusedRecordView: View {
             .font(StrandFont.footnote)
             .foregroundStyle(StrandPalette.textTertiary)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
-            .padding(.top, 2)
+            .padding(.horizontal, NoopMetrics.space1)
     }
 }
 
@@ -233,6 +262,9 @@ private struct FusedMetricRowView: View {
                         Text(reason)
                             .font(StrandFont.footnote)
                             .foregroundStyle(StrandPalette.textTertiary)
+                            // Let the reason take the remaining width and wrap rather than clip on a
+                            // narrow iPhone (the badge keeps its intrinsic width).
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
@@ -290,6 +322,10 @@ private struct FusedMetricRowView: View {
                     Text(conflictSummary)
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
+                        // Wrap (don't truncate) the "X says Y — tap to compare" line on a 375pt screen
+                        // so the meaning survives instead of clipping mid-phrase.
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(StrandPalette.textTertiary)
@@ -320,8 +356,21 @@ private struct ConflictCompareSheet: View {
 
     private var point: FusedMetricPoint { row.point }
 
+    // Same glass recipe as the parent so the sheet's cards read as the one surface, not an opaque island.
+    @AppStorage(SceneBackgroundPrefs.enabledKey) private var showDayCycleBackground = true
+    private var useGlassSurface: Bool {
+        #if os(iOS)
+        return showDayCycleBackground
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
-        ScreenScaffold(title: LocalizedStringKey(row.label), subtitle: "Your bands report different numbers. Here's every source, and the one NOOP is using.") {
+        ScreenScaffold(title: LocalizedStringKey(row.label),
+                       subtitle: "Your bands report different numbers. Here's every source, and the one NOOP is using.",
+                       topBackground: showDayCycleBackground
+                           ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.gap) {
                 NoopCard {
                     VStack(spacing: 0) {
@@ -350,14 +399,16 @@ private struct ConflictCompareSheet: View {
                             .foregroundStyle(StrandPalette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, NoopMetrics.space1)
                 }
 
                 Button("Done") { dismiss() }
                     .buttonStyle(.noopSecondary)
-                    .padding(.top, 4)
+                    .padding(.top, NoopMetrics.space1)
             }
         }
+        // Liquid Glass for the sheet's cards too, matching the parent screen.
+        .environment(\.noopGlassSurface, useGlassSurface)
     }
 }
 
