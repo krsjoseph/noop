@@ -1,3 +1,6 @@
+#if !os(watchOS)
+// The watch never draws the hypnogram (uses .onContinuousHover + ChartHover helpers, unavailable
+// on watchOS); excluded there, iOS/macOS unchanged.
 import SwiftUI
 
 // MARK: - Hypnogram (§9.4 Sleep)
@@ -177,7 +180,9 @@ public struct Hypnogram: View {
                                     .position(x: rect.midX, y: rect.midY)
                             }
                         }
-                        .drawingGroup()
+                        // NO .drawingGroup() — flat solid pills are cheap to draw inline; the per-instance
+                        // offscreen flatten was part of the v7.0.2 lag regression. The #707 accessibility
+                        // collapse is served by `.accessibilityHidden(true)` below + the single plot summary.
                         .accessibilityHidden(true)
 
                         // Hover affordance: crosshair, band highlight ring, tooltip.
@@ -349,4 +354,5 @@ private func sampleNight() -> [SleepInterval] {
     .background(StrandPalette.surfaceBase)
     .preferredColorScheme(.dark)
 }
+#endif
 #endif
