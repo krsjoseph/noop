@@ -140,7 +140,12 @@ struct CoachView: View {
                 header: "Provider",
                 footer: "Coach uses your own API key. Pick a provider, paste a key, and choose a model. Your key is stored securely in the Keychain and never leaves \(Platform.deviceNounPhrase) except as the request you make."
             ) {
-                SettingsRow(icon: "sparkles", title: "Provider") {
+                // A segmented control is too wide for a SettingsRow trailing slot — at its intrinsic
+                // width it blows the grouped card past the viewport and shifts/clips the whole screen
+                // (#coach-overflow). Render it as a FULL-WIDTH inset block (overline + segmented picker),
+                // matching the Server URL / Model / Key fields below.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Provider").strandOverline()
                     Picker("Provider", selection: $coach.provider) {
                         ForEach(AIProvider.allCases) { p in
                             Text(p.displayName).tag(p)
@@ -148,9 +153,10 @@ struct CoachView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .fixedSize()
+                    .frame(maxWidth: .infinity)
                     .accessibilityLabel("Provider")
                 }
+                .settingsRowInsets()
 
                 // Server URL (Custom / local LLM only)
                 if coach.provider == .custom {
