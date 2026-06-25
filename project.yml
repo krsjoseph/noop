@@ -178,6 +178,11 @@ targets:
         CFBundleDisplayName: NOOP
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Export-compliance: NOOP only uses standard/exempt encryption (HTTPS, Apple BLE/HealthKit) —
+        # no proprietary crypto — so it's exempt under the US EAR. Declaring NO here stops every
+        # TestFlight build stalling on "Missing Compliance" before it can be tested. Flip to YES (and
+        # file the annual self-classification) only if non-exempt encryption is ever added.
+        ITSAppUsesNonExemptEncryption: false
         # Surfaces APP_GROUP_ID to runtime (WidgetSnapshot.suiteName) so the App Group id isn't
         # hard-coded in Swift; stays in sync with the application-groups entitlement (both $(APP_GROUP_ID)).
         AppGroupIdentifier: "$(APP_GROUP_ID)"

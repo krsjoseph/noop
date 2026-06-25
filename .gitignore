@@ -94,3 +94,20 @@ __pycache__/
 
 # Local release artifacts (zips/ipas built for upload; never tracked)
 dist/
+
+# ── fastlane / TestFlight ──
+# Build output + fastlane run reports.
+fastlane/build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+*.ipa
+*.dSYM.zip
+# Signing & App Store Connect secrets — NEVER commit.
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.example
+secrets/
+*.p8
+# Bundler-vendored gems, if used.
+vendor/bundle/

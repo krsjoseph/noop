@@ -1,0 +1,10 @@
+# App Store Connect / Developer Portal identity for every fastlane lane.
+#
+# Auth is via an App Store Connect API key (see fastlane/.env.example), so no `apple_id` /
+# password is needed here — only the identifiers that pin which app + team we act on.
+
+app_identifier("com.krsjoseph.noop") # the NOOP iOS app bundle id (watch + widgets nest under it)
+team_id("4ZWB5A8GBF")                # Apple Developer Portal team (code-signing / provisioning)
+
+# If this Apple ID belongs to more than one App Store Connect team, also set the ASC team:
+#   itc_team_id("XXXXXXXX")
