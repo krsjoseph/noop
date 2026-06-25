@@ -1,6 +1,11 @@
 import SwiftUI
 import StrandDesign
 
+/// Named scroll space for the large-title collapse — the title probe reports its bottom edge relative
+/// to the scroll viewport's top (≈ the nav-bar bottom), independent of safe-area maths. File-level
+/// because `ScreenScaffold` is generic (no static stored properties on generic types).
+private let noopScaffoldScrollSpace = "noopScaffoldScroll"
+
 /// Standard scrollable screen container: title + dark surface + content column.
 struct ScreenScaffold<Content: View, Trailing: View>: View {
     /// Optional — when nil (and no subtitle) the header is omitted entirely, so a screen can supply its
@@ -17,6 +22,12 @@ struct ScreenScaffold<Content: View, Trailing: View>: View {
     /// 800+ day imported history (#345). Defaults to `false` so every existing caller keeps
     /// the eager `VStack` and its identical layout/scroll behaviour.
     var lazy: Bool = false
+    /// iOS large-title collapse. When `true` (the default for every screen), the in-content title slides
+    /// up under the system navigation bar as you scroll, and a compact copy cross-fades into the nav
+    /// bar's principal slot (next to the back button) — the native large-title behaviour, reproduced with
+    /// the house fonts so the glass scene + custom subtitle survive. Set `false` to opt a screen out (no
+    /// probe, no toolbar item). Inert when `title` is nil. iOS-only; macOS keeps its static header.
+    var collapsesTitleInBar: Bool = true
     /// Optional full-bleed view drawn behind the scroll content at the TOP of the screen (e.g. Today's
     /// day-cycle scene). Defaults to nil so other screens stay on the flat canvas; nil renders nothing.
     var topBackground: AnyView? = nil
@@ -32,6 +43,11 @@ struct ScreenScaffold<Content: View, Trailing: View>: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSizeClass
     #endif
+
+    /// 0 → large title fully visible (nav-bar title hidden); 1 → large title scrolled under the bar
+    /// (nav-bar title fully shown). Driven directly off the title's measured position so it tracks the
+    /// finger rather than animating on a timer.
+    @State private var barTitleProgress: CGFloat = 0
 
     var body: some View {
         ScrollView {
@@ -68,6 +84,33 @@ struct ScreenScaffold<Content: View, Trailing: View>: View {
             .ignoresSafeArea()
         }
         .modifier(RefreshableIfNeeded(onRefresh: onRefresh))
+        // Large-title collapse (opt-in). The named space lets the title probe report its bottom edge
+        // relative to the scroll viewport top; the toolbar copy cross-fades in as it crosses. Gated on
+        // the flag so non-opted screens attach no toolbar item and keep their existing nav title.
+        .coordinateSpace(.named(noopScaffoldScrollSpace))
+        #if os(iOS)
+        .onPreferenceChange(TitleBottomKey.self) { maxY in
+            guard collapsesTitleInBar else { return }
+            // Cross-fade over the final `fadeRange` points of the title sliding under the bar: bottom at
+            // the viewport top (maxY ≤ 0) → fully shown; one fadeRange below → hidden.
+            let fadeRange: CGFloat = 28
+            let p = 1 - min(max(maxY / fadeRange, 0), 1)
+            if abs(p - barTitleProgress) > 0.001 { barTitleProgress = p }
+        }
+        .toolbar {
+            if collapsesTitleInBar, let title {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .font(StrandFont.headline)
+                        .foregroundStyle(StrandPalette.textPrimary)
+                        .opacity(barTitleProgress)
+                        // A touch of upward travel as it lands, mirroring the system inline title.
+                        .offset(y: (1 - barTitleProgress) * 6)
+                        .accessibilityHidden(barTitleProgress < 0.5)
+                }
+            }
+        }
+        #endif
     }
 
     /// The header + content column. `lazy` swaps the eager `VStack` for a `LazyVStack` so a long
@@ -101,17 +144,38 @@ struct ScreenScaffold<Content: View, Trailing: View>: View {
             Spacer(minLength: 0)
             trailing()
         }
+        // Probe only when collapsing — measures the title block's bottom edge in the scroll space so the
+        // nav-bar copy can cross-fade in as it slides under the bar. No probe on other screens.
+        .background(titleProbe)
     }
+
+    @ViewBuilder private var titleProbe: some View {
+        if collapsesTitleInBar {
+            GeometryReader { g in
+                Color.clear.preference(key: TitleBottomKey.self,
+                                       value: g.frame(in: .named(noopScaffoldScrollSpace)).maxY)
+            }
+        }
+    }
+}
+
+/// Carries the in-content title's bottom edge (in the scaffold's named scroll space) up to the
+/// collapse driver. Default is "far below the bar" so a screen with no probe reads as fully expanded.
+private struct TitleBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = .greatestFiniteMagnitude
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
 }
 
 extension ScreenScaffold where Trailing == EmptyView {
     /// Convenience init for the common case with no header trailing element — keeps every existing
     /// call site (which never passed `trailing`) source-compatible.
     init(title: LocalizedStringKey?, subtitle: LocalizedStringKey? = nil,
-         onRefresh: (() async -> Void)? = nil, lazy: Bool = false, topBackground: AnyView? = nil,
+         onRefresh: (() async -> Void)? = nil, lazy: Bool = false,
+         collapsesTitleInBar: Bool = true, topBackground: AnyView? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.init(title: title, subtitle: subtitle, onRefresh: onRefresh, lazy: lazy,
-                  topBackground: topBackground, trailing: { EmptyView() }, content: content)
+                  collapsesTitleInBar: collapsesTitleInBar, topBackground: topBackground,
+                  trailing: { EmptyView() }, content: content)
     }
 }
 
