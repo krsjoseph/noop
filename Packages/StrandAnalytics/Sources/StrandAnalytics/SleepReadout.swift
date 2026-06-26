@@ -44,3 +44,43 @@ public enum SleepReadout {
         return nil
     }
 }
+
+/// Pure values for the Recovery (Charge) and HRV live-readout panels (Group G). Each parses the tagged
+/// log tail the Recovery / HRV test-mode emitters write, so the panel reflects exactly the last Charge
+/// breakdown or HRV computation. No state, no side effects, no em-dashes.
+public enum TestReadout {
+
+    /// The most recent Charge score + band line from the `.recovery`-tagged tail, or nil. The emitter
+    /// writes "[recovery] charge day=... score=<n> band=<b> ..." (or a "nilScore reason=..." line when the
+    /// night could not be scored). Returns the score/band fragment so the panel reads the same number the
+    /// dashboard shows; falls back to the nil-reason when there is no score yet.
+    public static func lastChargeBreakdown(taggedTail: [String]) -> String? {
+        for line in taggedTail.reversed() {
+            if let r = line.range(of: "score=") {
+                let rest = line[r.lowerBound...]   // "score=.. band=.. (..)"
+                let upto = rest.prefix { $0 != "(" }.trimmingCharacters(in: .whitespaces)
+                if !upto.isEmpty { return String(upto) }
+            }
+            if let r = line.range(of: "nilScore reason=") {
+                let token = line[r.upperBound...].prefix { $0 != " " }
+                if !token.isEmpty { return "no score (\(token))" }
+            }
+        }
+        return nil
+    }
+
+    /// The most recent HRV result fragment from the `.hrv`-tagged tail, or nil. The emitter writes
+    /// "[hrv] hrv rmssd=<n>ms sdnn=<n>ms meanNN=<n>ms" on success, or "[hrv] hrv result=nil (..)" when a
+    /// gate refused the reading. Returns the rmssd/sdnn fragment, or the nil note, so the panel reads the
+    /// same outcome the snapshot screen showed.
+    public static func lastHrvComputation(taggedTail: [String]) -> String? {
+        for line in taggedTail.reversed() {
+            if let r = line.range(of: "rmssd=") {
+                let frag = String(line[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                if !frag.isEmpty { return frag }
+            }
+            if line.contains("result=nil") { return "no reading (filtered out)" }
+        }
+        return nil
+    }
+}

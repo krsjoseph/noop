@@ -47,3 +47,37 @@ final class SleepReadoutTests: XCTestCase {
         XCTAssertNil(SleepReadout.lastGateFired(taggedTail: []))
     }
 }
+
+/// The Recovery / HRV live-readout parsers (Test Centre Group G). Twin of the Android TestReadout tests.
+final class TestReadoutTests: XCTestCase {
+    func testLastChargeBreakdownParsesScoreAndBand() {
+        let tail = [
+            "[recovery] charge day=2021-06-17 baseline hrv mean=50.0 spread=4.79 nValid=14 status=trusted",
+            "[recovery] charge day=2021-06-17 score=62.5 band=yellow (logistic k=1.6 z0=-0.2)",
+        ]
+        XCTAssertEqual(TestReadout.lastChargeBreakdown(taggedTail: tail), "score=62.5 band=yellow")
+    }
+
+    func testLastChargeBreakdownFallsBackToNilReason() {
+        let tail = ["[recovery] charge day=2021-06-17 nilScore reason=hrvBaselineNotUsable hrvStatus=calibrating hrvNValid=2 (need nValid>=4)"]
+        XCTAssertEqual(TestReadout.lastChargeBreakdown(taggedTail: tail), "no score (hrvBaselineNotUsable)")
+    }
+
+    func testLastChargeBreakdownNilWhenNoTrace() {
+        XCTAssertNil(TestReadout.lastChargeBreakdown(taggedTail: []))
+        XCTAssertNil(TestReadout.lastChargeBreakdown(taggedTail: ["[sleep] gate run=0 ... gate=accepted"]))
+    }
+
+    func testLastHrvComputationParsesRmssdFragment() {
+        let tail = [
+            "[hrv] hrv path=spot nInput=60 nClean=58 rejectedFraction=0.03",
+            "[hrv] hrv rmssd=42.1ms sdnn=55.3ms meanNN=812.0ms",
+        ]
+        XCTAssertEqual(TestReadout.lastHrvComputation(taggedTail: tail), "rmssd=42.1ms sdnn=55.3ms meanNN=812.0ms")
+    }
+
+    func testLastHrvComputationReportsFilteredOut() {
+        let tail = ["[hrv] hrv result=nil (a gate above refused the reading)"]
+        XCTAssertEqual(TestReadout.lastHrvComputation(taggedTail: tail), "no reading (filtered out)")
+    }
+}
