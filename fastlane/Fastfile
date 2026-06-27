@@ -1,9 +1,12 @@
 # NOOP — TestFlight automation.
+require "spaceship"
 #
 # Quick start:
 #   1. Put your App Store Connect API key creds in fastlane/.env (gitignored) — see .env.example.
-#   2. One-time, if the app doesn't exist in App Store Connect yet:  bundle exec fastlane setup_app
-#   3. Ship a build:                                                 bundle exec fastlane beta
+#   2. One-time, create/verify signing identifiers:                   bundle exec fastlane setup_signing
+#   3. If needed, create the App Store Connect app record manually with bundle id com.aretetechnologies.noop,
+#      then verify Fastlane can see it:                               bundle exec fastlane setup_app
+#   4. Ship a build:                                                  bundle exec fastlane beta
 #
 # Notes for this repo:
 #   • Strand.xcodeproj is GENERATED from project.yml by XcodeGen, so every build lane regenerates it
@@ -17,10 +20,36 @@
 
 default_platform(:ios)
 
+APP_NAME = "NOOP".freeze
 APP_IDENTIFIER = "com.aretetechnologies.noop".freeze
+APP_GROUP_ID = "group.com.aretetechnologies.noop".freeze
 SCHEME = "NOOPiOS".freeze
 TEAM_ID = "7A97GB45TD".freeze
 PROJECT_YML = "../project.yml".freeze
+
+BUNDLE_IDS = {
+  APP_IDENTIFIER => [
+    Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
+    Spaceship::ConnectAPI::BundleIdCapability::Type::HEALTHKIT
+  ],
+  "#{APP_IDENTIFIER}.widgets" => [
+    Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS
+  ],
+  "#{APP_IDENTIFIER}.watch" => [
+    Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
+    Spaceship::ConnectAPI::BundleIdCapability::Type::HEALTHKIT
+  ],
+  "#{APP_IDENTIFIER}.watch.complications" => [
+    Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS
+  ]
+}.freeze
+
+BUNDLE_ID_NAMES = {
+  APP_IDENTIFIER => APP_NAME,
+  "#{APP_IDENTIFIER}.widgets" => "#{APP_NAME} Widgets",
+  "#{APP_IDENTIFIER}.watch" => "#{APP_NAME} Watch",
+  "#{APP_IDENTIFIER}.watch.complications" => "#{APP_NAME} Watch Complications"
+}.freeze
 
 # Build an App Store Connect API key token from the env (.p8 + key id + issuer id).
 def asc_api_key
@@ -43,6 +72,58 @@ def provisioning_xcargs
   ].join(" ")
 end
 
+def marketing_version
+  File.read(PROJECT_YML)[/MARKETING_VERSION:\s*"([^"]+)"/, 1] || "1.0"
+end
+
+def ensure_bundle_id(identifier)
+  bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
+  return bundle_id if bundle_id
+
+  UI.message("Creating Bundle ID #{identifier}")
+  Spaceship::ConnectAPI::BundleId.create(
+    name: BUNDLE_ID_NAMES.fetch(identifier),
+    platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+    identifier: identifier
+  )
+end
+
+def ensure_capability(bundle_id, capability_type)
+  capabilities = bundle_id.get_capabilities
+  return if capabilities.any? { |capability| capability.is_type?(capability_type) }
+
+  UI.message("Enabling #{capability_type} for #{bundle_id.identifier}")
+  bundle_id.create_capability(capability_type)
+end
+
+def ensure_signing_identifiers
+  BUNDLE_IDS.each_with_object({}) do |(identifier, capabilities), created|
+    bundle_id = ensure_bundle_id(identifier)
+    capabilities.each { |capability| ensure_capability(bundle_id, capability) }
+    created[identifier] = bundle_id
+  end
+end
+
+def create_app_store_record(parent_bundle_id)
+  Spaceship::ConnectAPI::App.create(
+    name: APP_NAME,
+    version_string: marketing_version,
+    sku: ENV.fetch("APP_SKU", APP_IDENTIFIER),
+    primary_locale: "en-US",
+    bundle_id: parent_bundle_id.id,
+    platforms: [Spaceship::ConnectAPI::Platform::IOS]
+  )
+rescue => e
+  raise unless e.to_s.include?("resource 'apps' does not allow 'CREATE'") ||
+               e.to_s.include?("does not allow 'CREATE'")
+
+  UI.user_error!(
+    "Bundle IDs and capabilities are ready, but this App Store Connect API key cannot create new app " \
+    "records. Create the app manually in App Store Connect with bundle ID #{APP_IDENTIFIER}, or use " \
+    "an App Store Connect account/key that has app-creation permission, then rerun `bundle exec fastlane setup_app`."
+  )
+end
+
 platform :ios do
   desc "Regenerate Strand.xcodeproj from project.yml (XcodeGen is the source of truth)"
   lane :generate do
@@ -62,17 +143,30 @@ platform :ios do
     generate
   end
 
-  desc "Create the app record in App Store Connect (run once; safe to re-run — it no-ops if it exists)"
+  desc "Create Bundle IDs and enable capabilities needed by automatic signing"
+  lane :setup_signing do
+    asc_api_key
+    ensure_signing_identifiers
+    UI.success("Bundle IDs and capabilities are ready for #{APP_IDENTIFIER}")
+  end
+
+  desc "Create Bundle IDs/capabilities and the App Store Connect app record (run once; safe to re-run)"
   lane :setup_app do
-    produce(
-      api_key: asc_api_key,
-      app_identifier: APP_IDENTIFIER,
-      app_name: "NOOP",
-      language: "English (U.S.)",
-      # Extension bundle ids (widgets/watch/complications) and capabilities are auto-registered by
-      # Automatic signing during the first `beta` archive, so we only create the parent app here.
-      skip_itc: false,
-      skip_devcenter: true
+    asc_api_key
+    bundle_ids = ensure_signing_identifiers
+
+    app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+    if app
+      UI.success("App Store Connect app already exists for #{APP_IDENTIFIER}")
+    else
+      UI.message("Creating App Store Connect app record for #{APP_IDENTIFIER}")
+      create_app_store_record(bundle_ids.fetch(APP_IDENTIFIER))
+      UI.success("Created App Store Connect app record for #{APP_IDENTIFIER}")
+    end
+
+    UI.important(
+      "App Group #{APP_GROUP_ID} still has to exist on the Apple Developer team. " \
+      "If Xcode automatic signing cannot create it during beta, create it manually in Certificates, Identifiers & Profiles."
     )
   end
 
