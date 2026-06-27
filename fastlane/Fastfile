@@ -11,15 +11,15 @@
 #   • The version (MARKETING_VERSION) and build number (CURRENT_PROJECT_VERSION) live in project.yml,
 #     NOT the pbxproj — so `bump` edits project.yml then regenerates. TestFlight rejects a build whose
 #     number was already uploaded, so bump before re-shipping the same marketing version.
-#   • Signing is Automatic (team 4ZWB5A8GBF). Archiving with -allowProvisioningUpdates lets Xcode mint
+#   • Signing is Automatic (team 7A97GB45TD). Archiving with -allowProvisioningUpdates lets Xcode mint
 #     /refresh the Apple Distribution cert + App Store profiles for the app and every embedded target
 #     (widgets, watch, complications), authenticated by the same API key — no Match repo required.
 
 default_platform(:ios)
 
-APP_IDENTIFIER = "com.krsjoseph.noop".freeze
+APP_IDENTIFIER = "com.aretetechnologies.noop".freeze
 SCHEME = "NOOPiOS".freeze
-TEAM_ID = "4ZWB5A8GBF".freeze
+TEAM_ID = "7A97GB45TD".freeze
 PROJECT_YML = "../project.yml".freeze
 
 # Build an App Store Connect API key token from the env (.p8 + key id + issuer id).

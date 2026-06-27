@@ -29,6 +29,6 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.krsjoseph.noop</string>
+	<string>com.aretetechnologies.noop</string>
 </dict>
 </plist>
