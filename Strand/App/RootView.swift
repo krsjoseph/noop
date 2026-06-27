@@ -60,7 +60,10 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .devices: return "Devices"
         case .notifications: return "Notifications"
         case .automation: return "Automations"
-        case .smartAlarm: return "Smart Alarm"
+        // "Alarms" is the ONE alarm surface (#766): the strap's silent wake-alarm (moved in from
+        // Automations) and the evening wind-down reminder, in one place. Previously "Wind-Down" (#730).
+        // The case name and rawValue stay `smartAlarm`/"Smart Alarm" as the in-memory nav identifier only.
+        case .smartAlarm: return "Alarms"
         case .settings: return "Settings"
         case .support: return "Support"
         }
@@ -181,11 +184,11 @@ struct RootView: View {
 
     @ViewBuilder private var detail: some View {
         switch selection ?? .today {
-        case .today: TodayView()
+        case .today: todayDetail
         case .intelligence: IntelligenceView()
         case .insightsHub: InsightsHubView()
         case .coach: CoachView()
-        case .live: LiveView()
+        case .live: liveDetail
         case .breathe: BreathingView()
         case .intervals: IntervalTimerView()
         case .explore: MetricExplorerView()
@@ -206,9 +209,44 @@ struct RootView: View {
         case .notifications: NotificationSettingsView()
         case .automation: AutomationsView()
         case .smartAlarm: SmartAlarmView()
-        case .settings: SettingsView()
+        case .settings: settingsDetail
         case .support: SupportView()
         }
+    }
+
+    // Today's "Your Cards" rows push Stress/Health/Hydration detail pages via NavigationLink. On macOS
+    // the detail column has no enclosing NavigationStack of its own, so those pushes had no Back chrome
+    // and switching sidebar items hung (#753 Bug 2). Give the Today pane its own NavigationStack the
+    // same way MetricExplorerView wraps itself because "Explore is a standalone detail pane, so it owns
+    // its NavigationStack". iOS already wraps each tab in a NavigationStack via RootTabView, so this is
+    // macOS-only and leaves iOS untouched (TodayView's `.toolbar` stays on its own view body either way).
+    @ViewBuilder private var todayDetail: some View {
+        #if os(macOS)
+        NavigationStack { TodayView() }
+        #else
+        TodayView()
+        #endif
+    }
+
+    // Settings now pushes into Test Centre via a NavigationLink. On macOS the detail column has no
+    // enclosing NavigationStack of its own, so the same #753 fix applies: wrap the Settings pane in its
+    // own NavigationStack so the Test Centre push gets Back chrome. iOS already wraps each tab.
+    @ViewBuilder private var settingsDetail: some View {
+        #if os(macOS)
+        NavigationStack { SettingsView() }
+        #else
+        SettingsView()
+        #endif
+    }
+
+    // Live's strap-log card pushes into Test Centre (#507/#509). Same macOS NavigationStack wrap so the
+    // push gets Back chrome on the detail column; iOS already wraps each tab.
+    @ViewBuilder private var liveDetail: some View {
+        #if os(macOS)
+        NavigationStack { LiveView() }
+        #else
+        LiveView()
+        #endif
     }
 }
 

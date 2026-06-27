@@ -98,6 +98,71 @@ object BatteryEstimator {
         return Estimate(clamped, if (measuredRate != null) Source.MEASURED else Source.RATED, current)
     }
 
+    /**
+     * Side-effect-free diagnostic twin of [estimate]: returns the SAME Estimate plus a list of trace
+     * lines describing the full (t, soc) series, the detected charge step(s), the trailing discharge run
+     * start/span/drop, the fitted slope, and which gate (minSpanHours / minDropPct) decided source =
+     * measured vs rated. The Battery test mode gates this behind TestCentre.active(BATTERY); when the mode
+     * is off it is never called, so there is zero cost. Pure: no clock, no I/O. Twin of the Swift trace.
+     */
+    fun estimateTrace(samples: List<Pair<Long, Double>>, ratedHours: Double):
+        Pair<Estimate?, List<String>> {
+        val sorted = samples.sortedBy { it.first }
+        val last = sorted.lastOrNull()
+        val first0 = sorted.firstOrNull()
+        if (last == null || first0 == null) {
+            return null to listOf("battery series=0 readings, no reading to anchor to")
+        }
+        val lines = mutableListOf<String>()
+        lines.add("battery series=${sorted.size} readings span ${first0.first}..${last.first}s")
+        for (s in sorted) lines.add("battery read t=${s.first}s soc=${soc(s.second)}")
+
+        var startIdx = 0
+        if (sorted.size >= 2) {
+            for (i in sorted.size - 1 downTo 1) {
+                if (sorted[i].second > sorted[i - 1].second + chargeStepPct) {
+                    startIdx = i
+                    val rise = sorted[i].second - sorted[i - 1].second
+                    lines.add("battery chargeStep at t=${sorted[i].first}s +${soc(rise)}pp " +
+                        "(>chargeStepPct ${soc(chargeStepPct)})")
+                    break
+                }
+            }
+        }
+        val run = sorted.subList(startIdx, sorted.size)
+
+        var spanPass = false
+        var dropPass = false
+        if (run.size >= 2) {
+            val runFirst = run.first()
+            val runLast = run.last()
+            val spanHours = (runLast.first - runFirst.first) / 3600.0
+            val drop = runFirst.second - runLast.second
+            lines.add("battery dischargeRun start=${runFirst.first}s " +
+                "span=${hrs(spanHours)}h drop=${soc(drop)}pp")
+            spanPass = spanHours >= minSpanHours
+            dropPass = drop >= minDropPct
+            if (spanPass && dropPass && drop / spanHours > 0) {
+                lines.add("battery slope=${slope(drop / spanHours)}pct/h fitted from run endpoints")
+            }
+        } else {
+            lines.add("battery dischargeRun too short to fit (run=${run.size} readings)")
+        }
+
+        val measured = spanPass && dropPass && run.size >= 2 &&
+            (run.first().second - run.last().second) /
+            ((run.last().first - run.first().first) / 3600.0) > 0
+        lines.add("battery gate minSpanHours ${hrs(minSpanHours)} " +
+            "${if (spanPass) "PASS" else "FAIL"}, minDropPct ${soc(minDropPct)} " +
+            "${if (dropPass) "PASS" else "FAIL"} -> source=${if (measured) "measured" else "rated"}")
+
+        return estimate(samples, ratedHours) to lines
+    }
+
+    private fun soc(v: Double) = String.format(Locale.US, "%.1f", v)
+    private fun hrs(v: Double) = String.format(Locale.US, "%.1f", v)
+    private fun slope(v: Double) = String.format(Locale.US, "%.1f", v)
+
     /** Display rule from #713: hours under 48h ("~14h"), days above ("~4.5 days"). Unit text only, the UI
      *  adds the "left" / "remaining" copy. Locale-fixed so the tests stay stable. */
     fun label(hours: Double): String =

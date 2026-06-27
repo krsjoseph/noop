@@ -127,6 +127,72 @@ struct PostBondTimeoutLoopDetector {
     }
 }
 
+/// #747 / #750: decides when a strap that keeps REFUSING the encrypted bond ("Encryption/Authentication is
+/// insufficient", no genuine bond in between) has refused enough times that hammering it further is
+/// pointless. Two responsibilities, both pure so they're unit-testable without a CoreBluetooth seam:
+///
+///  - #747 PAUSE: after `giveUpThreshold` consecutive refusals the auto-reconnect should STOP re-kicking
+///    (it can't bond without the user freeing the strap / re-pairing), so the caller pauses the rescan and
+///    surfaces an honest hint instead of looping forever and draining the battery.
+///  - #750 EPITAPH: at the same moment, emit ONE summary "epitaph" line recording how the bond attempt
+///    died (the streak + an opaque, install-local id), so a shared strap log carries the cause without any
+///    PII (no MAC, no serial, just the count and a short opaque token).
+///
+/// The streak accumulates across the reconnect loop (a disconnect does NOT reset it) and is cleared only by
+/// a genuine bond or an explicit user reconnect, exactly like BLEManager's existing `bondRefusalStreak`.
+struct BondRefusalGiveUp {
+    /// Consecutive bond refusals before we pause auto-reconnect + write the epitaph. 5 (not 2, where the
+    /// pairing HINT already shows): the hint asks the user to act; we give them several reconnect cycles to
+    /// do it before we stop hammering. A genuinely held/stale strap reaches 5 within a couple of minutes.
+    let giveUpThreshold: Int
+
+    private(set) var refusals = 0
+    /// True once `giveUpThreshold` is reached: auto-reconnect should pause and the epitaph has been (or
+    /// should be) written. Stays true until `reset()` so the pause holds across the loop.
+    private(set) var gaveUp = false
+
+    init(giveUpThreshold: Int = 5) { self.giveUpThreshold = giveUpThreshold }
+
+    /// Record one bond refusal. Returns true if THIS refusal freshly crossed the give-up threshold (so the
+    /// caller pauses the reconnect + writes the epitaph exactly once).
+    mutating func recordRefusal() -> Bool {
+        refusals += 1
+        if !gaveUp && refusals >= giveUpThreshold {
+            gaveUp = true
+            return true
+        }
+        return false
+    }
+
+    /// Clear the streak: a genuine bond landed, or the user explicitly reconnected. Re-arms auto-reconnect.
+    mutating func reset() {
+        refusals = 0
+        gaveUp = false
+    }
+
+    /// #750: the one-line bond-refusal EPITAPH. Records the streak + an OPAQUE install-local id only, never
+    /// a MAC or serial. `opaqueId` should be a short token derived from the CoreBluetooth-local peripheral
+    /// UUID (per-install, not the hardware address), which carries no PII. Pure so a fixture pins it. No
+    /// em-dash (project rule). Byte-identical to the Android twin.
+    static func epitaphLine(refusals: Int, opaqueId: String) -> String {
+        "Bond epitaph: the strap [\(opaqueId)] refused the encrypted bond \(refusals)x in a row with no successful bond - giving up auto-reconnect to stop hammering it. It is almost certainly held by the official WHOOP app or a stale phone pairing. Free it (close the WHOOP app, put the strap in pairing mode, forget it in Bluetooth settings) then reconnect in NOOP."
+    }
+
+    /// #747: the honest user-facing hint shown when auto-reconnect pauses. Tells them WHY it stopped and how
+    /// to get going again. Pure; no em-dash. Byte-identical to the Android twin.
+    static func pausedHint() -> String {
+        "NOOP stopped retrying because your strap keeps refusing to pair. It is likely still held by the official WHOOP app, or your phone is holding an old pairing. Close the WHOOP app, put the strap in pairing mode (tap until the LEDs flash blue), and if it is listed in your Bluetooth settings choose Forget This Device. Then tap Connect to try again."
+    }
+
+    /// #750: a short OPAQUE token from a CoreBluetooth-local peripheral UUID for the epitaph. The CB UUID is
+    /// per-install (NOT the hardware MAC), and we keep only its first 8 hex chars, so the token is stable
+    /// within a log but carries no device-identifying PII. Pure + deterministic. Twin of the Android helper.
+    static func opaqueId(fromLocalUUID uuid: String) -> String {
+        let hex = uuid.replacingOccurrences(of: "-", with: "").lowercased()
+        return String(hex.prefix(8))
+    }
+}
+
 /// Decides when a completed sync that handed over only the strap's console/diagnostic output (no sensor
 /// records) is sustained enough to warn that the strap's clock has lost sync and it isn't banking to flash
 /// (#77 / #91 / #120). A SINGLE empty cycle is common on a perfectly healthy strap — the strap can hand
@@ -393,6 +459,18 @@ public final class BLEManager: NSObject, ObservableObject {
     /// `===` identity check would NOT tell a healthy session apart from a later loop cycle. Named distinctly
     /// from Repository.swift's v7.0.3 refreshGen publish token so the two never get confused.
     private var connectGeneration = 0
+    // MARK: Connection & Sync test mode (Test Centre) - diagnostic-only counters
+    //
+    // These exist purely to feed the .connection-tagged diagnostic lines + readout when that test mode is
+    // active; they change NO connect / bond / offload behaviour. Every emit site that reads them is gated
+    // behind TestCentre.active(.connection) BEFORE any string is built, so the counters are still
+    // maintained cheaply (a Date()/Int) but nothing tagged is ever produced when the mode is off.
+    /// Wall time the current connect attempt began (the scan/connect call), to measure connect latency at
+    /// didConnect. nil between attempts; set when connect() kicks the radio.
+    private var connectAttemptStartedAt: Date?
+    /// Count of INVOLUNTARY reconnects this run (a drop or failed-connect that was not user-initiated),
+    /// surfaced as the reconnect-churn count. Reset by an intentional disconnect.
+    private var connReconnectCount = 0
     /// #126 false-alarm guard: tracks CONSECUTIVE console-only completed syncs so the "clock has lost
     /// sync" banner only fires on sustained emptiness, not a single transient empty cycle on a healthy strap.
     private var emptySyncTracker = EmptySyncTracker()
@@ -514,6 +592,16 @@ public final class BLEManager: NSObject, ObservableObject {
     /// (so it accumulates across the reconnect loop). Distinct from `pinnedBondRefusals`, which is gated to
     /// the multi-WHOOP pinned peripheral and drives the #52 stale-pin handoff.
     private var bondRefusalStreak = 0
+    /// #747 / #750: after the bond is refused persistently, pause auto-reconnect (stop hammering) and write
+    /// a one-line epitaph. Fed by the SAME refusal events as `bondRefusalStreak`; its higher give-up
+    /// threshold fires once the pairing HINT has had several cycles to be acted on. Reset on a genuine bond
+    /// or an explicit user reconnect (so a manual retry re-arms auto-reconnect).
+    private var bondGiveUp = BondRefusalGiveUp()
+    /// True while auto-reconnect is PAUSED by the #747 give-up. The disconnect-rescan and the
+    /// failed-connect backoff both consult this and skip scheduling a reconnect; a manual connect()/
+    /// disconnect() clears it via `bondGiveUp.reset()`. Distinct from `intentionalDisconnect` so a paused
+    /// link still reports its state honestly rather than looking like a user teardown.
+    private var autoReconnectPausedForBondLoop = false
     /// Multi-WHOOP stale-pin recovery (#52). Consecutive "Encryption/Authentication is insufficient" bond
     /// refusals on the CURRENTLY PINNED peripheral. A stale registry pin (pointing at a strap that bonds to
     /// the official app / isn't really here) makes `connect()` drop the strap that DOES bond and loop
@@ -603,8 +691,9 @@ public final class BLEManager: NSObject, ObservableObject {
         // Route deviceId through the device registry: use the active device's id (migration v15 seeds
         // a single 'my-whoop' row as active, so this is still "my-whoop" today — zero behaviour change).
         // Guarded + best-effort: if the registry is empty/unreadable, deviceId stays as it was, so no
-        // crash and no behaviour change. registryQueue is nonisolated/Sendable (GRDB-serialized).
-        if let activeId = try? DeviceRegistryStore(dbQueue: store.registryQueue).activeDeviceId(),
+        // crash and no behaviour change. registryWriter is nonisolated/Sendable (the Pool manages
+        // its own concurrency).
+        if let activeId = try? DeviceRegistryStore(dbQueue: store.registryWriter).activeDeviceId(),
            !activeId.isEmpty {
             self.deviceId = activeId
         }
@@ -629,7 +718,12 @@ public final class BLEManager: NSObject, ObservableObject {
                                 onChunk: { [weak self] decoded, console in
                                     if decoded { self?.state.decodedChunksThisSession += 1 }
                                     if console { self?.state.consoleChunksThisSession += 1 }
-                                })
+                                },
+                                // Connection & Sync test mode (Test Centre): the cheap gate + tagged sink the
+                                // Backfiller checks before building any .connection diagnostic line. The gate is
+                                // one UserDefaults bool; nothing is emitted (or built) when the mode is off.
+                                connectionActive: { TestCentre.active(.connection) },
+                                connectionLog: { [weak self] s in self?.state.append(log: s, domain: .connection) })
         // Strand: no server uploader/sync — all data stays on-device.
 
         // Retro-decode: when the decoder gains a historical layout (e.g. WHOOP 4.0 v25), re-run every
@@ -676,6 +770,16 @@ public final class BLEManager: NSObject, ObservableObject {
     // MARK: Public API
     public func connect(model: WhoopModel = .persisted) {
         intentionalDisconnect = false
+        // #747/#750: a connect() that fires while the bond-loop pause is active can only be USER-initiated
+        // (the pause suppresses the auto-reconnect schedulers), so re-arm: clear the give-up streak + pause
+        // so this fresh attempt isn't immediately re-paused and the auto-reconnect works again if it bonds.
+        if autoReconnectPausedForBondLoop {
+            bondGiveUp.reset()
+            autoReconnectPausedForBondLoop = false
+        }
+        // Connection test mode: stamp when this connect attempt began so didConnect can report the connect
+        // latency. A plain Date() assignment, no behaviour change; only read behind the .connection gate.
+        connectAttemptStartedAt = Date()
         selectedModel = model
         // Battery "~X days left" fallback (#713): a 5/MG runs far longer than a 4.0, so point the estimator's
         // rated-life fallback at the connected family. The Today badge reads state.batteryEstimate (which uses
@@ -756,6 +860,8 @@ public final class BLEManager: NSObject, ObservableObject {
         // (manual) reconnect attempts the full R10/R11 stream again rather than inheriting old suspicion.
         marginalRadio.reset()
         postBondLoop.reset()   // #617: a clean teardown clears the bond-loop streak so a manual reconnect starts fresh
+        bondGiveUp.reset()     // #747/#750: a clean teardown clears the bond-refusal give-up + un-pauses auto-reconnect
+        autoReconnectPausedForBondLoop = false
         state.reconnectGuide = nil   // #711: a user-initiated teardown resolves the re-pair guide (no longer looping)
         readoptingTo = nil   // #52: a clean teardown abandons any in-flight pin handoff
         standardHRFallback = false
@@ -1272,6 +1378,25 @@ public final class BLEManager: NSObject, ObservableObject {
         if let bf = backfiller,
            let summary = Backfiller.sessionSummaryLine(rows: bf.sessionRowsPersisted, motion: bf.sessionMotionRows, skinTemp: bf.sessionSkinTempRows, nights: bf.sessionNights) {
             log(summary)
+        }
+        // Connection test mode: the offload OUTCOME the readout's lastOffloadResult id binds. Gated
+        // zero-cost (the .connection bool is read before any string is built). Diagnostic only - it reads
+        // the same per-session tallies the existing summary above does, changing no offload behaviour. A
+        // timeout/idle-cap exit is a STALL; a HISTORY_COMPLETE with rows is a clean complete; with none it
+        // is an empty (console-only) cycle.
+        if TestCentre.active(.connection), let bf = backfiller {
+            let rows = bf.sessionRowsPersisted
+            let result: String
+            if reason == "timeout" {
+                result = "stalled (idle timeout, rows=\(rows) so far)"
+            } else if reason == "HISTORY_COMPLETE" {
+                result = rows > 0
+                    ? "complete rows=\(rows) nights=\(bf.sessionNights)"
+                    : "empty (console only, no sensor records)"
+            } else {
+                result = "\(reason) rows=\(rows)"
+            }
+            state.append(log: "offload result=\(result)", domain: .connection)
         }
         // #547 RE-POLLUTION: this session's ingest gate dropped bad-clock records, so the strap has a
         // wandering clock and may have banked similar garbage on an OLDER build whose gate was weaker. Arm
@@ -1848,6 +1973,14 @@ public final class BLEManager: NSObject, ObservableObject {
     private func timestamp() -> String {
         BLEManager.logTimeFormatter.string(from: Date())
     }
+
+    /// Emit one Connection & Sync test-mode bond-state line, gated zero-cost behind TestCentre.active(.connection).
+    /// The gate (one UserDefaults bool) is read BEFORE the tagged string is appended, so this is a no-op when
+    /// the mode is off. Diagnostic only - it never changes the bond path; it just records the transition.
+    private func emitConnectionBondState(_ detail: String) {
+        guard TestCentre.active(.connection) else { return }
+        state.append(log: "bondState \(detail)", domain: .connection)
+    }
     private func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String(format: "%02x", $0) }.joined()
     }
@@ -2084,6 +2217,9 @@ public final class BLEManager: NSObject, ObservableObject {
             let from = nowSec - BLEManager.inactivityLookbackSeconds
             let gravity = await collector?.recentGravity(from: from, to: nowSec) ?? []
             guard !gravity.isEmpty else { return }
+            // Sleep & Rest test mode (Group E): bank the live gravity window for the readout's coverage
+            // figure. Gated on the zero-cost active() Bool, so this is a no-op when the mode is off.
+            if TestCentre.active(.sleep) { state.recordSleepLiveGravity(gravity) }
 
             let decision = SedentaryDetector.evaluate(
                 gravity, state: InactivityPrefs.loadState(),
@@ -2222,7 +2358,28 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         lastDataAt = Date()
         log("Connected — discovering services")
+        // Connection test mode: report the connect latency + the uptime-start marker the readout reads.
+        // Gated zero-cost: the .connection bool is read before any string is built, so this is a no-op
+        // when the mode is off. Behaviour-neutral diagnostics only - the connect flow above is unchanged.
+        if TestCentre.active(.connection) {
+            let nowUnix = Int(Date().timeIntervalSince1970)
+            let latencyMs = connectAttemptStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) }
+            state.append(log: "connect up gen=\(connectGeneration) "
+                + "latencyMs=\(latencyMs.map(String.init) ?? "?") uptimeStart=\(nowUnix)", domain: .connection)
+        }
         discoverPrimaryServices(on: peripheral)
+    }
+
+    /// Connection test mode: a STABLE, integer-token reason for a BLE error, for parity with Android's
+    /// integer GATT status (which emits `status<N>`) and a tighter export surface than a localized,
+    /// locale-dependent free-text string. We emit the `CBError`/`CBATTError` raw enum value (an Int), so
+    /// the token is locale-independent and carries no free text. A nil error reads "unknown"; an error
+    /// from neither CoreBluetooth domain reads "code?" (no localizedDescription, which could carry text).
+    private func connErrorToken(_ error: Error?) -> String {
+        guard let error else { return "unknown" }
+        if let cb = error as? CBError { return "cbError\(cb.code.rawValue)" }
+        if let att = error as? CBATTError { return "cbAttError\(att.code.rawValue)" }
+        return "code?"
     }
 
     public func centralManager(_ central: CBCentralManager,
@@ -2318,14 +2475,40 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         resetCharacteristics()
         puffinRecorder.flush()   // persist any buffered puffin capture frames before reconnect
         Task { @MainActor in await collector?.flushStandardHR() }   // persist any buffered 0x2A37 HR
-        if !intentionalDisconnect {
+        if autoReconnectPausedForBondLoop {
+            // #747: the bond keeps being refused, so auto-reconnect is paused: we stop hammering a strap that
+            // can't bond (the epitaph + paused hint were already surfaced when the give-up tripped). The user
+            // re-arms it by tapping Connect. We do NOT schedule a rescan here.
+            log("Disconnected\(error.map { ": \($0.localizedDescription)" } ?? ""); auto-reconnect paused (strap keeps refusing to pair; tap Connect once it's free)")
+            if TestCentre.active(.connection) {
+                state.append(log: "connect down (uptime ends)", domain: .connection)
+                state.append(log: "reconnect paused=bondLoop (strap refusing bond)", domain: .connection)
+            }
+        } else if !intentionalDisconnect {
             log("Disconnected\(error.map { " — \($0.localizedDescription)" } ?? ""); rescanning in 3s")
+            // Connection test mode: count + describe the involuntary reconnect churn, and mark the link
+            // down for the uptime readout. Gated zero-cost (the .connection bool is read before any string
+            // is built). Diagnostic only - the rescan above is unchanged. The count increments only on an
+            // INVOLUNTARY drop, mirroring an actual reconnect cycle.
+            connReconnectCount += 1
+            if TestCentre.active(.connection) {
+                let reason = (error as? CBError)?.code == .connectionTimeout
+                    ? "connectionTimeout" : connErrorToken(error)
+                state.append(log: "connect down (uptime ends)", domain: .connection)
+                state.append(log: "reconnect n=\(connReconnectCount) reason=\(reason)", domain: .connection)
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self, !self.intentionalDisconnect else { return }
                 self.connect()
             }
         } else {
             log("Disconnected (intentional)")
+            // A user-initiated teardown ends the churn count for the run and marks the link down so the
+            // uptime readout reads "not connected" rather than a stale uptime. Gated zero-cost.
+            connReconnectCount = 0
+            if TestCentre.active(.connection) {
+                state.append(log: "connect down (intentional)", domain: .connection)
+            }
         }
     }
 
@@ -2337,6 +2520,17 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // re-presenting the now-stale pairing key, so every reconnect loops on this same error with no
         // recovery and no user guidance. Surface an actionable re-pair guide instead of failing silently —
         // NOOP itself works fine on the new firmware once the stale bond is cleared. (5/MG firmware reset, 2026-06)
+        // Connection test mode: a failed connect is part of the reconnect churn the tester is chasing.
+        // Gated zero-cost; diagnostic only - the backoff/guide logic below is unchanged.
+        if TestCentre.active(.connection) {
+            let reason: String
+            if let cbErr = error as? CBError, cbErr.code == .peerRemovedPairingInformation {
+                reason = "peerRemovedPairing"   // stable token (strap re-bonded elsewhere or firmware reset)
+            } else {
+                reason = connErrorToken(error)
+            }
+            state.append(log: "reconnect n=\(connReconnectCount) failedConnect reason=\(reason)", domain: .connection)
+        }
         if let cbErr = error as? CBError, cbErr.code == .peerRemovedPairingInformation {
             state.reconnectGuide = """
             Your strap's Bluetooth pairing was reset — usually by a WHOOP firmware update, or the official WHOOP app reconnecting. NOOP works fine on the new firmware; you just need to re-pair:
@@ -2352,7 +2546,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // edge of range — #414). The disconnect path reschedules a rescan, but didFailToConnect never
         // did, so the loop died here until a manual reconnect. Reschedule with a capped exponential
         // backoff (3, 6, 12, 24, 48, 60s…) so a strap that's genuinely out of range doesn't hammer BLE.
-        guard !intentionalDisconnect else { return }
+        // #747: don't reschedule while the bond-loop pause is active; the user must free the strap first.
+        guard !intentionalDisconnect, !autoReconnectPausedForBondLoop else { return }
         failedConnectAttempts += 1
         let delay = min(60.0, 3.0 * pow(2.0, Double(failedConnectAttempts - 1)))
         log("Reconnecting in \(Int(delay))s (attempt \(failedConnectAttempts))")
@@ -2518,6 +2713,14 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             log("Confirmed write failed: \(error.localizedDescription)")
             let insufficient = error.localizedDescription.lowercased().contains("encryption")
                 || error.localizedDescription.lowercased().contains("authentication")
+            // Connection test mode: surface the failed-encrypt / "held by another central" hint as an
+            // upfront tagged line (the strap is still bonded to the official WHOOP app or a stale OS
+            // pairing, so the just-works bond is refused). Gated zero-cost; diagnostic only.
+            if TestCentre.active(.connection) {
+                state.append(log: insufficient
+                    ? "otherCentral bondWrite refused=insufficient (strap likely held by the WHOOP app or a stale pairing; cannot start a fresh encrypted bond)"
+                    : "otherCentral bondWrite failed=\(connErrorToken(error))", domain: .connection)
+            }
             // WHOOP 5/MG first connect: CoreBluetooth won't start a fresh just-works bond against a strap
             // still bonded to the official WHOOP app, so the CLIENT_HELLO .withResponse write fails with
             // "Encryption/Authentication is insufficient" and the link never authenticates. Surface
@@ -2536,6 +2739,19 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     log("WHOOP 5/MG: bond refused \(bondRefusalStreak)× with no successful bond — the strap is refusing the encrypted link (WHOOP app holds it, or a stale iOS pairing). Surfacing pairing-mode + forget-device guidance (#78).")
                 } else {
                     log("WHOOP 5/MG: bond write refused (insufficient) — retrying once; will surface pairing-mode guidance if it persists (#78).")
+                }
+                // #747 / #750: feed the same refusal into the give-up tracker. Once it crosses the higher
+                // threshold (the pairing hint has had several cycles to be acted on), pause auto-reconnect so
+                // we stop hammering a strap that can't bond, write the one-line epitaph (opaque id only, no
+                // PII), and surface the honest paused hint. A genuine bond or a manual reconnect re-arms it.
+                if bondGiveUp.recordRefusal() {
+                    autoReconnectPausedForBondLoop = true
+                    let opaque = BondRefusalGiveUp.opaqueId(fromLocalUUID: peripheral.identifier.uuidString)
+                    log(BondRefusalGiveUp.epitaphLine(refusals: bondGiveUp.refusals, opaqueId: opaque))
+                    state.pairingHint = BondRefusalGiveUp.pausedHint()
+                    if TestCentre.active(.connection) {
+                        state.append(log: "bond gaveUp refusals=\(bondGiveUp.refusals) id=\(opaque) (auto-reconnect paused)", domain: .connection)
+                    }
                 }
             }
             // Multi-WHOOP stale-pin recovery (#52). When a stale registry pin points at a strap that keeps
@@ -2570,7 +2786,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
                 state.pairingHint = nil
                 bondRefusalStreak = 0         // #78: a genuine bond resets the refusal streak
+                bondGiveUp.reset()            // #747/#750: a genuine bond clears the give-up + re-arms auto-reconnect
+                autoReconnectPausedForBondLoop = false
                 noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
+                emitConnectionBondState("encryptedBond family=whoop5 (CLIENT_HELLO acked)")
                 log("WHOOP 5/MG: CLIENT_HELLO acked — link established; subscribing notify chars (experimental).")
             }
             for c in whoop5NotifyCharacteristics where !c.isNotifying {
@@ -2624,6 +2843,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             state.encryptedBond = true   // WHOOP 4 confirmed-write bond is always genuine — #69
             bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
             noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
+            emitConnectionBondState("encryptedBond family=whoop4 (confirmed write acked)")
             log("BONDED (confirmed write acknowledged) — custom channels should now flow")
         }
         // Run the connect handshake EXACTLY ONCE per connection. didWriteValueFor re-fires on EVERY
@@ -2824,10 +3044,22 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                         log("Strap newest banked record: \(d.string(from: Date(timeIntervalSince1970: TimeInterval(newest)))) (from data range)")
                         // Also surface the OLDEST banked record so one connect shows the full backlog SPAN — the
                         // depth a deep oldest-first drain has to cover before recent nights land (#364).
-                        if let oldest = BLEManager.dataRangeOldestUnix(from: frame), oldest < newest {
+                        let oldest = BLEManager.dataRangeOldestUnix(from: frame)
+                        if let oldest, oldest < newest {
                             backfiller?.sessionOldestUnix = oldest   // #547: closes the session-relative window
                             let spanDays = (newest - oldest) / 86_400
                             log("Strap banked history span: \(d.string(from: Date(timeIntervalSince1970: TimeInterval(oldest)))) → newest (~\(spanDays) day\(spanDays == 1 ? "" : "s") of backlog, drained oldest-first)")
+                        }
+                        // Connection test mode: promote the CLOCK-DRIFT picture from the buried raw frames to one
+                        // upfront tagged line - the strap-reported [oldest, newest] window vs wall clock with a
+                        // FUTURE-DATE flag (#767 / #754 cluster). Gated zero-cost; pure formatter, no behaviour
+                        // change (the offload/watchdog logic above already ran on the same decoded values).
+                        if TestCentre.active(.connection) {
+                            let line = ConnectionTrace.clockDriftLine(
+                                oldestUnix: (oldest.map { $0 < newest } ?? false) ? oldest : nil,
+                                newestUnix: newest,
+                                wallNowUnix: Int(Date().timeIntervalSince1970))
+                            state.append(log: line, domain: .connection)
                         }
                     }
                 }

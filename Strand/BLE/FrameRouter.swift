@@ -1,5 +1,6 @@
 import Foundation
 import WhoopProtocol
+import StrandAnalytics
 
 /// Pure decode→state router. Takes a COMPLETE (already reassembled) frame, decodes it with
 /// WhoopProtocol.parseFrame, and updates LiveState. No CoreBluetooth — fully unit-testable.
@@ -31,7 +32,17 @@ public final class FrameRouter {
         // `objectWillChange` → a full LiveView.body re-eval (these frames are separate BLE
         // notifications, so SwiftUI can't coalesce them). Guarding collapses a steady flood to one
         // re-eval per genuine change instead of one per frame.
-        if state.lastFrameType != parsed.typeName { state.lastFrameType = parsed.typeName }
+        if state.lastFrameType != parsed.typeName {
+            // Connection test mode: one tagged line per genuine frame-TYPE transition (not per frame - the
+            // existing change-guard naturally throttles it), so a report shows the live frame cadence. Gated
+            // zero-cost: the .connection bool is read before any string is built, and we only ever reach here
+            // on a real type change, so the raw flood is collapsed exactly as the perf guard intends.
+            if TestCentre.active(.connection) {
+                state.append(log: "frameTiming type=\(parsed.typeName) t=\(Int(Date().timeIntervalSince1970))s",
+                             domain: .connection)
+            }
+            state.lastFrameType = parsed.typeName
+        }
 
         switch parsed.typeName {
         case "REALTIME_DATA", "REALTIME_RAW_DATA":
@@ -42,6 +53,11 @@ public final class FrameRouter {
             // byte across many frames, so an unguarded write re-renders the whole console for nothing.
             if let hr = parsed.parsed["heart_rate"]?.intValue, hr >= 30, hr <= 220, state.heartRate != hr {
                 state.heartRate = hr
+                // Sleep & Rest test mode (Group E): bank the live HR sample for the readout's HR-density
+                // figure. Gated on the zero-cost active() Bool, so this is a no-op when the mode is off.
+                if TestCentre.active(.sleep) {
+                    state.recordSleepLiveHr(ts: Int(Date().timeIntervalSince1970), bpm: hr)
+                }
             }
             // The realtime stream usually reports rr_count=0; only update R-R when this frame
             // actually carries intervals, so we don't wipe R-R sourced from the 0x2A37 profile.

@@ -3,6 +3,7 @@ import Combine
 import WhoopProtocol
 import WhoopStore
 import StrandAnalytics
+import StrandImport
 #if os(iOS)
 import UserNotifications
 #endif
@@ -190,7 +191,13 @@ final class AppModel: ObservableObject {
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
         // was computed per day. `live` is captured strongly (created just above) — the engine outlives the
         // app session, so there's no retain-cycle risk worth a weak dance here. (Sleep overhaul §2.5.)
-        self.intelligence.diagnosticSink = { [live] line in live.append(log: line) }
+        self.intelligence.diagnosticSink = { [live] line, domain in live.append(log: line, domain: domain) }
+        // Workouts & GPS test mode (Test Centre): wire the Repository (auto-detect inputs/why + cross-source
+        // dedup decisions) and the GPS recorder (fix-progress) tagged sinks to the SAME shareable strap log.
+        // Each emitter re-checks `TestCentre.active(.workouts)` before building a line, so these wirings are
+        // inert (one UserDefaults bool read) when the mode is off. `live` is captured strongly, as above.
+        self.repo.workoutsLog = { [live] line in live.append(log: line, domain: .workouts) }
+        self.gpsRecorder.workoutsLog = { [live] line in live.append(log: line, domain: .workouts) }
         // Smooth HR centrally so it's solid everywhere it's shown.
         live.$heartRate.sink { [weak self] _ in self?.ingestHR() }.store(in: &hrCancellables)
         live.$rr.sink { [weak self] _ in self?.ingestHR() }.store(in: &hrCancellables)
@@ -243,10 +250,23 @@ final class AppModel: ObservableObject {
         }.store(in: &hrCancellables)
         // A completed backfill has just written strap history. Refresh the dashboard cache,
         // but leave heavyweight analysis to its own guarded/background-friendly path.
+        //
+        // #755 COALESCE: a strap whose firmware segments a deep offload into many small HISTORY_COMPLETE
+        // slices stamps `lastSyncedAt` once PER slice (BLEManager.exitBackfilling), seconds apart, for the
+        // whole multi-minute download. Without coalescing each slice fired refreshAfterCompletedBackfill()
+        // — a full repo.refresh (~50 store reads) + analyzeRecent — and every one re-fired TodayView's
+        // ~50-read loadAll, all contending with the backfill's bulk writes on the single-connection store.
+        // On a heavy + actively-syncing history that stacked into a ~10s freeze. `.debounce` collapses the
+        // slice storm: it suppresses the intermediate emissions and fires ONCE, 2s after the stream goes
+        // quiet — i.e. after the LAST slice lands (the backfill is done). Crucially it ALWAYS delivers the
+        // trailing edge, so the dashboard still refreshes with the newly-synced data — freshness is kept,
+        // we just stop re-doing it dozens of times mid-download. removeDuplicates() still drops a slice that
+        // stamped an identical second; the trailing refresh after a real change is never dropped.
         live.$lastSyncedAt
             .dropFirst()
             .compactMap { $0 }
             .removeDuplicates()
+            .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 Task { [weak self] in await self?.refreshAfterCompletedBackfill() }
             }
@@ -344,7 +364,7 @@ final class AppModel: ObservableObject {
     /// model's `scan()` / `disconnect()`), so the coordinator never references BLEManager directly.
     private func wireSourceCoordinator() async {
         guard sourceCoordinator == nil, let store = await repo.storeHandle() else { return }
-        let registry = DeviceRegistry(store: DeviceRegistryStore(dbQueue: store.registryQueue))
+        let registry = DeviceRegistry(store: DeviceRegistryStore(dbQueue: store.registryWriter))
         registry.reload()
         let coordinator = SourceCoordinator(
             registry: registry,
@@ -440,7 +460,46 @@ final class AppModel: ObservableObject {
         // Make the session durable from the first instant (#529): persist it now so an OS kill right
         // after Start — before any HR sample lands — can still be rehydrated + ended on relaunch.
         persistActiveWorkout()
+        // Workouts & GPS test mode (Test Centre): one session-start line tagged `.workouts`. Zero-cost when
+        // off (the gate is one UserDefaults bool read), so the lifecycle of a missing workout is visible.
+        emitWorkoutsTrace(WorkoutsTrace.sessionLine(
+            event: "start", sportKey: WorkoutSource.traceSportKey(resolved), hrSamples: 0))
         buzz(loops: 1)
+    }
+
+    /// Emit one Workouts & GPS test-mode line tagged `.workouts` iff the mode is on. The cheap
+    /// `TestCentre.active(.workouts)` gate is checked BEFORE the @autoclosure builds the line, so nothing is
+    /// constructed when the mode is off. Diagnostic only - the session lifecycle is unchanged.
+    private func emitWorkoutsTrace(_ build: @autoclosure () -> String) {
+        guard TestCentre.active(.workouts) else { return }
+        live.append(log: build(), domain: .workouts)
+    }
+
+    /// The gated sink the import handlers pass to the importers for the Import & Data Ingest test mode.
+    /// Returns nil when the mode is off, so the importer takes its byte-identical untraced path (it builds
+    /// no trace line and captures nothing extra); returns a `@Sendable` closure that hops the batch of
+    /// already-redacted lines to the main actor (LiveState is @MainActor) and appends them, tagged
+    /// `.dataImport`, in order, when the mode is on. The importer runs nonisolated, so the main-actor hop
+    /// keeps the append race-free. One UserDefaults bool read decides whether any of this runs.
+    private func importTraceSink() -> (@Sendable ([String]) -> Void)? {
+        guard TestCentre.active(.dataImport) else { return nil }
+        return { [weak self] lines in
+            Task { @MainActor in
+                guard let self else { return }
+                for line in lines { self.live.append(log: line, domain: .dataImport) }
+            }
+        }
+    }
+
+    /// Emit the file-meta line for an import run (detected kind + extension + size BUCKET, never the path or
+    /// name), tagged `.dataImport`, iff the mode is on. Called by the handlers that have the materialized
+    /// URL. The size is bucketed inside `ImportTrace`, so no byte-exact size or filename leaves the device.
+    private func emitImportFileMeta(kind: DataSourceKind, url: URL) {
+        guard TestCentre.active(.dataImport) else { return }
+        let ext = url.pathExtension
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
+        live.append(log: ImportTrace.fileMetaLine(sourceKind: kind, ext: ext, sizeBytes: size),
+                    domain: .dataImport)
     }
 
     /// Persist the in-flight manual workout to `UserDefaults` so it survives the app being killed mid-
@@ -497,7 +556,14 @@ final class AppModel: ObservableObject {
         let samples = w.samples
         // Save when there's an HR window OR a real GPS route — a GPS-only walk (HR not streaming) is
         // still a workout (parity with Android's `samples.size < 2 && track.size < 2` discard gate).
-        guard samples.count >= 2 || route != nil else { lastWorkout = nil; return }
+        guard samples.count >= 2 || route != nil else {
+            // Workouts & GPS test mode: record WHY a session vanished (too short / no route), tagged `.workouts`.
+            emitWorkoutsTrace(WorkoutsTrace.sessionLine(
+                event: "discarded", sportKey: WorkoutSource.traceSportKey(w.sport),
+                hrSamples: samples.count, gpsPoints: route == nil ? 0 : nil))
+            lastWorkout = nil
+            return
+        }
         let end = Date()
         let avg = samples.isEmpty ? nil
             : Int((Double(samples.map(\.bpm).reduce(0, +)) / Double(samples.count)).rounded())
@@ -524,6 +590,14 @@ final class AppModel: ObservableObject {
         // device only; mirrors the moments / sleepMarks UserDefaults persistence. (#524)
         if let route { RouteStore.store(route, startTs: startTs, sport: w.sport) }
         lastWorkout = row
+        // Workouts & GPS test mode: one session-end summary tagged `.workouts` (the lastSessionSummary readout
+        // source) carrying the captured HR window size, the duration, and the accepted GPS point count, so the
+        // lifecycle of a saved session is visible end to end. `pointCount` is the recorder's accepted-fix tally
+        // (not reset by stop), 0 for a non-GPS session. Zero-cost when off.
+        emitWorkoutsTrace(WorkoutsTrace.sessionLine(
+            event: "end", sportKey: WorkoutSource.traceSportKey(w.sport), hrSamples: samples.count,
+            durationSec: Int(end.timeIntervalSince(w.start)),
+            gpsPoints: wasGps ? gpsRecorder.pointCount : nil))
         buzz(loops: 2)
         Task { [weak self] in
             guard let self else { return }
@@ -726,6 +800,23 @@ final class AppModel: ObservableObject {
     /// Used by the notification-pattern picker and coaching features.
     func buzz(pattern: UInt8, loops: UInt8 = 1) {
         ble.send(.runHapticsPattern, payload: [pattern, loops, 0, 0, 0])
+    }
+
+    /// Tell the strap to STOP an in-progress haptic pattern (#769). The biofeedback layers (Breathe /
+    /// "Calm me" / resonance) schedule a stream of buzzes; cancelling the app-side DispatchWorkItems stops
+    /// scheduling NEW pulses but cannot recall a pattern the strap is already mid-way through. If the link
+    /// then drops mid-pattern, the strap's UI/haptic manager can be left wedged on that pattern with no app
+    /// able to clear it. STOP_HAPTICS (cmd 122, payload [0x00]) is the documented, reversible clear for
+    /// WHOOP 4.0.
+    ///
+    /// WHOOP 5/MG CAVEAT: the 5/MG buzz rides the maverick 0x13 path (a one-shot, not a sustained pattern),
+    /// and we have NOT confirmed the 5/MG honours cmd 122 on that path. `send` does not allow-list 122 for
+    /// the 5/MG family, so on a 5/MG this is a no-op (logged "skipped"), not a guessed write. So this is
+    /// BEST-EFFORT: it reliably clears a wedged WHOOP 4.0; on a 5/MG the one-shot nature already limits the
+    /// wedge, and we deliberately do not invent an unverified stop opcode. Safe to call always (no-op when
+    /// unbonded or when the family doesn't accept it).
+    func stopHaptics() {
+        ble.send(.stopHaptics, payload: [0x00])
     }
 
     // MARK: - Wrist-buzz mirror notifications (PR #577 — iOS only)
@@ -1326,7 +1417,9 @@ final class AppModel: ObservableObject {
                 }
                 let local = try await Self.materializeForImport(url)
                 defer { local.cleanup() }
-                let summary = try await WhoopImporter.importExport(url: local.url, into: store, deviceId: deviceId)
+                emitImportFileMeta(kind: .whoopExport, url: local.url)
+                let summary = try await WhoopImporter.importExport(url: local.url, into: store,
+                                                                   deviceId: deviceId, trace: importTraceSink())
                 try? await store.checkpointWAL()   // reclaim the WAL a bulk import grew (#590)
                 await repo.refresh()
                 let span: String
@@ -1355,7 +1448,9 @@ final class AppModel: ObservableObject {
                 }
                 let local = try await Self.materializeForImport(url)
                 defer { local.cleanup() }
-                let summary = try await XiaomiImporter.importExport(url: local.url, into: store)
+                emitImportFileMeta(kind: .xiaomiBand, url: local.url)
+                let summary = try await XiaomiImporter.importExport(url: local.url, into: store,
+                                                                    trace: importTraceSink())
                 try? await store.checkpointWAL()   // reclaim the WAL a bulk import grew (#590)
                 await repo.refresh()
                 let span: String
@@ -1387,7 +1482,9 @@ final class AppModel: ObservableObject {
                 }
                 let local = try await Self.materializeForImport(url)
                 defer { local.cleanup() }
-                let summary = try await AppleHealthImport.importExport(url: local.url, into: store, deviceId: appleDeviceId)
+                emitImportFileMeta(kind: .appleHealth, url: local.url)
+                let summary = try await AppleHealthImport.importExport(url: local.url, into: store,
+                                                                       deviceId: appleDeviceId, trace: importTraceSink())
                 try? await store.checkpointWAL()   // reclaim the WAL a bulk import grew (#590)
                 await repo.refresh()
                 finishImport(.appleHealth, summary: "Imported \(summary.recordCount) records")

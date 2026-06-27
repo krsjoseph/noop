@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.noop.analytics.AutoWorkoutDetector
+import com.noop.analytics.AutoWorkoutDetectorTrace
 import com.noop.data.DailyMetric
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -245,12 +246,30 @@ private suspend fun autoDetectCandidate(
             repo.workouts("lifting", fromSec, nowSec)
         ).map { it.startTs to it.endTs }
 
-    val candidates = AutoWorkoutDetector.detect(
-        hr = hr,
-        restingHR = restingHr,
-        gravity = emptyList(), // HR-only MVP (matches iOS passing motion: nil)
-        savedWorkouts = saved,
-    )
+    // Workouts & GPS test mode (Test Centre): when on, run the diagnostic twin which returns the SAME
+    // candidates detect(...) does (it reuses detect verbatim) plus the inputs / thresholds / per-window why
+    // trace, routed to the .workouts-tagged strap log. Zero-cost when off: one SharedPreferences bool read,
+    // and detectTrace is only called on that branch, so the default path runs the untraced detect.
+    val candidates = if (com.noop.testcentre.TestCentre.from(context)
+            .active(com.noop.testcentre.TestDomain.WORKOUTS)
+    ) {
+        val (results, trace) = AutoWorkoutDetectorTrace.detectTrace(
+            hr = hr,
+            restingHR = restingHr,
+            gravity = emptyList(),
+            savedWorkouts = saved,
+            path = "autoDetect",
+        )
+        for (line in trace) viewModel.ble.externalLog(line, com.noop.testcentre.TestDomain.WORKOUTS)
+        results
+    } else {
+        AutoWorkoutDetector.detect(
+            hr = hr,
+            restingHR = restingHr,
+            gravity = emptyList(), // HR-only MVP (matches iOS passing motion: nil)
+            savedWorkouts = saved,
+        )
+    }
     // Drop anything the user already dismissed, then take the most recent. Mirrors iOS exactly.
     val dismissed = AutoWorkoutPrefs.dismissed(context)
     return candidates

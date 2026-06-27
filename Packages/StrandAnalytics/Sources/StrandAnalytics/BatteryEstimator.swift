@@ -104,6 +104,65 @@ public enum BatteryEstimator {
                         currentSoc: current)
     }
 
+    /// Side-effect-free diagnostic twin of `estimate`: returns the SAME `Estimate` plus a list of trace
+    /// lines describing the full (t, soc) series, the detected charge step(s), the trailing discharge run
+    /// start/span/drop, the fitted slope, and which gate (minSpanHours / minDropPct) decided source =
+    /// measured vs rated. The Battery test mode gates this behind TestCentre.active(.battery) and feeds the
+    /// lines to append(log:domain:.battery); when the mode is off it is never called, so there is zero
+    /// cost. Pure: no clock, no I/O, so fixtures stay exact. The Kotlin twin is BatteryEstimator.estimateTrace.
+    public static func estimateTrace(samples: [(ts: Int, soc: Double)], ratedHours: Double)
+        -> (estimate: Estimate?, trace: [String]) {
+        let sorted = samples.sorted { $0.ts < $1.ts }
+        guard let last = sorted.last, let first0 = sorted.first else {
+            return (nil, ["battery series=0 readings, no reading to anchor to"])
+        }
+        var lines: [String] = []
+        lines.append("battery series=\(sorted.count) readings span \(first0.ts)..\(last.ts)s")
+        for s in sorted { lines.append("battery read t=\(s.ts)s soc=\(socText(s.soc))") }
+
+        // The most recent CHARGE step (same scan as estimate): a SoC rise larger than chargeStepPct.
+        var startIdx = 0
+        if sorted.count >= 2 {
+            for i in stride(from: sorted.count - 1, through: 1, by: -1)
+            where sorted[i].soc > sorted[i - 1].soc + chargeStepPct {
+                startIdx = i
+                let rise = sorted[i].soc - sorted[i - 1].soc
+                lines.append("battery chargeStep at t=\(sorted[i].ts)s +\(socText(rise))pp "
+                    + "(>chargeStepPct \(socText(chargeStepPct)))")
+                break
+            }
+        }
+        let run = Array(sorted[startIdx...])
+
+        var spanPass = false
+        var dropPass = false
+        if run.count >= 2, let runFirst = run.first, let runLast = run.last {
+            let spanHours = Double(runLast.ts - runFirst.ts) / 3600.0
+            let drop = runFirst.soc - runLast.soc
+            lines.append("battery dischargeRun start=\(runFirst.ts)s "
+                + "span=\(hoursText(spanHours))h drop=\(socText(drop))pp")
+            spanPass = spanHours >= minSpanHours
+            dropPass = drop >= minDropPct
+            if spanPass && dropPass && drop / spanHours > 0 {
+                lines.append("battery slope=\(slopeText(drop / spanHours))pct/h fitted from run endpoints")
+            }
+        } else {
+            lines.append("battery dischargeRun too short to fit (run=\(run.count) readings)")
+        }
+
+        let measured = spanPass && dropPass && run.count >= 2
+            && (run.first!.soc - run.last!.soc) / (Double(run.last!.ts - run.first!.ts) / 3600.0) > 0
+        lines.append("battery gate minSpanHours \(hoursText(minSpanHours)) "
+            + "\(spanPass ? "PASS" : "FAIL"), minDropPct \(socText(minDropPct)) "
+            + "\(dropPass ? "PASS" : "FAIL") -> source=\(measured ? "measured" : "rated")")
+
+        return (estimate(samples: samples, ratedHours: ratedHours), lines)
+    }
+
+    private static func socText(_ v: Double) -> String { String(format: "%.1f", v) }
+    private static func hoursText(_ v: Double) -> String { String(format: "%.1f", v) }
+    private static func slopeText(_ v: Double) -> String { String(format: "%.1f", v) }
+
     /// Display rule from #713: show hours under 48h ("~14h"), days above ("~4.5 days"). Unit text only,
     /// the caller adds the "left" / "remaining" copy. Locale-free so the tests stay stable; the UI
     /// localises the number when it renders.

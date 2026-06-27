@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
@@ -141,13 +142,18 @@ private enum class Destination(
 
     // Group: System
     Automations("automations", "Automations", Icons.Filled.Bolt),
-    SmartAlarm("smart_alarm", "Smart Alarm", Icons.Filled.Alarm),
+    // "Alarms" is the ONE alarm surface (#766): the phone-based Wake Window (light-sleep detection with a
+    // guaranteed OS backup), the strap's own firmware wake-alarm, and the wind-down reminder, all in one
+    // place. Previously "Wake Window" (#730), but the strap alarm moved in from Automations so the broader
+    // name fits. Route id stays "smart_alarm" (display string only).
+    SmartAlarm("smart_alarm", "Alarms", Icons.Filled.Alarm),
     Devices("devices", "Devices", Icons.Filled.Sensors),
     DataSources("data_sources", "Data Sources", Icons.Filled.Storage),
     FusedRecord("fused_record", "Your Data, Fused", Icons.AutoMirrored.Filled.CompareArrows),
     Notifications("notifications", "Notifications", Icons.Filled.Notifications),
     Support("support", "Support", Icons.Filled.Tune),
     Settings("settings", "Settings", Icons.Filled.Settings),
+    TestCentre("test_centre", "Test Centre", Icons.Filled.BugReport),
 
     // The "More" tab: its own navigated page (mirroring the iOS More tab) that hosts the full
     // grouped destination list. It is NOT itself in any [DrawerGroup] — it's the door to them.
@@ -168,7 +174,7 @@ private enum class Destination(
 private data class DrawerGroup(val header: String, val items: List<Destination>)
 
 // Mirrors the iOS RootTabView `moreTab` grouping + order one-for-one. Today / Trends / Sleep are NOT
-// listed (they're bottom-bar tabs, exactly as on iOS). Android-only screens (Vital Signs, Smart Alarm,
+// listed (they're bottom-bar tabs, exactly as on iOS). Android-only screens (Vital Signs, Wake Window,
 // Notifications, Devices) are slotted into the matching iOS group.
 private val drawerGroups: List<DrawerGroup> = listOf(
     DrawerGroup("Insights", listOf(
@@ -334,7 +340,10 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 composable(Destination.Devices.route) { DevicesScreen(viewModel) }
                 composable(Destination.DataSources.route) { DataSourcesScreen(viewModel) }
                 composable(Destination.Notifications.route) { NotificationsSettingsScreen(viewModel) }
-                composable(Destination.Settings.route) { SettingsScreen(viewModel) }
+                composable(Destination.Settings.route) {
+                    SettingsScreen(viewModel, onOpenTestCentre = { nav.navigate(Destination.TestCentre.route) })
+                }
+                composable(Destination.TestCentre.route) { TestCentreScreen(viewModel) }
                 // The "More" page — the iOS More tab's twin: a navigated ScreenScaffold page hosting the
                 // full grouped destination list (was a pull-up sheet). A row navigates top-level.
                 composable(Destination.More.route) {

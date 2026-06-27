@@ -634,6 +634,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         // Opt-in experimental sleep staging (V2) — read off SharedPreferences here (the
                         // analytics layer is Context-free) and thread it into the sleep self-heal. (V7 3b)
                         useExperimentalSleepV2 = PuffinExperiment.from(appContext).experimentalSleepV2,
+                        // Sleep & Rest test mode (Test Centre E5): when the SLEEP domain is on, route the
+                        // per-day sleep gate trace into the SAME shareable strap log, tagged .sleep so it
+                        // lands under the profile in the export. Zero-cost when off: the gate is one
+                        // SharedPreferences bool read here and the sink stays null, so analyzeDay runs its
+                        // byte-identical untraced path. Mirrors the macOS sleepTraceActive wiring.
+                        sleepTraceSink =
+                            if (com.noop.testcentre.TestCentre.from(appContext)
+                                    .active(com.noop.testcentre.TestDomain.SLEEP))
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.SLEEP) }
+                            else null,
+                        // Recovery (Charge) test mode (Test Centre Group G): when the RECOVERY domain is on,
+                        // route each night's Charge term-breakdown into the .recovery-tagged strap log so a
+                        // "Charge looks wrong" report shows which term moved it (and which was nil). Zero-cost
+                        // when off: one SharedPreferences bool read and the sink stays null, so the Charge
+                        // score path is byte-identical. Mirrors the macOS recoveryTraceActive wiring.
+                        recoveryTraceSink =
+                            if (com.noop.testcentre.TestCentre.from(appContext)
+                                    .active(com.noop.testcentre.TestDomain.RECOVERY))
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.RECOVERY) }
+                            else null,
+                        // Steps test mode (Test Centre): when the STEPS domain is on, route the per-day 5/MG
+                        // raw-counter trace + the WHOOP-4 calibration trace into the .steps-tagged strap log so
+                        // a "steps look off" report shows the wrap-aware deltas and the calibration state.
+                        // Zero-cost when off: one SharedPreferences bool read and the sink stays null, so the
+                        // steps total path is byte-identical. Mirrors the macOS stepsTraceActive wiring.
+                        stepsTraceSink =
+                            if (com.noop.testcentre.TestCentre.from(appContext)
+                                    .active(com.noop.testcentre.TestDomain.STEPS))
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.STEPS) }
+                            else null,
                     )
                     // analyzeRecent now hops to Dispatchers.Default; a scope cancellation surfaces as a
                     // CancellationException that runCatching would otherwise swallow, breaking the loop's
@@ -747,6 +777,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  (#215) — this observer just republishes it to the UI while the ViewModel is alive. */
     private var gpsJob: Job? = null
 
+    /** Emit one Workouts & GPS test-mode line tagged .workouts iff the mode is on. The cheap
+     *  TestCentre.active(WORKOUTS) gate is read here, so nothing is built when the mode is off. The line
+     *  is built lazily by the caller (already a short String, no heavy work). Diagnostic only. */
+    private fun emitWorkoutsTrace(build: () -> String) {
+        if (com.noop.testcentre.TestCentre.from(appContext)
+                .active(com.noop.testcentre.TestDomain.WORKOUTS)
+        ) {
+            ble.externalLog(build(), com.noop.testcentre.TestDomain.WORKOUTS)
+        }
+    }
+
     /** Begin a workout for [sport]; start GPS route tracking when [gpsEnabled]. Single buzz confirms. */
     fun startWorkout(sport: Sport = WorkoutSport.default, gpsEnabled: Boolean = false) {
         if (_activeWorkout.value != null) return
@@ -754,6 +795,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val startMs = System.currentTimeMillis()
         _activeWorkout.value = ActiveWorkout(startMs = startMs, sport = sport, gpsEnabled = gpsEnabled)
         buzz(1)
+        // Workouts & GPS test mode (Test Centre): one session-start line tagged .workouts. Zero-cost when off.
+        emitWorkoutsTrace {
+            com.noop.analytics.WorkoutsTrace.sessionLine(
+                event = "start", sportKey = WorkoutEditing.traceSportKey(sport.name), hrSamples = 0,
+            )
+        }
         if (gpsEnabled) {
             // Hand the route to the process-level session and make sure the foreground service is up to
             // collect it — even if the user hasn't opted into background connection, the route must keep
@@ -858,7 +905,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             WhoopConnectionService.stop(appContext)
         }
         val samples = w.samples
-        if (samples.size < 2 && track.size < 2) { _lastWorkout.value = null; return }
+        if (samples.size < 2 && track.size < 2) {
+            // Workouts & GPS test mode: record WHY a session vanished (too short / no track), tagged .workouts.
+            emitWorkoutsTrace {
+                com.noop.analytics.WorkoutsTrace.sessionLine(
+                    event = "discarded", sportKey = WorkoutEditing.traceSportKey(w.sport.name),
+                    hrSamples = samples.size, gpsPoints = if (w.gpsEnabled) track.size else null,
+                )
+            }
+            _lastWorkout.value = null
+            return
+        }
         val endMs = System.currentTimeMillis()
         val avg = if (samples.isNotEmpty()) samples.sumOf { it.bpm } / samples.size else null
         val peak = if (samples.isNotEmpty()) samples.maxOf { it.bpm } else null
@@ -879,6 +936,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             routePolyline = if (track.size >= 2) RouteMath.encode(track) else null,
         )
         _lastWorkout.value = row
+        // Workouts & GPS test mode: one session-end summary tagged .workouts (the lastSessionSummary readout
+        // source) carrying the captured HR window size, the duration, and the accepted GPS point count (the
+        // final track), so the lifecycle of a saved session is visible end to end. Zero-cost when off.
+        emitWorkoutsTrace {
+            com.noop.analytics.WorkoutsTrace.sessionLine(
+                event = "end", sportKey = WorkoutEditing.traceSportKey(w.sport.name), hrSamples = samples.size,
+                durationSec = ((endMs - w.startMs) / 1000L).toInt(),
+                gpsPoints = if (w.gpsEnabled) track.size else null,
+            )
+        }
         buzz(2)
         viewModelScope.launch {
             runCatching { repository.upsertWorkouts(listOf(row)) }
@@ -1041,9 +1108,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // #687: collapse the SAME activity tracked live under the strap AND imported from Health
             // Connect / Apple Health into one richer entry — they sit under different sources so without
             // this they show as two sessions. Dedup runs on the dismissed-filtered set, before the sort.
-            val sorted = WorkoutEditing
-                .dedupCrossSource(WorkoutEditing.filterDismissed(filled + lifting, markers))
-                .sortedByDescending { it.startTs }
+            val filteredRows = WorkoutEditing.filterDismissed(filled + lifting, markers)
+            // Workouts & GPS test mode: when on, run the dedup twin which returns the BYTE-IDENTICAL kept list
+            // plus a trace line per collapsed cross-source pair, tagged .workouts. Zero-cost when off (the gate
+            // is one SharedPreferences bool read), and the kept list equals dedupCrossSource exactly, so the
+            // workout list the screen shows is unchanged. Mirrors the macOS Repository.workoutRows wiring.
+            val deduped = if (com.noop.testcentre.TestCentre.from(appContext)
+                    .active(com.noop.testcentre.TestDomain.WORKOUTS)
+            ) {
+                val (kept, trace) = WorkoutEditing.dedupCrossSourceTrace(filteredRows)
+                for (line in trace) ble.externalLog(line, com.noop.testcentre.TestDomain.WORKOUTS)
+                kept
+            } else {
+                WorkoutEditing.dedupCrossSource(filteredRows)
+            }
+            val sorted = deduped.sortedByDescending { it.startTs }
             _workouts.value = sorted
             // Post-workout summary (#517) — opt-in, default OFF. The newest session (by start) drives a
             // one-shot Effort + duration + avg-HR notification when it's strictly newer than the last one
@@ -1603,6 +1682,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Fire a haptic buzz on the strap (requires a bonded connection). */
     fun buzz(loops: Int = 2) = ble.buzz(loops)
+
+    /** Tell the strap to stop an in-progress haptic pattern (#769). Best-effort; no-op when not connected
+     *  or on a 5/MG (cmd 122 isn't confirmed on its 0x13 path). Used by the Breathe session teardown. */
+    fun stopHaptics() = ble.stopHaptics()
 
     // --- Double-tap action (parity since 4.2.8). Persisted via NoopPrefs; dispatched from the init
     // LiveState collector on a fresh DOUBLE_TAP event. Port of macOS BehaviorStore.doubleTapAction +

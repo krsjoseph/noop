@@ -936,7 +936,7 @@ private fun StressEmpty() {
 
 // MARK: - Stress band
 
-private enum class StressBand(val title: String, val tone: StrandTone) {
+internal enum class StressBand(val title: String, val tone: StrandTone) {
     Low("LOW", StrandTone.Positive),
     Medium("MEDIUM", StrandTone.Warning),
     High("HIGH", StrandTone.Critical);
@@ -976,7 +976,7 @@ private object StressRamp {
 
 // MARK: - Trend range (the W/M/3M/6M/1Y/ALL window, mirroring ExploreRange)
 
-private enum class StressRange(val label: String, val days: Int?) {
+internal enum class StressRange(val label: String, val days: Int?) {
     Week("W", 7),
     Month("M", 30),
     Quarter("3M", 90),
@@ -987,7 +987,12 @@ private enum class StressRange(val label: String, val days: Int?) {
 
 // MARK: - Stress model (transparent: stored value OR z-score derivation)
 
-private class StressModel private constructor(
+// #753: `internal` (was file-private) so Today's pinned Stress card can build the SAME model the detail
+// screen shows and read `model.score`, instead of taking the stress series' last banked row. The pinned card
+// and the detail page then derive today's score identically (stored row preferred, else live RHR/HRV
+// baseline) and refresh on the same data, so the pinned card never lags the detail page (e.g. a stale "2").
+// The constructor stays private; only the companion `build` factory is exposed.
+internal class StressModel private constructor(
     val score: Double,            // 0–3 (today)
     val band: StressBand,
     val explanation: String,

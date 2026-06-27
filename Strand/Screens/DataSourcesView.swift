@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import StrandDesign
 import StrandImport
+import StrandAnalytics
 import WhoopStore
 
 struct DataSourcesView: View {
@@ -569,7 +570,32 @@ struct DataSourcesView: View {
                     wearableImporting = false
                     return
                 }
-                let result = try await WearableImporter.importExport(url: url, into: store)
+                // Import & Data Ingest test mode: a gated trace sink. The sink is nil when the mode is off
+                // (the importer then takes its byte-identical untraced path). The brand is auto-detected, so
+                // the kind-bearing file-meta line is emitted AFTER the result lands, with the real detected
+                // kind; the size is bucketed in ImportTrace so no path, name or byte-exact size leaves.
+                // The importer runs nonisolated, so the sink hops each batch to the main actor (LiveState is
+                // @MainActor) before appending, keeping the tagged log append race-free and ordered.
+                // Import & Data Ingest test mode: read the gate ONCE for this completion (the trace sink AND
+                // the post-result file-meta line below share it), so a mid-import toggle can't make the two
+                // reads disagree and the bool is read a single time.
+                let importTracing = TestCentre.active(.dataImport)
+                let result = try await WearableImporter.importExport(
+                    url: url, into: store,
+                    trace: importTracing
+                        ? { @Sendable [weak live] lines in
+                            Task { @MainActor [weak live] in
+                                lines.forEach { live?.append(log: $0, domain: .dataImport) }
+                            }
+                          }
+                        : nil)
+                if importTracing {
+                    let ext = url.pathExtension
+                    let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
+                    live.append(log: ImportTrace.fileMetaLine(sourceKind: result.brand.dataSourceKind,
+                                                              ext: ext, sizeBytes: size),
+                                domain: .dataImport)
+                }
                 await repo.refresh()
                 wearableSummary = WearableExportImporter.summaryText(result)
                 wearableFailed = false
@@ -600,9 +626,9 @@ struct DataSourcesView: View {
                 return
             }
             do {
-                // `registryQueue` is the nonisolated GRDB handle the synchronous DeviceRegistryStore
+                // `registryWriter` is the nonisolated GRDB handle the synchronous DeviceRegistryStore
                 // wraps — same construction the rest of the app uses (AppModel / BLEManager).
-                try DeviceRegistryStore(dbQueue: store.registryQueue).deleteAllData(deviceId: model.appleDeviceId)
+                try DeviceRegistryStore(dbQueue: store.registryWriter).deleteAllData(deviceId: model.appleDeviceId)
                 await repo.refresh()
                 model.appleHealthImportSummary = nil
                 model.appleHealthImportFailed = false

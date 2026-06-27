@@ -411,8 +411,22 @@ struct HRVSnapshotView: View {
     /// End the capture and run the full cleaning analysis over everything collected.
     private func finish() {
         ScreenIdle.keepAwake(false)
-        result = HRVAnalyzer.analyze(rawRR: captureBuffer.map(Double.init),
-                                     maxRejectedFraction: HRVAnalyzer.defaultSpotMaxRejectedFraction)
+        let raw = captureBuffer.map(Double.init)
+        // HRV & Autonomic test mode (Group G): when the mode is on, emit the cleaning trace (nInput /
+        // nClean / rejected fraction, the range + Malik ectopic counts, the minBeats + spot gates,
+        // RMSSD/SDNN/meanNN) tagged `.hrv`. analyzeTrace returns the SAME HRVResult `analyze` would
+        // (it reuses analyze verbatim), so the headline RMSSD is byte-identical with the trace on or off.
+        // Zero cost when off: the gate is one UserDefaults bool read and analyzeTrace is never called, so
+        // the plain `analyze` path below runs untouched.
+        if TestCentre.active(.hrv) {
+            let (traced, lines) = HRVAnalyzer.analyzeTrace(
+                rawRR: raw, maxRejectedFraction: HRVAnalyzer.defaultSpotMaxRejectedFraction, path: "spot")
+            for line in lines { live.append(log: line, domain: .hrv) }
+            result = traced
+        } else {
+            result = HRVAnalyzer.analyze(rawRR: raw,
+                                         maxRejectedFraction: HRVAnalyzer.defaultSpotMaxRejectedFraction)
+        }
         phase = .done
     }
 

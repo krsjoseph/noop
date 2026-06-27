@@ -175,9 +175,10 @@ struct SettingsView: View {
                 strapGroup.staggeredAppear(index: 3)
                 recoveryGroup.staggeredAppear(index: 4)
                 featuresGroup.staggeredAppear(index: 5)
-                experimentalGroup.staggeredAppear(index: 6)
-                backupGroup.staggeredAppear(index: 7)
-                aboutGroup.staggeredAppear(index: 8)
+                testCentreCard.staggeredAppear(index: 6)
+                experimentalGroup.staggeredAppear(index: 7)
+                backupGroup.staggeredAppear(index: 8)
+                aboutGroup.staggeredAppear(index: 9)
             }
         }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
@@ -767,6 +768,27 @@ struct SettingsView: View {
         backupAlertTitle = "Charge baseline recalibrating"
         backupAlertMessage = "NOOP will re-learn your baseline from tonight's data onward. Your history is kept, and it takes a few nights to settle."
         showBackupAlert = true
+    }
+
+    // MARK: - Test Centre (the diagnostic home, #507/#509)
+
+    /// A nav row into the Test Centre, the single home for the diagnostic, log and test controls (spec
+    /// section 7). The strap log, recalibrate, scheduled export and experimental toggles also live there
+    /// on the same bindings, so this is a faster door to the full set without growing this screen.
+    private var testCentreCard: some View {
+        SettingsGroup(
+            header: "Test Centre",
+            footer: "Turn on a test for the thing that's wrong, wear the strap, then tap Report. Your strap log, recalibrate, scheduled export and experimental probes all live here too."
+        ) {
+            NavigationLink {
+                TestCentreView()
+            } label: {
+                aboutRowLabel(icon: "testtube.2", title: "Open Test Centre",
+                              subtitle: "The single home for the diagnostic, log and test controls.")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Test Centre")
+        }
     }
 
     // MARK: - Features (opt-in trackers)

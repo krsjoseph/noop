@@ -1,5 +1,6 @@
 import Foundation
 import WhoopStore
+import StrandAnalytics   // WorkoutsTrace: the dedup-decision line formatter for the Workouts test mode
 
 /// Origin of a workout row, classified from its stored `source` column. The macOS read model
 /// (`WorkoutRow`) carries no `deviceId`, so the row's origin has to be recovered from `source`.
@@ -110,6 +111,24 @@ enum WorkoutSource: Equatable {
         displaySport(sport).lowercased().filter { !$0.isWhitespace }
     }
 
+    /// The set of `sportKey`s for the named catalogue (Running, Cycling, … Padel, Other), computed once.
+    /// Used ONLY by the TRACE path to decide whether a key is a known, non-PII catalogue sport.
+    private static let catalogSportKeys: Set<String> =
+        Set(WorkoutCatalog.all.map { sportKey($0.name) })
+
+    /// PRIVACY (TRACE PATH ONLY): a redaction-safe sport key for the Workouts test-mode trace. `sportKey`
+    /// returns a free-typed name verbatim (folded), so a user-named sport like "Johns Birthday 5k" would
+    /// otherwise surface as `sport=johnsbirthday5k` in the export, which `redactPii` cannot catch. Here we
+    /// emit the key ONLY when it matches the known named catalogue; any off-catalogue / free-text sport
+    /// folds to the generic "custom" so genuine user text can never enter a shared bundle. The user-facing
+    /// `displaySport` is unchanged - this is purely the diagnostic-line token. "detected"/"Activity" fold to
+    /// "activity" via `sportKey` and that IS a catalogue-independent known token, so it is allowed through.
+    static func traceSportKey(_ sport: String) -> String {
+        let key = sportKey(sport)
+        if key == "activity" { return key }   // the detector's neutral token, never user text
+        return catalogSportKeys.contains(key) ? key : "custom"
+    }
+
     /// How many "rich" captured signals a row carries — the tiebreak for which duplicate to keep.
     /// A live-tracked strap session scores high (HR trace, peak, strain, zones, distance); a thin
     /// import scores low. Energy is the most commonly-present import field so it is weighted lowest.
@@ -163,6 +182,49 @@ enum WorkoutSource: Equatable {
             kept.append(row)
         }
         return kept
+    }
+
+    /// A short, source-only descriptor of a row for the Workouts test-mode dedup trace ("strap" / "apple" /
+    /// "detected" / "manual" / "lifting" / "activityFile"). No timestamps or free text.
+    static func sourceLabel(_ row: WorkoutRow) -> String {
+        switch classify(row.source) {
+        case .whoop:        return "strap"
+        case .apple:        return "apple"
+        case .detected:     return "detected"
+        case .manual:       return "manual"
+        case .lifting:      return "lifting"
+        case .activityFile: return "activityFile"
+        }
+    }
+
+    /// Diagnostic twin of `dedupCrossSource(...)` for the Workouts & GPS test mode: returns the BYTE-IDENTICAL
+    /// kept list (the SAME walk, the SAME `preferred` choice) plus a trace line per collapsed pair naming the
+    /// kept vs dropped source and their richness. The kept output equals `dedupCrossSource(...)` exactly, so
+    /// the trace can never diverge from the list the screen shows. Only called when the mode is on.
+    static func dedupCrossSourceTrace(_ rows: [WorkoutRow]) -> (kept: [WorkoutRow], trace: [String]) {
+        var kept: [WorkoutRow] = []
+        kept.reserveCapacity(rows.count)
+        var lines: [String] = []
+        outer: for row in rows {
+            for i in kept.indices where sameActivity(kept[i], row) {
+                // L8: identify kept-vs-dropped by the REAL keep decision, not by a (startTs, source) tuple
+                // that collides when row and kept[i] share both fields (e.g. a same-start same-source pair
+                // differing only in richness). preferred() returns one of the two rows; a full-row ==
+                // against kept[i] tells us which side won. When the two rows are byte-identical the label is
+                // interchangeable, so == is correct in every case.
+                let keptWins = preferred(kept[i], row) == kept[i]
+                let winner = keptWins ? kept[i] : row
+                let loser = keptWins ? row : kept[i]
+                lines.append(WorkoutsTrace.dedupLine(
+                    sportKey: traceSportKey(row.sport),   // PRIVACY: catalogue key or "custom", never free text
+                    keptSource: sourceLabel(winner), droppedSource: sourceLabel(loser),
+                    keptRichness: richness(winner), droppedRichness: richness(loser)))
+                kept[i] = winner
+                continue outer
+            }
+            kept.append(row)
+        }
+        return (kept, lines)
     }
 
     // MARK: - Building / preserving rows

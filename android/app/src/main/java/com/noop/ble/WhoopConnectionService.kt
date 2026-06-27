@@ -248,6 +248,17 @@ class WhoopConnectionService : Service() {
                         // background must declare the location FGS type. Reverted to connectedDevice-only
                         // when the workout ends (active=false re-posts the base type).
                         startForegroundCompat(buildNotification(ble.state.value, null), tracking = true)
+                        // Workouts & GPS test mode (Test Centre): wire the GpsSession fix-progress sink to the
+                        // .workouts-tagged strap log ONLY when the WORKOUTS mode is on (one SharedPreferences
+                        // bool read here). When off, the sink stays null and the route fold is byte-identical.
+                        GpsSession.workoutsLog =
+                            if (com.noop.testcentre.TestCentre.from(applicationContext)
+                                    .active(com.noop.testcentre.TestDomain.WORKOUTS)
+                            ) {
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.WORKOUTS) }
+                            } else {
+                                null
+                            }
                         gpsJob = launch {
                             // LocationTracker fails SAFE (no permission / no provider just ends the
                             // stream); runCatching guards an OEM throw so it can't tear down the FGS.
@@ -256,6 +267,7 @@ class WhoopConnectionService : Service() {
                             }
                         }
                     } else {
+                        GpsSession.workoutsLog = null   // route finished: drop the test-mode sink
                         startForegroundCompat(buildNotification(ble.state.value, null), tracking = false)
                     }
                 }

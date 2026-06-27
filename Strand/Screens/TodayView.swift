@@ -31,6 +31,18 @@ private enum TodayAutoLand {
     static var didLandThisLaunch = false
 }
 
+/// #762: carries the hero ring ROW's measured width up so `scoreHeroRow` can size the three rings off the
+/// real available width WITHOUT wrapping them in a height-clamped GeometryReader. The old GeometryReader was
+/// pinned to `.frame(height: 150)`; once a Charge/Rest ring also showed a provenance badge (the two-line
+/// SourceBadge + ScoreStatePill block), the column's intrinsic height climbed past 150 and the fixed frame
+/// CLIPPED it, so the badge under the Rest ring overlapped the content below (the reported overlap glitch).
+/// Measuring width via a zero-impact background reader instead lets the row self-size in height, so it grows
+/// to fit the rings + labels + badges and never clips. Reduce keeps the max, ignoring any 0 default.
+private struct HeroRingRowWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 struct TodayView: View {
     @EnvironmentObject var repo: Repository
     // PERF (scroll stutter): TodayView deliberately does NOT observe `LiveState` directly. A connected
@@ -42,6 +54,21 @@ struct TodayView: View {
     // leaf subviews that each own their OWN `@EnvironmentObject live`, so a 1 Hz tick only re-renders those
     // dots/rows, never the rest of the dashboard. The memoized derivations below already absorbed the
     // EXPENSIVE recomputes; this removes the cheap-but-constant view-tree re-evaluation flood on top.
+    //
+    // #755 FIX-3 (DEFERRED — note only, not done): a `repo.refreshSeq` bump still re-evaluates the WHOLE
+    // Today `body` (TodayView observes `repo` via @EnvironmentObject, and every section reads it). #755's
+    // fixes 1+2 cut the bump FREQUENCY hard (a multi-chunk backfill now coalesces to a handful of refreshes,
+    // and the Repository diff-guard already drops no-op bumps), so the per-bump full-body re-eval is no
+    // longer a STORM — that was the scroll-stutter root cause and it is addressed. A true fix-3 (stop a
+    // single bump re-evaluating the full body) would mean extracting each section — heroSection,
+    // heartRateTrendSection, the Key-Metrics grid, yourCardsSection, workoutsSection, sourcesSection — into
+    // its own leaf view that reads ONLY the @State snapshot loadAll commits (sparks / restScore / hrPoints /
+    // workouts / provenanceByMetric / the your-cards values) plus the specific `repo`-derived values it
+    // needs (displayDay, selectedDayKey, repo.today) passed in as plain values, so the parent no longer
+    // re-renders them on every `repo` change — exactly the leaf-isolation pattern used for LiveState above,
+    // but for `repo`. That touches 10+ sections and dozens of `repo.*` references; doing it minimally is not
+    // possible without risking the reactivity regressions #755 warns about (a 7.0.3-class subtle break that
+    // passes clean tests), so it is left as a follow-up rather than rushed in alongside the load-path fix.
     @EnvironmentObject var profile: ProfileStore
     @EnvironmentObject var router: NavRouter
     /// The "update ringer" — the bell in the top bar opens this inbox; dismissed Today cards post into it.
@@ -83,6 +110,18 @@ struct TodayView: View {
         DashboardCardPrefs.decodeEnabled(dashboardCardsRaw)
             .filter { hydrationEnabled || $0 != .hydration }
     }
+
+    // #755: a mirror of `LiveState.backfilling` (strap mid history-offload). TodayView must NOT observe
+    // LiveState directly (the 1 Hz flood — see the top-of-type note), so a tiny leaf `BackfillFlagBridge`
+    // owns the observation and pushes only the boolean EDGE into this @State. loadAll reads it to DEFER the
+    // heavy history-wide reads while the offload's bulk writes are in flight, and the off→false edge re-runs
+    // the deferred set immediately (belt-and-braces alongside the coalesced refreshSeq bump). A bare boolean
+    // that flips ~twice per offload, so it costs nothing like the per-tick chunk count would.
+    @State private var liveBackfillingFlag = false
+    // #755: have the history-wide reads ever populated this session? Used so the FIRST load always runs them
+    // (even mid-offload, so a cold launch during a sync is never a blank dashboard), while later re-loads can
+    // safely defer them during an active backfill.
+    @State private var loadedHistoryWideOnce = false
 
     // 14-day sparkline series, keyed by metric key. Loaded once in .task.
     @State private var sparks: [String: [Double]] = [:]
@@ -141,6 +180,12 @@ struct TodayView: View {
     // trend and Rest score) resolves to the selected day instead of always showing today. Mirrors the
     // Android TodayScreen.selectedDayOffset. Loads re-run when this changes (see .task(id:)).
     @State private var selectedDayOffset = 0
+    // #762: the hero ring row's measured width, set by a zero-impact background preference reader so the
+    // three rings size off the real available width without a height-clamped GeometryReader clipping the
+    // badge under the Rest/Charge ring. 0 until first layout (the row falls back to a sensible default
+    // width then). Only changes on a genuine width change (rotation / size class), never on the ~1 Hz
+    // live-HR re-render, so this @State doesn't add to the body-eval flood the type note warns about.
+    @State private var heroRingRowWidth: CGFloat = 0
     // iOS top-bar state: the date-jump popover and the profile/settings sheet.
     @State private var showDayPicker = false
     @State private var showSettings = false
@@ -296,10 +341,35 @@ struct TodayView: View {
         return days.last(where: { $0.recovery != nil && $0.day < selectedDayKey })
     }
 
-    /// "Last night · <date>" stamp for the carried-over recovery row, keyed on that scored day's own
-    /// date. Shared by every carried recovery read-out so the prior-day provenance reads identically.
+    /// Carry-over recency cap (#779): the "Last night" framing only holds when the carried scored day is
+    /// within this many days of today. A weeks-old import is still carried so the recovery side isn't a bare
+    /// blank, but it is relabelled "Latest sleep · <date>" so a stale number is NEVER passed off as today's.
+    static let carryFreshnessDays = 2
+
+    /// True when the carried scored day is OLDER than the freshness cap (#779), which drives the "Latest
+    /// sleep" relabel. Pure + unit-testable. Both keys are "yyyy-MM-dd"; an unparseable key (or non-positive gap)
+    /// reads as fresh so we never over-claim staleness. `todayKey` is today's logical-day key (carry-over is
+    /// today-only). Mirror EXACTLY in Kotlin.
+    static func isCarryStale(priorDayKey: String, todayKey: String) -> Bool {
+        guard let prior = dayKeyParser.date(from: priorDayKey),
+              let today = dayKeyParser.date(from: todayKey) else { return false }
+        let days = Calendar.current.dateComponents([.day], from: prior, to: today).day ?? 0
+        return days > carryFreshnessDays
+    }
+
+    /// The carried recovery caption stamp, keyed on that scored day's own date and its recency. Within the
+    /// freshness cap it reads "Last night · <date>"; once the carried day is older than the cap (#779) it
+    /// reads "Latest sleep · <date>" so a weeks-old import is never surfaced as "Last night". Shared by every
+    /// carried recovery read-out so the prior-day provenance reads identically. Mirror EXACTLY in Kotlin.
+    static func carriedCaption(priorDayKey: String, todayKey: String) -> String {
+        let prefix = isCarryStale(priorDayKey: priorDayKey, todayKey: todayKey) ? "Latest sleep" : "Last night"
+        return "\(prefix) · \(lastChargeDateFmt(priorDayKey))"
+    }
+
+    /// Instance convenience over the pure `carriedCaption`. `selectedDayKey` is today's logical-day key in
+    /// every carry-over context (the selector gates `isToday`), so it supplies the recency anchor.
     private func carriedCaption(_ prior: DailyMetric) -> String {
-        "Last night · \(Self.lastChargeDateFmt(prior.day))"
+        Self.carriedCaption(priorDayKey: prior.day, todayKey: selectedDayKey)
     }
 
     /// The most recent SCORED Charge to carry over on TODAY (#543) — the prior row's recovery value plus
@@ -321,7 +391,10 @@ struct TodayView: View {
         MetricTileState.resolve(
             hasTodayValue: displayDay?.recovery != nil,
             calibratingNightsRemaining: recoveryCalibration.map { max(1, Baselines.minNightsSeed - $0) },
-            carriedDate: lastScoredRecoveryDay.map { Self.lastChargeDateFmt($0.day) })
+            carriedDate: lastScoredRecoveryDay.map { Self.lastChargeDateFmt($0.day) },
+            carriedStale: lastScoredRecoveryDay.map {
+                Self.isCarryStale(priorDayKey: $0.day, todayKey: selectedDayKey)
+            } ?? false)
     }
 
     // MARK: Component 3 — recording status
@@ -844,10 +917,23 @@ struct TodayView: View {
             // something to refract; over the flat canvas it would be low-contrast, so scene-off keeps the
             // opaque frosted card). No-op below iOS 26 / on macOS (the surface falls back to frosted).
             .environment(\.noopGlassSurface, useGlassSurface)
+            // #755: mirror `LiveState.backfilling` into `liveBackfillingFlag` WITHOUT TodayView observing
+            // LiveState (which would re-flood `body` ~1 Hz — see the top-of-type note). The bridge is a
+            // zero-size leaf in `.background` (no layout impact) that owns the observation and pushes only
+            // the boolean EDGE up. loadAll reads the flag to defer the heavy history-wide reads during an
+            // active offload; the off→false edge below re-runs them as a safety net to the coalesced refresh.
+            .background(BackfillFlagBridge(flag: $liveBackfillingFlag))
         }
         // Reload when the data refreshes OR the selected day changes — the HR trend and Rest score are
         // day-scoped, so navigating must re-fetch them for the newly selected window.
         .task(id: TodayLoadKey(seq: repo.refreshSeq, offset: selectedDayOffset)) { await loadAll() }
+        // #755: NO per-edge safety net here, on purpose. A deep offload segments into many slices that each
+        // flip `backfilling` false→true, so re-running the heavy history-wide reads on that edge would re-fire
+        // them dozens of times mid-offload and re-create the very write-contention this fix removes. The
+        // deferred reads land via the SINGLE coalesced trigger instead: AppModel's debounced `lastSyncedAt`
+        // sink fires one refresh ~2s after the offload quiesces, which bumps `refreshSeq` and re-fires the
+        // task above with `backfilling` now settled false (and a return-to-tab re-fires it too). If that final
+        // refresh diffs byte-identical, nothing new landed, so the already-shown history-wide data is correct.
         // Persist the freshly-built derivations so subsequent (1 Hz) renders with the same
         // inputs hit the cache instead of recomputing. Writing @State during `body` is not
         // allowed, so commit it after layout — the memoized accessors already return the
@@ -1731,21 +1817,46 @@ struct TodayView: View {
     /// floats cleanly on the scenic field (no per-ring card); a tappable label + chevron sits beneath
     /// each and opens that score's section in the scoring guide. Rings are sized off the available
     /// width so the trio never crushes on a narrow phone nor bloats on iPad.
+    /// #762: the hero ring diameter for a given row width. Clamped to [82, 98] so the trio never crushes on
+    /// a narrow phone nor bloats on iPad; the linear middle term divides the usable width (less the two 22pt
+    /// gaps and a small margin) across the three columns. Pure + static so the clamp can be unit-tested
+    /// without a live view, and so the value feeding the SELF-SIZING row (no fixed 150pt clip) is the same
+    /// one the test asserts. Mirror on Android if the hero ever moves to a measured-width sizing there.
+    static func heroRingDiameter(rowWidth: CGFloat) -> CGFloat {
+        min(98, max(82, (rowWidth - 56) / 3.4))
+    }
+
     @ViewBuilder
     private func scoreHeroRow(d: DailyMetric?, score: Double?) -> some View {
-        GeometryReader { geo in
-            // Design Reset: three EQUAL clean rings (no glow, faint track) in Charge / Effort / Rest order
-            // with generous spacing — mirrors the flat mockup. Sized off width so they stay equal on any phone.
-            let ring = min(98, max(82, (geo.size.width - 56) / 3.4))
-            HStack(alignment: .top, spacing: 22) {
-                // Component 4 — Charge/Rest badge their real per-day merge winner; Effort has no badge.
-                heroRingColumn(section: .charge, domain: .charge, provenanceKey: "recovery") { chargeRing(score: score, d: d, diameter: ring) }
-                heroRingColumn(section: .effort, domain: .effort) { effortRing(d: d, diameter: ring) }
-                heroRingColumn(section: .rest, domain: .rest, provenanceKey: "sleep_performance") { restRing(diameter: ring) }
-            }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
+        // #762: size the three rings off the row's MEASURED width (read via a background preference reader,
+        // not a height-clamped GeometryReader), then let the HStack SELF-SIZE its height. The old layout
+        // wrapped the row in `GeometryReader { … }.frame(height: 150)`; that hard 150pt height clipped the
+        // column once a Charge/Rest ring also rendered its provenance badge (ring + label + the two-line
+        // SourceBadge/ScoreStatePill block exceeds 150), so the Rest badge overlapped the content beneath
+        // (the reported overlap/clipping). With a self-sizing HStack the row grows to fit its tallest column
+        // and never clips. Until the first layout measures width, fall back to a sensible phone width so the
+        // rings render at a reasonable size on the very first frame rather than collapsing.
+        let measured = heroRingRowWidth > 1 ? heroRingRowWidth : 345
+        // Design Reset: three EQUAL clean rings (no glow, faint track) in Charge / Effort / Rest order with
+        // generous spacing, mirroring the flat mockup. Sized off width so they stay equal on any phone.
+        let ring = Self.heroRingDiameter(rowWidth: measured)
+        HStack(alignment: .top, spacing: 22) {
+            // Component 4: Charge/Rest badge their real per-day merge winner; Effort has no badge.
+            heroRingColumn(section: .charge, domain: .charge, provenanceKey: "recovery") { chargeRing(score: score, d: d, diameter: ring) }
+            heroRingColumn(section: .effort, domain: .effort) { effortRing(d: d, diameter: ring) }
+            heroRingColumn(section: .rest, domain: .rest, provenanceKey: "sleep_performance") { restRing(diameter: ring) }
         }
-        .frame(height: 150)
+        .frame(maxWidth: .infinity, alignment: .center)
+        // Zero-impact width reader: a clear background that publishes the row's width up via preference. It
+        // adds no visual and no intrinsic size, so the HStack's own (self-sizing) height is what lays out.
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: HeroRingRowWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(HeroRingRowWidthKey.self) { w in
+            if w > 1 && abs(w - heroRingRowWidth) > 0.5 { heroRingRowWidth = w }
+        }
     }
 
     /// The localized natural-case display word for a score domain (Charge / Effort / Rest / Stress). The
@@ -2284,10 +2395,11 @@ struct TodayView: View {
             StatTile(
                 label: "Steps",
                 value: realSteps ?? estSteps.map { intString(Double($0)) } ?? "—",
-                // An estimated day reads "est."; a not-yet-calibrated day says how many more phone-counted
-                // days are needed (so a blank tile is never silently unexplained).
+                // An estimated day reads "est." plus the calibration STATUS (k / days / confidence) so a
+                // frozen-looking estimate self-explains (#760/#792); a not-yet-calibrated day says how many
+                // more phone-counted days are needed (so a blank tile is never silently unexplained, #589).
                 caption: realSteps != nil ? "today"
-                    : (estSteps != nil ? "est."
+                    : (estSteps != nil ? stepsEstimateCaption
                        : (needsCalibration ? stepsCalibrationCaption : "today")),
                 accent: (realSteps != nil || estSteps != nil) ? StrandPalette.metricCyan : StrandPalette.textPrimary,
                 sparkline: sparks["steps"],
@@ -2458,9 +2570,64 @@ struct TodayView: View {
         return status.headline
     }
 
+    /// #760/#792: the caption under an ESTIMATED Steps tile: "est. · <status detail>", where the detail is
+    /// the engine's own STATUS line (manual k, or k=… from N days + confidence tier) built from the SAME
+    /// persisted calibration the estimate used. So a WHOOP 4.0 user can see WHY the number reads as it does
+    /// (and why it may look frozen at low confidence) right where they notice the "est." flag, matching
+    /// Android. Falls back to a bare "est." if no coefficient is recorded yet.
+    private var stepsEstimateCaption: String {
+        let status: StepsEstimateEngine.CalibrationStatus = profile.stepsCalibrationManual
+            ? .manual(coefficient: profile.stepsCalibrationCoefficient,
+                      sampleDays: profile.stepsCalibrationSampleDays)
+            : .calibrated(coefficient: profile.stepsCalibrationCoefficient,
+                          sampleDays: profile.stepsCalibrationSampleDays,
+                          confidence: profile.stepsCalibrationConfidence)
+        guard profile.stepsCalibrationCoefficient > 0 else { return "est." }
+        return "est. · \(status.detail)"
+    }
+
     // MARK: - Loading
 
+    /// #755: the dashboard load is split into a DAY-SCOPED set (the selected day's HR window, Rest score,
+    /// sleep band, live Effort, provenance, axis — everything that must re-resolve when the user chevrons
+    /// to another day) and a HISTORY-WIDE set (the 10 sparklines, workouts, the cross-source bundles, the
+    /// "your cards" series — all independent of which day is selected). The day-scoped reads are a handful
+    /// of queries and ALWAYS run, so a day-switch or a tab-return repaints the screen immediately. The
+    /// history-wide reads are the bulk (~40 reads) and are DEFERRED while a multi-chunk backfill is actively
+    /// writing to the single-connection store (`live.backfilling`), because running them then both stutters
+    /// the screen and contends with the bulk writes. They are never permanently skipped: the coalesced
+    /// trailing refresh after the backfill quiesces (AppModel's debounced `lastSyncedAt` sink) bumps
+    /// `refreshSeq`, which re-fires this task with `live.backfilling` false, and the deferred set runs then.
+    /// Values + provenance are byte-identical to the old single-pass `loadAll` whenever each part runs.
     private func loadAll() async {
+        // Always refresh the selected day — cheap, and it's what a day-switch / return-to-tab needs.
+        // When the one-shot auto-land fires it changes `selectedDayOffset`, which re-fires this whole task
+        // for the landed day; bail here exactly as the old single-pass `loadAll` did on that `return` (skip
+        // the history-wide set + the new-day announce — the re-fired pass does both for the real day).
+        let autoLanded = await loadDayScoped()
+        guard !autoLanded else { return }
+        // Defer the heavy history-wide reads ONLY on a re-load while a backfill is actively writing, so they
+        // don't contend with the offload's bulk writes on the single-connection store. But ALWAYS run them on
+        // the FIRST load (even mid-offload): otherwise a cold launch during a sync would show a blank
+        // dashboard (no sparklines / workouts / your-cards) until the offload ends (#755). Loading on the
+        // first pass also makes the mount-during-sync flag race harmless: with no data yet we load regardless
+        // of the flag. The deferred set is guaranteed to run later via the coalesced refresh (see .task note).
+        if !backfillActivelyWriting || !loadedHistoryWideOnce {
+            await loadHistoryWide()
+            loadedHistoryWideOnce = true
+        }
+        announceNewDaysIfNeeded()
+    }
+
+    /// True while the strap is mid history-offload — the SAME signal the "Syncing strap history…" note
+    /// reads (`LiveState.backfilling`, set across BLEManager.startBackfilling/exitBackfilling). Used to
+    /// defer the bulk history-wide reads so they don't contend with the offload's bulk writes (#755).
+    private var backfillActivelyWriting: Bool { liveBackfillingFlag }
+
+    /// 14-day sparklines + the cross-source bundles + the "your cards" series + workouts — everything that
+    /// does NOT depend on `selectedDayOffset`. The bulk of the dashboard's reads; deferred during an active
+    /// backfill (see `loadAll`). Same reads, same derivations, same assignment order as before.
+    private func loadHistoryWide() async {
         // 14-day sparklines — Whoop + Apple Health. These reads are mutually independent (distinct
         // metric keys/sources), so kick them all off concurrently with `async let` and await the
         // results below. Each hits the @MainActor Repository, fires its `await store.*` on the
@@ -2495,22 +2662,85 @@ struct TodayView: View {
         sparks["weight"]      = await weightSpark
         sparks["active_kcal"] = await activeKcalSpark
 
-        // The next block of reads are all mutually independent (distinct keys/sources, none consumes
-        // another's result): the Rest + steps-estimate series, the two provenance resolves, workout +
-        // Apple-daily rows, the two Mi-Band series, and the three "your cards" series. Fire them all
-        // off concurrently with `async let`, then await each where its result is first used — same
-        // data, same derivations, same assignment order as the sequential version, all on the main actor.
-        async let restSeriesA       = repo.exploreSeries(key: "sleep_performance", source: "my-whoop")
+        // Steps ESTIMATE per day (WHOOP 4.0 motion → calibrated steps), the Mi-Band series, workout +
+        // Apple-daily rows, and the three "your cards" series — all history-wide (none depends on the
+        // selected day) and mutually independent (distinct keys/sources). Fire them concurrently with
+        // `async let`, then await each where its result is first used — same data, same derivations, same
+        // assignment order as before. (The Rest score + provenance resolves moved to loadDayScoped, #755.)
         async let stepsEstSeriesA    = repo.exploreSeries(key: "steps_est", source: "my-whoop")
-        async let recoveryResolvedA  = repo.resolvedSeries(key: "recovery", source: Repository.whoopSource)
-        async let restResolvedA      = repo.resolvedSeries(key: "sleep_performance", source: Repository.whoopSource)
         async let workoutsA          = repo.workoutRows()
         async let appleDaysA         = repo.appleDailyRows()
         async let xStepsA            = repo.series(key: "steps", source: "xiaomi-band")
         async let xSleepA            = repo.series(key: "sleep_total_min", source: "xiaomi-band")
-        async let stressSeriesA      = repo.exploreSeries(key: "stress", source: "my-whoop")
+        // #753: the pinned Stress card must read its number the SAME way StressView (the detail page) does,
+        // not off the merged stress series' last row. StressView builds `StressModel(days: repo.days,
+        // stored:)` and shows `model.score`, which PREFERS today's stored stress row but otherwise DERIVES
+        // today's score from the live `repo.days` RHR/HRV baseline. The old pinned read
+        // (`exploreSeries("stress").last`) returned the latest *banked* day instead, so when today had no
+        // stored stress row yet the pinned card sat on yesterday's number (e.g. "2") while the detail page
+        // moved to today's freshly-derived value. They diverged because they computed from different sources
+        // AND the pinned card never re-derived. Reading the SAME `repo.series` the detail uses, and building
+        // the SAME StressModel below, ties the pinned card to today's score; both then refresh on the shared
+        // `repo.refreshSeq` task key (loadAll's TodayLoadKey) and stay in sync.
+        async let stressStoredA      = repo.series(key: "stress", source: "my-whoop")
         async let fitnessAgeSeriesA  = repo.exploreSeries(key: "fitness_age", source: "my-whoop")
         async let vitalitySeriesA    = repo.exploreSeries(key: "vitality", source: "my-whoop")
+
+        // Steps ESTIMATE per day (WHOOP 4.0 motion → calibrated steps). exploreSeries reads the computed
+        // "-noop" metricSeries the IntelligenceEngine writes, exactly like the Explore "steps_est" metric.
+        // Only consulted when a day has no REAL step count (see the .steps tile), so it never overrides a
+        // measured value — it just fills the gap a 4.0 user would otherwise see as "—".
+        let stepsEstSeries = await stepsEstSeriesA
+        stepsEstByDay = Dictionary(stepsEstSeries.map { ($0.day, Int($0.value.rounded())) },
+                                   uniquingKeysWith: { _, last in last })
+
+        workouts = await workoutsA
+        appleDays = await appleDaysA
+        // Mi Band (Mi Fitness import) — distinct days across its representative metric keys.
+        let xSteps = await xStepsA
+        let xSleep = await xSleepA
+        xiaomiDays = Set(xSteps.map(\.day) + xSleep.map(\.day)).count
+        // Your cards (#582 / Design Reset): Stress / Fitness age / Vitality for the pinned home cards.
+        // #753: Stress mirrors StressView. `StressModel(days:stored:).score` is TODAY's score (stored row
+        // preferred, else derived off the live RHR/HRV baseline), so the pinned card never lags the detail
+        // page on a day with no banked stress row. nil (no usable signal) keeps the honest "Calibrating"
+        // placeholder, matching StressView's empty state. Fitness age / Vitality keep their merged reads.
+        stressToday = StressModel(days: repo.days, stored: await stressStoredA)?.score
+        fitnessAgeToday = (await fitnessAgeSeriesA).last?.value
+        vitalityToday = (await vitalitySeriesA).last?.value
+        // Hydration card (opt-in): today's stored total + the sex/Effort goal. Only loaded when the
+        // feature is on, so a disabled feature does zero work and the card stays hidden.
+        if hydrationEnabled {
+            hydrationTotalML = await repo.hydrationTotal(day: Repository.localDayKey(Date()))
+            hydrationGoalML = repo.hydrationGoalML(profileSex: profile.sex)
+        } else {
+            hydrationTotalML = nil
+            hydrationGoalML = nil
+        }
+        if let store = await repo.storeHandle() {
+            let farFuture = Int(Date.distantFuture.timeIntervalSince1970)
+            xiaomiSleeps = ((try? await store.sleepSessions(deviceId: "xiaomi-band", from: 0, to: farFuture, limit: 4000))?.count) ?? 0
+        }
+    }
+
+    /// The reads that follow `selectedDayOffset`: the selected day's Rest score + provenance, its HR
+    /// window + axis, the overlapping sleep band, today's in-progress Effort, and the one-shot auto-land.
+    /// A handful of queries, so this ALWAYS runs on a refresh / day-switch / tab-return — the screen stays
+    /// responsive even while the heavy history-wide set is deferred during a backfill (#755). The Rest tile
+    /// sparkline (`sparks["sleep_performance"]`) is derived from the SAME `restSeries` read here so the
+    /// tile's number and its mini-graph stay consistent and day-fresh. Byte-identical to the old inline
+    /// values; only the read's location moved.
+    ///
+    /// Returns `true` when the one-shot #605/#739 auto-land fired and changed `selectedDayOffset` (the
+    /// caller then bails, since changing the offset re-fires the whole task for the landed day) — this
+    /// preserves the old `return` that skipped the rest of the pass.
+    @discardableResult
+    private func loadDayScoped() async -> Bool {
+        // Rest series + the two provenance resolves — all day-keyed outputs, none consumes another's
+        // result, so fire them concurrently and await where first used.
+        async let restSeriesA       = repo.exploreSeries(key: "sleep_performance", source: "my-whoop")
+        async let recoveryResolvedA = repo.resolvedSeries(key: "recovery", source: Repository.whoopSource)
+        async let restResolvedA     = repo.resolvedSeries(key: "sleep_performance", source: Repository.whoopSource)
 
         // Rest SCORE for the logical day. `exploreSeries` already merges imported + computed
         // `sleep_performance` (imported-wins), so a Bluetooth-only user sees the on-device Rest
@@ -2522,14 +2752,6 @@ struct TodayView: View {
         // trend didn't track the score it sat under. Plot the SAME merged `sleep_performance` 0–100 series
         // the score reads instead, windowed to the trailing 14 calendar days like every other spark.
         sparks["sleep_performance"] = trailingWindow(restSeries, days: 14).map { $0.value }
-
-        // Steps ESTIMATE per day (WHOOP 4.0 motion → calibrated steps). exploreSeries reads the computed
-        // "-noop" metricSeries the IntelligenceEngine writes, exactly like the Explore "steps_est" metric.
-        // Only consulted when a day has no REAL step count (see the .steps tile), so it never overrides a
-        // measured value — it just fills the gap a 4.0 user would otherwise see as "—".
-        let stepsEstSeries = await stepsEstSeriesA
-        stepsEstByDay = Dictionary(stepsEstSeries.map { ($0.day, Int($0.value.rounded())) },
-                                   uniquingKeysWith: { _, last in last })
         // The selected day's Rest, falling back to the series tail only when today itself is selected —
         // a navigated past day with no Rest row shows "—" rather than borrowing the newest value.
         restScore = restByDay[selectedDayKey] ?? (selectedDayOffset == 0 ? restSeries.last?.value : nil)
@@ -2549,31 +2771,6 @@ struct TodayView: View {
             provenance["sleep_performance"] = win
         }
         provenanceByMetric = provenance
-
-        workouts = await workoutsA
-        appleDays = await appleDaysA
-        // Mi Band (Mi Fitness import) — distinct days across its representative metric keys.
-        let xSteps = await xStepsA
-        let xSleep = await xSleepA
-        xiaomiDays = Set(xSteps.map(\.day) + xSleep.map(\.day)).count
-        // Your cards (#582 / Design Reset): latest Stress / Fitness age / Vitality for the pinned home
-        // cards. Same merged exploreSeries reads their detail screens use; nil simply hides that card.
-        stressToday = (await stressSeriesA).last?.value
-        fitnessAgeToday = (await fitnessAgeSeriesA).last?.value
-        vitalityToday = (await vitalitySeriesA).last?.value
-        // Hydration card (opt-in): today's stored total + the sex/Effort goal. Only loaded when the
-        // feature is on, so a disabled feature does zero work and the card stays hidden.
-        if hydrationEnabled {
-            hydrationTotalML = await repo.hydrationTotal(day: Repository.localDayKey(Date()))
-            hydrationGoalML = repo.hydrationGoalML(profileSex: profile.sex)
-        } else {
-            hydrationTotalML = nil
-            hydrationGoalML = nil
-        }
-        if let store = await repo.storeHandle() {
-            let farFuture = Int(Date.distantFuture.timeIntervalSince1970)
-            xiaomiSleeps = ((try? await store.sleepSessions(deviceId: "xiaomi-band", from: 0, to: farFuture, limit: 4000))?.count) ?? 0
-        }
 
         // HR trend for the SELECTED day — 5-minute bucket means from that logical day's local midnight.
         // For today the window runs to now (an in-progress curve); for a navigated past day it runs the
@@ -2610,7 +2807,7 @@ struct TodayView: View {
             let todayStart = cal.startOfDay(for: Repository.logicalDay(Date()))
             let latestStart = cal.startOfDay(for: latest)
             let back = cal.dateComponents([.day], from: latestStart, to: todayStart).day ?? 0
-            if back > 0, back <= Self.autoLandMaxDaysBack { selectedDayOffset = back; return }
+            if back > 0, back <= Self.autoLandMaxDaysBack { selectedDayOffset = back; return true }
         }
 
         // In-progress Effort for TODAY (#402): score today's strain over the SAME window the HR curve
@@ -2641,7 +2838,7 @@ struct TodayView: View {
             .filter { $0.endTs > windowStart && $0.startTs < windowEnd }
             .max(by: { ($0.endTs - $0.startTs) < ($1.endTs - $1.startTs) })
 
-        announceNewDaysIfNeeded()
+        return false
     }
 
     /// Post a single honest `.reading` update to the inbox when a refresh brought in genuinely NEWER
@@ -2972,6 +3169,24 @@ private struct SyncingHistoryNoteIfBackfilling: View {
     }
 }
 
+/// #755: a zero-size leaf that mirrors `LiveState.backfilling` into a parent `@Binding` so TodayView can
+/// read the offload state to defer its heavy reads WITHOUT itself observing LiveState (which would re-flood
+/// the whole dashboard `body` on every ~1 Hz live tick — the scroll-stutter the rest of this file avoids).
+/// This leaf owns the observation but renders nothing and re-renders only itself; it pushes only the
+/// boolean EDGE up (not the per-tick chunk count), and writes the binding from `.onAppear`/`.onChange`
+/// (never during its own body evaluation). The parent's @State therefore flips ~twice per offload, not 1 Hz.
+private struct BackfillFlagBridge: View {
+    @EnvironmentObject private var live: LiveState
+    @Binding var flag: Bool
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onAppear { if flag != live.backfilling { flag = live.backfilling } }
+            .onChangeCompat(of: live.backfilling) { now in if flag != now { flag = now } }
+    }
+}
+
 /// Honest strap-sync outcome row for the Data Sources card (ports the Android Live line, ed6a31d): the
 /// stalled-offload error when the last one died, else "History synced N ago". Hidden while an offload
 /// runs — the SyncingHistoryNote already says so. The `TimelineView` re-renders the relative label each
@@ -3096,7 +3311,10 @@ enum MetricTileState: Equatable {
     /// Baselines still cold-start: `nightsRemaining` more nights until the score is personal. No number.
     case calibrating(nightsRemaining: Int)
     /// A prior scored day shown pre-tonight (#543 carry-over). `date` is that scored day's own date.
-    case carriedLastNight(date: String)
+    /// `stale` is true when that day is older than the freshness cap (#779): the carry is still shown so the
+    /// recovery side isn't a bare blank, but it's relabelled "Latest sleep" so a weeks-old import is never
+    /// passed off as "Last night".
+    case carriedLastNight(date: String, stale: Bool)
     /// No data for the period — strap not worn / not connected / not synced. No number.
     case needsStrap
 
@@ -3106,7 +3324,10 @@ enum MetricTileState: Equatable {
         switch self {
         case .scored:                       return nil
         case .calibrating:                  return "Calibrating"
-        case .carriedLastNight(let date):   return "Last night · \(date)"
+        case .carriedLastNight(let date, let stale):
+            // stringLiteral keeps this a stable, fully-formed key (the date is already substituted) rather
+            // than a "... %@" format key, so the caption is testable + renders the exact same string.
+            return LocalizedStringKey(stringLiteral: stale ? "Latest sleep · \(date)" : "Last night · \(date)")
         case .needsStrap:                   return "Needs the strap"
         }
     }
@@ -3119,8 +3340,12 @@ enum MetricTileState: Equatable {
         case .calibrating(let n):
             // "night(s)" pluralises honestly so a single remaining night doesn't read "1 nights".
             return "Building your baseline. About \(n) more \(n == 1 ? "night" : "nights") until your scores are personal."
-        case .carriedLastNight:
-            return "Tonight's lands after you sleep with the strap on."
+        case .carriedLastNight(_, let stale):
+            // A fresh post-rollover carry tells you tonight's score is on its way; a stale carry (an older
+            // import, #779) instead explains the number is from that earlier session, not today.
+            return stale
+                ? "This is your last scored session. Wear the strap overnight for a fresh score."
+                : "Tonight's lands after you sleep with the strap on."
         case .needsStrap:
             return "No data for today. Was your strap worn and connected overnight?"
         }
@@ -3133,8 +3358,10 @@ enum MetricTileState: Equatable {
             return nil
         case .calibrating(let n):
             return "Calibrating. Building your baseline. About \(n) more \(n == 1 ? "night" : "nights") until your scores are personal."
-        case .carriedLastNight(let date):
-            return "Last night, \(date). Tonight's lands after you sleep with the strap on."
+        case .carriedLastNight(let date, let stale):
+            return stale
+                ? "Latest sleep, \(date). This is your last scored session. Wear the strap overnight for a fresh score."
+                : "Last night, \(date). Tonight's lands after you sleep with the strap on."
         case .needsStrap:
             return "Needs the strap. No data for today. Was your strap worn and connected overnight?"
         }
@@ -3151,17 +3378,19 @@ enum MetricTileState: Equatable {
     /// the engine outputs already computed on the view. Mirror EXACTLY in Kotlin (same order of checks):
     ///   1. today's own value exists            → `.scored`
     ///   2. still mid-calibration (today only)  → `.calibrating(nightsRemaining)`
-    ///   3. a prior scored day to carry (#543)  → `.carriedLastNight(date)`
+    ///   3. a prior scored day to carry (#543)  → `.carriedLastNight(date, stale)`
     ///   4. nothing banked anywhere             → `.needsStrap`
     /// `nightsRemaining` is clamped to AT LEAST 1 so a boundary count never reads "0 more nights" while
     /// calibration is genuinely still on (the singular/plural rule then reads the clamped value). Mirror
-    /// the Kotlin `coerceAtLeast(1)` exactly.
+    /// the Kotlin `coerceAtLeast(1)` exactly. `carriedStale` (#779) relabels an out-of-cap carry to
+    /// "Latest sleep" so a weeks-old import is never passed off as "Last night".
     static func resolve(hasTodayValue: Bool,
                         calibratingNightsRemaining: Int?,
-                        carriedDate: String?) -> MetricTileState {
+                        carriedDate: String?,
+                        carriedStale: Bool = false) -> MetricTileState {
         if hasTodayValue { return .scored }
         if let remaining = calibratingNightsRemaining { return .calibrating(nightsRemaining: max(1, remaining)) }
-        if let date = carriedDate { return .carriedLastNight(date: date) }
+        if let date = carriedDate { return .carriedLastNight(date: date, stale: carriedStale) }
         return .needsStrap
     }
 }

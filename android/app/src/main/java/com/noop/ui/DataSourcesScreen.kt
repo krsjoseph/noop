@@ -237,6 +237,12 @@ fun DataSourcesScreen(vm: AppViewModel) {
             } else {
                 vm.ble.externalLog("Import ${summary.source} failed: ${summary.message}")
             }
+            // Import & Data Ingest test mode (Test Centre): emit the parser / per-stage / day-delta trace,
+            // tagged IMPORT, iff the mode is on. Gated zero-cost when off (one SharedPreferences bool read).
+            // The numbers are the SAME per-table counts the summary carries (Room upserts are fire-and-forget,
+            // so the persisted count equals the mapped count at this seam); emission changes nothing saved. No
+            // file name, path, or health value is in any line. Twin of the macOS DataSourcesView handlers.
+            emitImportTrace(context, vm, summary)
             refreshCounts()
             busy = false
             Toast.makeText(context, summary.message, Toast.LENGTH_LONG).show()
@@ -984,4 +990,59 @@ private fun BackupButton(
         Spacer(Modifier.width(8.dp))
         Text(label, style = NoopType.headline, color = ink)
     }
+}
+
+/**
+ * Emit the Import & Data Ingest test-mode trace for a finished import, tagged TestDomain.IMPORT, iff the
+ * mode is on. Shared by the Data Sources + Onboarding import flows (both call runImport). Gated zero-cost
+ * when off: one SharedPreferences bool read before any line is built. The lines are byte-aligned with the
+ * macOS ImportTrace shapes (parser / per-stage / reject / day-delta), built from the ImportSummary the
+ * importer already returned. Never a file name, a path, or any health value.
+ *
+ * HONESTY (the whole point of this mode, tied to the #601/#749/#754 "didn't save" cluster): unlike the
+ * Swift store, which returns the summed SQLite changes from each upsert, Room's @Upsert reports no
+ * store-write count at this layer. So Android does NOT claim "(all written)" / "(all days persisted)" - it
+ * emits rowsIn / daysMapped with rowsOut / daysPersisted marked UNVERIFIED. A line never asserts a save it
+ * cannot confirm. REJECTED counts (e.g. skippedSpans - scrubbed/damaged spans, the OPPOSITE of written)
+ * are routed through the reject line, never a stage line, matching AppleHealthImport.swift.
+ */
+internal fun emitImportTrace(
+    context: android.content.Context,
+    vm: AppViewModel,
+    summary: com.noop.data.ImportSummary,
+) {
+    if (!com.noop.testcentre.TestCentre.from(context).active(com.noop.testcentre.TestDomain.IMPORT)) return
+    if (summary.totalRows <= 0) return   // a failed/empty import already logged its reason above
+    val kind = com.noop.analytics.ImportTrace.kindWire(summary.source)
+    vm.ble.externalLog(
+        com.noop.analytics.ImportTrace.parserVersionLine(kind, importerVersion = 1),
+        com.noop.testcentre.TestDomain.IMPORT,
+    )
+    // Reject keys are NOT writes: they are rows/spans the import dropped (the opposite of "written"), so
+    // they must never become a stage line. skippedSpans is the only one an Android importer emits today.
+    val skippedSpans = summary.counts["skippedSpans"] ?: 0
+    for ((rawKey, count) in summary.counts) {
+        if (rawKey == "skippedSpans") continue   // routed through the reject line below, not as a stage
+        val category = com.noop.analytics.ImportTrace.categoryWire(summary.source, rawKey)
+        // rowsOut is UNVERIFIED on Android (Room reports no store-write count); never claim "(all written)".
+        vm.ble.externalLog(
+            com.noop.analytics.ImportTrace.stageLineUnverified(category, rowsIn = count),
+            com.noop.testcentre.TestDomain.IMPORT,
+        )
+    }
+    // The reject line mirrors AppleHealthImport.swift: the app map drops nothing further here, so
+    // droppedRows = 0; skippedSpans carries the tolerant-import scrubbed-span count (0 on non-Apple).
+    vm.ble.externalLog(
+        com.noop.analytics.ImportTrace.rejectLine(droppedRows = 0, skippedSpans = skippedSpans),
+        com.noop.testcentre.TestDomain.IMPORT,
+    )
+    // Day delta: pick the source's day-keyed table (Apple -> appleDaily, WHOOP/others -> dailyMetric) so a
+    // real Apple import reports the right day count, and label the stage with the Swift category vocabulary.
+    val dayKey = if (summary.counts.containsKey("appleDaily")) "appleDaily" else "dailyMetric"
+    val days = summary.counts[dayKey] ?: summary.counts["days"] ?: 0
+    val dayCategory = com.noop.analytics.ImportTrace.categoryWire(summary.source, dayKey)
+    vm.ble.externalLog(
+        com.noop.analytics.ImportTrace.dayDeltaLineUnverified(dayCategory, daysMapped = days),
+        com.noop.testcentre.TestDomain.IMPORT,
+    )
 }

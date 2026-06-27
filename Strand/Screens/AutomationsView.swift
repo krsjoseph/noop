@@ -63,11 +63,13 @@ struct AutomationsView: View {
                 doubleTapCard.staggeredAppear(index: 1)
                 wearCard.staggeredAppear(index: 2)
                 coachingCard.staggeredAppear(index: 3)
-                alarmCard.staggeredAppear(index: 4)
-                inactivityCard.staggeredAppear(index: 5)
-                illnessCard.staggeredAppear(index: 6)
-                healthInsightsCard.staggeredAppear(index: 7)
-                batteryCard.staggeredAppear(index: 8)
+                // #766: the strap's silent wake-alarm card used to sit here, which let users conflate it
+                // with the wind-down reminder. It's moved to the dedicated Alarms screen (SmartAlarmView)
+                // so every wake/wind-down control lives in one place. Automations is just inputs-to-actions now.
+                inactivityCard.staggeredAppear(index: 4)
+                illnessCard.staggeredAppear(index: 5)
+                healthInsightsCard.staggeredAppear(index: 6)
+                batteryCard.staggeredAppear(index: 7)
             }
         }
         // Liquid Glass for the groups (SettingsGroup → NoopCard, glass-aware). Cascades via the
@@ -236,127 +238,6 @@ struct AutomationsView: View {
                         .accessibilityLabel("Use my resonance pace")
                 }
             }
-        }
-    }
-
-    // MARK: - Smart alarm
-
-    private var alarmCard: some View {
-        SettingsGroup(
-            header: "Smart alarm",
-            footer: "Wake to a buzz from the strap's own firmware alarm, even if NOOP is closed. Still experimental on WHOOP 4.0, so keep a backup alarm until you've confirmed it wakes you."
-        ) {
-            SettingsRow(icon: "alarm.fill", title: "Enable smart alarm",
-                        subtitle: "Arms the strap to buzz at your wake time.",
-                        value: behavior.smartAlarmEnabled ? "On" : nil) {
-                Toggle("", isOn: $behavior.smartAlarmEnabled)
-                    .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
-                    .accessibilityLabel("Enable smart alarm")
-            }
-            if behavior.smartAlarmEnabled {
-                SettingsRow(title: "Wake at") {
-                    DatePicker("", selection: alarmTimeBinding, displayedComponents: .hourAndMinute)
-                        .labelsHidden().datePickerStyle(.compact)
-                        .accessibilityLabel("Wake at")
-                }
-                alarmWeekdayPicker.settingsRowInsets()
-                Text("Armed on the strap itself, so it can buzz at your wake time even if your phone is asleep or NOOP is closed. We send the same alarm command the official app sends, but a strap-driven wake-up hasn't been confirmed on our side yet, so please keep a backup alarm for now.")
-                    .font(StrandFont.footnote)
-                    .foregroundStyle(StrandPalette.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .settingsRowInsets()
-            }
-        }
-        .onChangeCompat(of: behavior.smartAlarmEnabled) { _ in model.applySmartAlarm() }
-        .onChangeCompat(of: behavior.smartAlarmMinutes) { _ in model.applySmartAlarm() }
-        .onChangeCompat(of: behavior.smartAlarmWeekdays) { _ in model.applySmartAlarm() }
-    }
-
-    // MARK: Weekday picker (#539)
-
-    /// Calendar weekday numbers laid out Monday-first for display (Mon…Sun → 2,3,4,5,6,7,1).
-    nonisolated private static let weekdayOrder = [2, 3, 4, 5, 6, 7, 1]
-
-    private var alarmWeekdayPicker: some View {
-        VStack(alignment: .leading, spacing: NoopMetrics.space2) {
-            HStack(spacing: 6) {
-                ForEach(Self.weekdayOrder, id: \.self) { dow in
-                    let selected = Self.weekdayIsSelected(dow, in: behavior.smartAlarmWeekdays)
-                    Text(Self.weekdayInitial(dow))
-                        .font(StrandFont.caption)
-                        .foregroundStyle(selected ? StrandPalette.surfaceBase : StrandPalette.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .background(selected ? StrandPalette.accent : StrandPalette.surfaceInset, in: Circle())
-                        .contentShape(Circle())
-                        .onTapGesture { behavior.smartAlarmWeekdays = Self.toggledWeekday(dow, in: behavior.smartAlarmWeekdays) }
-                        .accessibilityLabel(Self.weekdayName(dow))
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-            Text(Self.weekdaySummary(behavior.smartAlarmWeekdays))
-                .font(StrandFont.caption)
-                .foregroundStyle(StrandPalette.textTertiary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// A day reads as "on" when the set is empty (= every day) or explicitly contains it. Pure for tests.
-    nonisolated static func weekdayIsSelected(_ dow: Int, in days: Set<Int>) -> Bool {
-        days.isEmpty || days.contains(dow)
-    }
-
-    /// Toggle one weekday, normalising "every day" at both ends so the empty set always means every day.
-    /// Pure + side-effect-free so the selection rules can be unit-tested. Pulling a day out of the
-    /// implicit "every day" expands to the explicit other six; selecting the seventh collapses back to
-    /// the empty "every day" set.
-    nonisolated static func toggledWeekday(_ dow: Int, in days: Set<Int>) -> Set<Int> {
-        var next: Set<Int>
-        if days.isEmpty {
-            // "Every day" → deselect just this one, leaving the other six explicit.
-            next = Set(1...7)
-            next.remove(dow)
-        } else if days.contains(dow) {
-            next = days
-            next.remove(dow)
-        } else {
-            next = days
-            next.insert(dow)
-        }
-        // All seven selected collapses back to the canonical "every day" empty set.
-        return next.count == 7 ? [] : next
-    }
-
-    /// Human-readable summary of the selection. Pure for tests.
-    nonisolated static func weekdaySummary(_ days: Set<Int>) -> String {
-        if days.isEmpty || days.count == 7 { return "Every day" }
-        if days == Set(2...6) { return "Weekdays" }
-        if days == Set([1, 7]) { return "Weekends" }
-        return weekdayOrder.filter { days.contains($0) }.map { weekdayName($0) }.joined(separator: ", ")
-    }
-
-    private static func weekdayInitial(_ dow: Int) -> String {
-        switch dow {
-        case 1: return "S"
-        case 2: return "M"
-        case 3: return "T"
-        case 4: return "W"
-        case 5: return "T"
-        case 6: return "F"
-        case 7: return "S"
-        default: return "?"
-        }
-    }
-
-    nonisolated private static func weekdayName(_ dow: Int) -> String {
-        switch dow {
-        case 1: return "Sun"
-        case 2: return "Mon"
-        case 3: return "Tue"
-        case 4: return "Wed"
-        case 5: return "Thu"
-        case 6: return "Fri"
-        case 7: return "Sat"
-        default: return "?"
         }
     }
 
@@ -562,10 +443,8 @@ struct AutomationsView: View {
         #endif
     }
 
-    private var alarmTimeBinding: Binding<Date> {
-        Binding(get: { Self.date(fromMinutes: behavior.smartAlarmMinutes) },
-                set: { behavior.smartAlarmMinutes = Self.minutes(from: $0) })
-    }
+    // `date(fromMinutes:)` / `minutes(from:)` stay: the inactivity active-hours pickers above use them.
+    // (The strap-alarm time binding moved to SmartAlarmView with the rest of the alarm UI, #766.)
     private static func date(fromMinutes m: Int) -> Date {
         Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
     }
