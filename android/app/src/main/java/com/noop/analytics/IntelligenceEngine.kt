@@ -49,6 +49,12 @@ object IntelligenceEngine {
 
         /** A locked owner override for [day] from the dayOwnership table, or null. Wins outright. */
         suspend fun lockedOwner(day: String): String?
+
+        /** The registry's currently-active strap id (CAPTURE-B universal `writeActiveId`). The default
+         *  returns null so legacy/test sources are unaffected; [RegistryDayOwnerSource] supplies the real
+         *  active id so the universal dayOwner diagnostic can name where new data is being WRITTEN, which
+         *  is the read-vs-write mismatch the #814/#799 spine bug was about. */
+        suspend fun activeWriteId(): String? = null
     }
 
     /** Minimum HR samples in a day's window before it is worth scoring. */
@@ -58,6 +64,10 @@ object IntelligenceEngine {
     const val STREAM_LIMIT: Int = 200_000
 
     private const val SECONDS_PER_DAY: Long = 86_400L
+
+    /** CAPTURE-B: a day's resolved read owner + the HR-row count read for it, captured in pass 1 and
+     *  consumed by pass 2's universal dayOwner emit. */
+    private data class OwnerRead(val owner: String, val hrRows: Int)
 
     /** Summary of one scored day (for logging / a future on-device intelligence screen). */
     data class Computed(
@@ -150,10 +160,17 @@ object IntelligenceEngine {
         // and reuses StepsEstimateEngine.calibrate/estimate verbatim, so the steps total is unchanged. Mirrors
         // the Swift stepsTraceActive wiring.
         stepsTraceSink: ((String) -> Unit)? = null,
+        // CAPTURE-B universal diagnostic sink (Test Centre, domain .universal). When non-null, EACH scored
+        // day emits one verbatim `dayOwner day=… readId=… writeActiveId=… hrRows=… provenance=…` line so
+        // EVERY Test Centre export self-diagnoses the read-vs-write identity and the day's data provenance,
+        // byte-identical to the iOS lanes' format. null (the default) = zero lines, byte-identical default
+        // path. The Context-aware caller (AppViewModel) reads TestCentre.active(UNIVERSAL) and passes a
+        // non-null sink ONLY when any test mode is on, routing each line to the .universal-tagged strap log.
+        universalSink: ((String) -> Unit)? = null,
     ): List<Computed> = withContext(Dispatchers.Default) {
         analyzeRecentOnCpu(repo, profile, maxDays, importedDeviceId, maxHROverride, nowSeconds,
             ownerSource, manualStepCoefficient, persistStepsCalibration, baselineEpoch, recoveryEpoch, diag,
-            useExperimentalSleepV2, sleepTraceSink, recoveryTraceSink, stepsTraceSink)
+            useExperimentalSleepV2, sleepTraceSink, recoveryTraceSink, stepsTraceSink, universalSink)
     }
 
     /** History span for the one-shot Effort rescore , large enough to cover any real wear history,
@@ -226,6 +243,9 @@ object IntelligenceEngine {
         // .steps-tagged strap log. The trace recomputes the SAME wrap-aware sum + reuses calibrate verbatim,
         // so the steps total is unchanged. Mirrors Swift.
         stepsTraceSink: ((String) -> Unit)? = null,
+        // CAPTURE-B universal diagnostic sink. null = byte-identical default (no lines); when non-null each
+        // scored day emits the verbatim `dayOwner …` line. See the public overload's doc.
+        universalSink: ((String) -> Unit)? = null,
     ): List<Computed> {
         val hrvCfg = Baselines.metricCfg["hrv"] ?: return emptyList()
         val rhrCfg = Baselines.metricCfg["resting_hr"] ?: return emptyList()
@@ -251,6 +271,11 @@ object IntelligenceEngine {
         // IntelligenceEngine.analyzeRecent registry snapshot + resolveDayOwner. (1B-4)
         val candidatePriorities = ownerSource?.candidatePriorities().orEmpty()
 
+        // CAPTURE-B: the registry's active strap id (the universal `writeActiveId`). Resolved ONCE; falls
+        // back to [importedDeviceId] so a single-WHOOP install (or a null/legacy ownerSource) names the same
+        // id the read path resolves to, and the universal line proves read == write rather than diverging.
+        val activeWriteId = (universalSink?.let { ownerSource?.activeWriteId() }) ?: importedDeviceId
+
         // ── Pass 1: detect + aggregate each offloaded night, scoring against the
         // imported-only baseline. For a BLE-only user repo.days(importedDeviceId) is
         // empty, so the HRV baseline is NOT usable and res.recovery is null here , but
@@ -259,6 +284,11 @@ object IntelligenceEngine {
         // re-score in pass 2. Collected oldest-first to match foldHistory's replay order.
         // foldHistory winsorizes outliers. days() is oldest-first (Swift ascending).
         val hist = repo.days(importedDeviceId)
+        // CAPTURE-B: per-day resolved read owner + HR-row count, captured in pass 1, consumed by pass 2's
+        // universal dayOwner emit (which reuses the SAME importedWhoopDays / appleHealthDays sets pass 2
+        // builds for daySourceToken, so there is no extra read). Only populated when the universal sink is
+        // on. Keyed by the local day.
+        val readOwnerByDay = LinkedHashMap<String, OwnerRead>()
         // HRV baseline honours the manual "Recalibrate baseline" epoch (noop.hrvBaselineEpoch): pass the
         // per-value "yyyy-MM-dd" day keys (parallel to the values) so foldHistory drops every night before
         // the epoch. baselineEpoch is threaded down from the Context-aware caller (0.0 = no recalibration).
@@ -327,6 +357,11 @@ object IntelligenceEngine {
             val owner = resolveDayOwner(repo, ownerSource, candidatePriorities, day, from, to, importedDeviceId)
 
             val hr = repo.hrSamples(owner, from, to, STREAM_LIMIT)
+            // CAPTURE-B: capture this day's resolved read owner + HR-row count so PASS 2 can emit the
+            // verbatim universal `dayOwner …` line per SCORED day (matching the iOS emit, which is in the
+            // scored-days loop, NOT here). Only when the universal sink is on. A day skipped below for too
+            // few rows is never scored, so it emits no line, byte-identical to the iOS behaviour.
+            if (universalSink != null) readOwnerByDay[day] = OwnerRead(owner, hr.size)
             if (hr.size < MIN_HR_SAMPLES) continue // need real raw data, not a stray sample
             val rr = repo.rrIntervals(owner, from, to, STREAM_LIMIT)
             val resp = repo.respSamples(owner, from, to, STREAM_LIMIT)
@@ -404,7 +439,13 @@ object IntelligenceEngine {
             // wrap-aware deltas + dropped deltas), tagged .steps. Only when the mode is on (the sink is
             // non-null), so the default path emits zero .steps lines. The trace recomputes the SAME
             // wrap-aware sum analyzeDay just ran over the SAME `daySteps`, so the steps total is unchanged.
-            if (stepsTraceSink != null) {
+            //
+            // #810: GUARD on daySteps being non-empty. A WHOOP 4.0 sends no raw step counter, so its
+            // `daySteps` is empty and the raw-counter trace is the wrong path (its steps are
+            // motion-estimated, surfaced by the calibration/estimate trace below). Skipping the call here
+            // stops the 4.0 export carrying a "counterSamples=0 ... need >=2" line that read as broken; a
+            // 5/MG always banks counter rows so this never suppresses its real trace.
+            if (stepsTraceSink != null && daySteps.isNotEmpty()) {
                 for (line in StepsEstimateEngineTrace.rawCounterTrace(
                     daySteps = daySteps, dayKey = day, tzOffsetSeconds = tzOffsetSeconds,
                     ticksPerStep = profile.stepTicksPerStep,
@@ -615,6 +656,26 @@ object IntelligenceEngine {
                     "matched=${res.sleepSessions.size} " +
                     "source=${daySourceToken(daily.day, importedWhoopDays, appleHealthDays)}",
             )
+            // ── CAPTURE-B: universal dayOwner self-diagnostic (#814/#799) ────────────────────────────────
+            // ONE line per SCORED day, tagged .universal so it rides EVERY Test Centre export regardless of
+            // which mode is on. It pins the read/write split #814 is about: readId is the owner this day was
+            // read+scored from (captured in pass 1), writeActiveId is the registry's active id; a divergence
+            // on a day with HR rows is the symptom. provenance says what backed the day. Verbatim format so
+            // the export parser reads it; byte-identical to the iOS emit (same scored-days loop, same shape).
+            // Only when the universal sink is on (the gate is the sink's nullness, set by the caller).
+            if (universalSink != null) {
+                val read = readOwnerByDay[daily.day]
+                universalSink(
+                    dayOwnerLine(
+                        day = daily.day,
+                        readId = read?.owner ?: activeWriteId,
+                        writeActiveId = activeWriteId,
+                        hrRows = read?.hrRows ?: 0,
+                        importedWhoopDays = importedWhoopDays,
+                        appleHealthDays = appleHealthDays,
+                    ),
+                )
+            }
             // Stamp the computed source id + the re-scored recovery & skin-temp deviation onto the row.
             dailies.add(daily.copy(deviceId = computedId, recovery = recovery, skinTempDevC = skinTempDevC))
             // Map the rich DetectedSleep sessions → Room SleepSession cache rows.
@@ -1147,6 +1208,47 @@ object IntelligenceEngine {
         day in importedWhoopDays -> "imported:whoop"
         day in appleHealthDays -> "imported:apple"
         else -> "computed"
+    }
+
+    /**
+     * CAPTURE-B universal provenance token for the dayOwner diagnostic. Distinct from [daySourceToken]:
+     * the universal line reports what the day's data ACTUALLY is, so a day with no HR rows reads `none`
+     * (nothing measured or imported), an imported day names its brand, and a day scored from real strap
+     * HR reads `measured` (the `computed` token's universal-vocabulary name). An import is named even on a
+     * day that also has HR, matching the dashboard merge precedence (imports win). Pure so it's unit-tested.
+     */
+    internal fun universalProvenanceToken(
+        day: String,
+        hrRows: Int,
+        importedWhoopDays: Set<String>,
+        appleHealthDays: Set<String>,
+    ): String = when {
+        day in importedWhoopDays -> "imported:whoop"
+        day in appleHealthDays -> "imported:apple"
+        hrRows > 0 -> "measured"
+        else -> "none"
+    }
+
+    /**
+     * The verbatim universal dayOwner diagnostic line (CAPTURE-B). Byte-identical to the iOS lanes' shared
+     * contract so a Test Centre export self-diagnoses the read-vs-write identity (the #814/#799 spine bug)
+     * and each day's data provenance, and parses the same on either platform. [readId] is the device the
+     * day was READ from (the resolved owner); [writeActiveId] is the registry's active strap (where new
+     * data is WRITTEN); a mismatch is the spine symptom. Pure so it's unit-tested directly and is the SAME
+     * line analyzeRecent ships. No PII (device ids are registry tokens, not addresses; the strap log sink
+     * also scrubs). No em-dashes.
+     */
+    internal fun dayOwnerLine(
+        day: String,
+        readId: String,
+        writeActiveId: String,
+        hrRows: Int,
+        importedWhoopDays: Set<String>,
+        appleHealthDays: Set<String>,
+    ): String {
+        val provenance = universalProvenanceToken(day, hrRows, importedWhoopDays, appleHealthDays)
+        return "dayOwner day=$day readId=$readId writeActiveId=$writeActiveId " +
+            "hrRows=$hrRows provenance=$provenance"
     }
 
     /**

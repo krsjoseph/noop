@@ -35,12 +35,27 @@ struct WorkoutsView: View {
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     private var effortScale: EffortScale { UnitPrefs.resolveEffortScale(effortScaleRaw) }
 
-    /// All loaded sessions, newest first. Seedable for previews.
+    /// All loaded sessions, newest first. Seedable for previews. #797: this holds only the rows inside the
+    /// currently-LOADED window (`loadedWindowDays`), not the entire history. A 1700+-workout import made
+    /// the eager all-rows read + sort fire on every `refreshSeq` bump (first paint AND every backfill
+    /// slice). First paint loads a bounded window; selecting a wider range than is loaded lazily pages in
+    /// the rest (`expandWindow`).
     @State private var allRows: [WorkoutRow]
     @State private var loaded: Bool
     @State private var seededInitialRange = false
     @State private var range: Range = .all
+    /// #797: how many trailing days of workouts are currently LOADED into `allRows`. First paint loads
+    /// `Self.firstPaintWindowDays`; picking "All" (or a range wider than this) pages the full history in on
+    /// demand. nil means the full history is loaded (the user expanded to "All"). Preview rows are treated
+    /// as fully loaded (nil) so the preview path is unchanged.
+    @State private var loadedWindowDays: Int?
     private let usesPreviewRows: Bool
+
+    /// #797: trailing-day window the FIRST workouts read is bounded to, so first paint never sorts a
+    /// multi-thousand-workout history. Comfortably covers the default range (the tightest range with ≥2
+    /// sessions, almost always ≤90 days); a wider pick pages the rest in via `expandWindow`. 400 days
+    /// covers the 1Y range plus headroom.
+    static let firstPaintWindowDays = 400
 
     // iPhone (.compact) can't fit the labelled "Add workout" button beside the 5-segment range pill —
     // the button got crushed into a tall sliver (#234/#339). Stack them there; iPad/Mac keep one row.
@@ -75,6 +90,8 @@ struct WorkoutsView: View {
     init(previewRows: [WorkoutRow]? = nil) {
         _allRows = State(initialValue: previewRows ?? [])
         _loaded = State(initialValue: previewRows != nil)
+        // Preview-seeded rows are treated as the full history (nil window) so the preview path never pages.
+        _loadedWindowDays = State(initialValue: previewRows != nil ? nil : Self.firstPaintWindowDays)
         usesPreviewRows = previewRows != nil
     }
 
@@ -121,7 +138,8 @@ struct WorkoutsView: View {
         }
         .task(id: repo.refreshSeq) {
             guard !usesPreviewRows else { return }
-            let r = await repo.workoutRows()
+            // #797: read only the currently-loaded window (bounded on first paint), not the whole history.
+            let r = await repo.workoutRows(days: loadedWindowDays ?? 4000)
             allRows = r
             let wasLoaded = loaded
             loaded = true
@@ -136,6 +154,13 @@ struct WorkoutsView: View {
                 range = defaultRange(for: allRows)
                 seededInitialRange = true
             }
+        }
+        // #797: when the user picks a range wider than the bounded first-paint window (typically "All"),
+        // page the full history in. A pick that fits the loaded window is a no-op. Also covers the
+        // auto-widen: if the selected window is sparse and `effectiveRange` falls back to `.all`, the
+        // full read is needed to show the older sessions.
+        .onChange(of: range) { newRange in
+            Task { await expandWindowIfNeeded(for: newRange == .all ? .all : effectiveRange) }
         }
         .sheet(item: $sheet) { target in
             ManualWorkoutSheet(editing: target.editing) { row, replacing in
@@ -193,7 +218,19 @@ struct WorkoutsView: View {
     /// Keeps the user's current range — only the initial load picks a default — and the auto-widen
     /// (`effectiveRange`) still covers a now-empty window.
     private func reload() async {
-        allRows = await repo.workoutRows()
+        allRows = await repo.workoutRows(days: loadedWindowDays ?? 4000)
+    }
+
+    /// #797: page the FULL workout history in when the user selects a range wider than the bounded
+    /// first-paint window. Idempotent: once expanded (`loadedWindowDays == nil`) it never re-reads here.
+    /// Only a pick of `.all` (or a future range exceeding the loaded window) triggers the one-time full
+    /// read, so the common 7D/30D/90D/1Y interactions stay on the already-loaded bounded set.
+    private func expandWindowIfNeeded(for picked: Range) async {
+        guard !usesPreviewRows, loadedWindowDays != nil else { return }
+        // A bounded range that fits inside what's already loaded needs no wider read.
+        if let pickedDays = picked.days, pickedDays <= (loadedWindowDays ?? 0) { return }
+        loadedWindowDays = nil
+        allRows = await repo.workoutRows(days: 4000)
     }
 
     // MARK: - Post-log activity-cost note (#439)

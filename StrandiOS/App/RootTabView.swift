@@ -258,6 +258,17 @@ struct RootTabView: View {
                     MoreRow("Shortcuts Export", "square.and.arrow.up.fill") { ShortcutExportSettingsView() }
                 }
                 moreSection("App") {
+                    // #805/#811: the v7.3.1 #766 alarm consolidation moved Smart Alarm under a single
+                    // "Alarms" sidebar entry (RootView .smartAlarm) but the regression dropped the row
+                    // from the iPhone More list, leaving Alarms unreachable on iPhone. Restore it here
+                    // (route to SmartAlarmView, the cross-platform iOS/macOS surface).
+                    //
+                    // Notifications (RootView .notifications) is deliberately NOT added: that screen is
+                    // macOS-only (it picks which Mac apps tap your wrist via NSWorkspace, imports AppKit,
+                    // and project.yml excludes Screens/NotificationSettingsView.swift from the iOS target),
+                    // so it can't compile or apply on iPhone. iPhone's wrist-alert controls live on the
+                    // Automations screen instead. Its absence from the iPhone More list is correct.
+                    MoreRow("Alarms", "alarm.fill") { SmartAlarmView() }
                     MoreRow("Automations", "wand.and.stars") { AutomationsView() }
                     MoreRow("Siri & Shortcuts", "mic.fill") { SiriShortcutsSettingsView() }
                     MoreRow("Settings", "gearshape.fill") { SettingsView() }

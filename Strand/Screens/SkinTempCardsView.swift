@@ -67,6 +67,10 @@ struct CycleAwarenessCard: View {
     var onLogPeriod: (() -> Void)? = nil
     /// Called when the user opens the cycle detail screen. nil makes the card non-navigating.
     var onOpenDetail: (() -> Void)? = nil
+    /// Called when the user turns cycle awareness OFF from here (#801). nil hides the off control.
+    /// Provided so the feature can be turned off in-place exactly where it was turned on (the opt-in
+    /// card's "Turn on" lives in the same Health spot), rather than only from Automations.
+    var onTurnOff: (() -> Void)? = nil
 
     // Cycle awareness reads in the calm, NON-VALENCED Rest indigo world (mirroring Mind): a
     // phase is just information, never framed good/bad. No red, ever.
@@ -108,6 +112,15 @@ struct CycleAwarenessCard: View {
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 PrivacyNote()
+
+                // In-place off control (#801): the toggle is now symmetric, it can be turned off
+                // right where it was turned on, not only from Automations. A quiet ghost button so it
+                // sits below the awareness/privacy lines without competing with the primary actions.
+                if let onTurnOff {
+                    Button("Turn off cycle awareness", action: onTurnOff)
+                        .buttonStyle(.noopGhost)
+                        .accessibilityHint("Stops reading a cycle phase from your nightly temperature. You can turn it back on here any time.")
+                }
             }
         }
         .accessibilityElement(children: .contain)

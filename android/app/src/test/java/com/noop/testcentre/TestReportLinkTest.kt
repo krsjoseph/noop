@@ -1,5 +1,8 @@
 package com.noop.testcentre
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,5 +43,74 @@ class TestReportLinkTest {
             profile = TestDomain.MASTER, title = "x",
             version = "7.3.0", platform = "Android", osVersion = "15")
         assertTrue(s.contains("labels=bug%2Ctest:all"))
+    }
+
+    // CAPTURE-A (#812): the log/what_happens body prefill
+
+    @Test
+    fun noReportTextAddsNoLogParam() {
+        // Default (existing callers) must compose the SAME URL as before, with no `log` param.
+        val s = TestReportLink.reportUrlString(
+            profile = TestDomain.SLEEP, title = "x",
+            version = "7.3.0", platform = "Android", osVersion = "15")
+        assertFalse(s.contains("log="))
+        assertFalse(s.contains("what_happens="))
+    }
+
+    @Test
+    fun reportTextPrefillsLogTailInDetailsBlock() {
+        val report = (1..200).joinToString("\n") { "line$it" }
+        val s = TestReportLink.reportUrlString(
+            profile = TestDomain.SLEEP, title = "x",
+            version = "7.3.0", platform = "Android", osVersion = "15",
+            reportText = report)
+        assertTrue(s.contains("log="))
+        // The <details> wrapper and the LAST line are present; the FIRST line (beyond the 150 tail) is not.
+        assertTrue(s.contains("%3Cdetails%3E")) // "<details>" encoded
+        assertTrue(s.contains("line200"))
+        assertFalse(s.contains("line1%0A")) // "line1\n" would only appear if the head leaked in
+    }
+
+    @Test
+    fun logDetailsBlockTakesTailAndNamesCount() {
+        val report = (1..10).joinToString("\n") { "L$it" }
+        val block = TestReportLink.logDetailsBlock(report, tailLines = 3)!!
+        assertTrue(block.contains("last 3 lines"))
+        assertTrue(block.contains("L8\nL9\nL10"))
+        assertFalse(block.contains("L7"))
+        assertFalse(block.contains("\u2014")) // no em-dash
+    }
+
+    @Test
+    fun logDetailsBlockNullOnEmpty() {
+        assertNull(TestReportLink.logDetailsBlock(""))
+        assertNull(TestReportLink.logDetailsBlock("\n\n"))
+    }
+
+    @Test
+    fun whatHappensSeedJoinsAnsweredPromptsInOrder() {
+        val qs = listOf(
+            Question(id = "q1", prompt = "When did it happen", kind = Question.Kind.TEXT),
+            Question(id = "q2", prompt = "Did you wear it", kind = Question.Kind.YES_NO),
+            Question(id = "q3", prompt = "Unanswered", kind = Question.Kind.TEXT),
+        )
+        val seed = TestReportLink.whatHappensSeed(qs, mapOf("q1" to "last night", "q2" to "yes"))
+        assertEquals("When did it happen: last night\nDid you wear it: yes", seed)
+    }
+
+    @Test
+    fun whatHappensSeedNullWhenNothingAnswered() {
+        val qs = listOf(Question(id = "q1", prompt = "p", kind = Question.Kind.TEXT))
+        assertNull(TestReportLink.whatHappensSeed(qs, emptyMap()))
+        assertNull(TestReportLink.whatHappensSeed(qs, mapOf("q1" to "  ")))
+    }
+
+    @Test
+    fun whatHappensSeedAddsParamWhenSupplied() {
+        val s = TestReportLink.reportUrlString(
+            profile = TestDomain.SLEEP, title = "x",
+            version = "7.3.0", platform = "Android", osVersion = "15",
+            whatHappensSeed = "it broke")
+        assertTrue(s.contains("what_happens=it%20broke"))
     }
 }

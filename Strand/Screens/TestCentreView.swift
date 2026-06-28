@@ -327,6 +327,7 @@ private struct TestModeRow: View {
     let mode: TestMode
     @ObservedObject var report: TestCentreReport
     @EnvironmentObject var live: LiveState
+    @EnvironmentObject var model: AppModel
     @State private var on: Bool = false
 
     private var elapsed: Double? {
@@ -417,6 +418,12 @@ private struct TestModeRow: View {
     private func startDisplayMonitor() {
         DisplayPerformanceMonitor.shared.emit = { [weak live] line in
             live?.append(log: line, domain: .display)
+        }
+        // CAPTURE-D (#797): wire the data-volume provider so start() emits one `dataVolume` line read STRAIGHT
+        // from the store (Repository.dataVolumeSnapshot queries the store, not the @Published caches), so an
+        // import-driven-lag report shows the read-set behind the frame stats.
+        DisplayPerformanceMonitor.shared.dataVolumeProvider = { [weak model] in
+            await model?.repo.dataVolumeSnapshot()
         }
         DisplayPerformanceMonitor.shared.start()
     }

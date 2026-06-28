@@ -173,7 +173,9 @@ class WhoopConnectionService : Service() {
                 // not to take it down. (Audited during #82, which proved unrelated/unreproducible —
                 // this guard is belt-and-braces, not a diagnosed fix.) After catch{emit} the inner
                 // flow completes; combine keeps running on ble.state with days frozen.
-                repo.daysMergedFlow("my-whoop").catch { emit(emptyList()) },
+                // #797: the bounded merge (recentDaysMergedFlow) is enough here, the notification only reads
+                // today's row; this stops a years-deep import re-merging the whole history on every change.
+                repo.recentDaysMergedFlow("my-whoop").catch { emit(emptyList()) },
             ) { state, days ->
                 val todayKey = java.time.LocalDate.now().toString()
                 // Carry the whole today row (not just recovery) so the 2x2 widget can derive Rest +

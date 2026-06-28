@@ -13,7 +13,15 @@ import StrandAnalytics
 final class IntelligenceEngine: ObservableObject {
     private let repo: Repository
     private let profile: ProfileStore
-    private let deviceId: String
+    /// The id of the strap whose RAW streams this engine scores and under whose `-noop` sibling it WRITES
+    /// the computed daily rows. SEEDED with "my-whoop", then RE-POINTED to the device registry's
+    /// `activeDeviceId` once the store opens (see `adoptActiveDeviceId`), mirroring the write side
+    /// (`BLEManager.bootstrapStore`) and the read side (`Repository.adoptActiveDeviceId`). #814: after a
+    /// remove+re-add the Collector writes today's raw under the NEW active id, so the engine must read +
+    /// score + persist under that SAME id or it would score an empty stale namespace. Per-day owner
+    /// resolution already factors the active id in; this keeps the imported-history read (`hist`), the
+    /// computed write id, and the owner fallback consistent with it.
+    private var deviceId: String
 
     @Published var results: [Computed] = []      // newest first
     @Published var computing = false
@@ -76,6 +84,12 @@ final class IntelligenceEngine: ObservableObject {
     private struct DayScan {
         let result: AnalyticsEngine.DayResult
         let rhrLine: String?
+        /// CAPTURE-B (#814/#799): the resolved READ owner id this day was scored from, and how many HR rows
+        /// that owner returned for the night window, carried out of the off-actor loop so the main-actor
+        /// fold can emit the universal `dayOwner …` self-diagnostic line (it needs the registry active id +
+        /// provenance sets, which are resolved on the main actor).
+        let readOwner: String
+        let hrRows: Int
         /// Sleep & Rest test-mode gate-trace + Rest sub-score lines for this day, collected off the main
         /// actor and replayed through `diagnosticSink` tagged `.sleep` in per-day order. Empty unless the
         /// Sleep mode is active (the gate is read once before the loop), so the default path is unchanged.
@@ -117,6 +131,19 @@ final class IntelligenceEngine: ObservableObject {
 
     init(repo: Repository, profile: ProfileStore, deviceId: String) {
         self.repo = repo; self.profile = profile; self.deviceId = deviceId
+    }
+
+    /// Re-point the engine at the device registry's ACTIVE device id (#814), so it reads, scores and
+    /// persists under the SAME id the Collector writes raw to after a remove+re-add. Idempotent +
+    /// best-effort: an empty/unchanged id is a no-op, so a single-device install (active id still
+    /// "my-whoop") never moves and is byte-identical to the pre-#814 behaviour. Returns true when the id
+    /// actually changed.
+    @discardableResult
+    func adoptActiveDeviceId(_ id: String) -> Bool {
+        let trimmed = id.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != deviceId else { return false }
+        deviceId = trimmed
+        return true
     }
 
     /// Median of a list (0 when empty) — used to denoise the 7-day resting-HR for Fitness Age.
@@ -476,17 +503,26 @@ final class IntelligenceEngine: ObservableObject {
                     }.map { $0.bpm }
                     rhrLine = Self.rhrFloorMeanLogLine(day: res.daily.day, floor: floor, inBedBpms: inBedBpms)
                 }
-                out.append(DayScan(result: res, rhrLine: rhrLine, sleepTrace: sleepTrace,
-                                   stepsTrace: stepsTrace))
+                out.append(DayScan(result: res, rhrLine: rhrLine,
+                                   readOwner: owner, hrRows: hr.count,
+                                   sleepTrace: sleepTrace, stepsTrace: stepsTrace))
             }
             return out
         }.value
+
+        // CAPTURE-B (#814/#799): per-day resolved READ owner + that owner's HR-row count, keyed by day, so
+        // the second pass (which has the provenance sets) can emit the universal `dayOwner …` line. The
+        // owner is the id this day was actually scored/read from; the registry active id is what the WRITE
+        // side uses; when they DIVERGE on a day that has data, that's the #814 read/write split made
+        // visible in every export.
+        var readOwnerByDay: [String: (owner: String, hrRows: Int)] = [:]
 
         // Back on the main actor: fold the off-actor results into the pass-2 state in the SAME order the
         // loop produced them. Pure assignment / appends — no further store reads — so this is cheap and the
         // main actor was free during the heavy enumeration above.
         for scan in scanned {
             let res = scan.result
+            readOwnerByDay[res.daily.day] = (scan.readOwner, scan.hrRows)
             nightlyHrvByDay[res.daily.day] = res.daily.avgHrv
             nightlyRhrByDay[res.daily.day] = res.daily.restingHr.map(Double.init)
             nightlyRespByDay[res.daily.day] = res.daily.respRateBpm
@@ -610,6 +646,9 @@ final class IntelligenceEngine: ObservableObject {
         // via `recoveryTrace`, which returns the SAME score `recomputeRecovery` computes (it reuses
         // RecoveryScorer.recovery verbatim), so the headline Charge number is unaffected.
         let recoveryTraceActive = TestCentre.active(.recovery)
+        // CAPTURE-B (#814/#799): the universal dayOwner line rides every export, so its gate is "ANY mode
+        // active" (TestCentre.active(.universal) == anyActive). Read once here, like the other gates.
+        let universalTraceActive = TestCentre.active(.universal)
         for night in scoredNights {
             let daily = sleepEditedDaily(night.daily, detected: night.cachedSleep, editsByStart: editsByStart,
                                          habitualMidsleepSec: habitualMidsleepSec)
@@ -636,6 +675,25 @@ final class IntelligenceEngine: ObservableObject {
             let tsmLog = daily.totalSleepMin.map { String(Int($0.rounded())) } ?? "nil"
             diagnosticSink?("sleep day=\(daily.day) totalSleepMin=\(tsmLog) "
                             + "matched=\(night.cachedSleep.count) source=\(source.logToken)", nil)
+            // ── CAPTURE-B: universal dayOwner self-diagnostic (#814/#799) ────────────────────────────────
+            // ONE line per scored day, tagged `.universal` so it rides EVERY Test Centre export regardless
+            // of which mode is on. It pins down the read/write split #814 is about: `readId` is the owner
+            // this day was actually read+scored from, `writeActiveId` is the registry's active id the
+            // Collector writes raw under; when they DIVERGE on a day with HR rows, the dashboard and the
+            // strap are reading two different namespaces. `hrRows` is the owner's HR-row count for the night
+            // window; `provenance` says what backed the day (strap-measured vs a WHOOP/Apple import).
+            // Counts + ids only (ids are local "my-whoop"/"whoop-…"/import tokens, no PII; LiveState also
+            // scrubs). Verbatim format so the export parser reads it.
+            // Gated on `.universal` (== any Test Centre mode active) so it rides every export but stays OFF
+            // the strap log in normal use, matching the sleep/recovery/steps emitters' call-site gate. The
+            // gate is one UserDefaults bool; the line is only built when it passes.
+            if universalTraceActive {
+                let owned = readOwnerByDay[daily.day]
+                diagnosticSink?(Self.dayOwnerLine(
+                    day: daily.day, readId: owned?.owner ?? regActiveId, writeActiveId: regActiveId,
+                    hrRows: owned?.hrRows ?? 0, importedWhoop: importedWhoopDays.contains(daily.day),
+                    importedApple: appleHealthDays.contains(daily.day)), .universal)
+            }
             dailies.append(daily.with(recovery: recovery, skinTempDevC: skinDev))
             if let rest = AnalyticsEngine.Rest.composite(daily: daily) {
                 restPoints.append(MetricPoint(day: daily.day, key: "sleep_performance", value: rest))
@@ -941,6 +999,24 @@ final class IntelligenceEngine: ObservableObject {
 
         // Reload the dashboard caches so the freshly computed scores show up immediately.
         if !dailies.isEmpty { await repo.refresh() }
+    }
+
+    /// CAPTURE-B (#814/#799): build the universal `dayOwner …` self-diagnostic line VERBATIM (the Test
+    /// Centre export parser depends on this exact shape). `readId` is the owner this day was read+scored
+    /// from; `writeActiveId` is the registry's active id the Collector writes raw under; a DIVERGENCE on a
+    /// day with HR rows is the #814 read/write split. `provenance` is `imported:whoop` / `imported:apple`
+    /// when an export covers the day, else `measured` when the owner returned HR rows, else `none`. Pure +
+    /// nonisolated so it's unit-tested directly and so the format can never silently drift. No PII (the ids
+    /// are local "my-whoop" / "whoop-…" / import tokens; LiveState.append also scrubs).
+    nonisolated static func dayOwnerLine(day: String, readId: String, writeActiveId: String,
+                                         hrRows: Int, importedWhoop: Bool, importedApple: Bool) -> String {
+        let provenance: String
+        if importedWhoop { provenance = "imported:whoop" }
+        else if importedApple { provenance = "imported:apple" }
+        else if hrRows > 0 { provenance = "measured" }
+        else { provenance = "none" }
+        return "dayOwner day=\(day) readId=\(readId) writeActiveId=\(writeActiveId) "
+            + "hrRows=\(hrRows) provenance=\(provenance)"
     }
 
     /// Resolve the SINGLE device that owns `day` (invariant I2), so the day is scored from exactly one

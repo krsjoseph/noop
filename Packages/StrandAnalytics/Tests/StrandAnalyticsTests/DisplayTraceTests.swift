@@ -59,6 +59,23 @@ final class DisplayTraceTests: XCTestCase {
                        "memoryHighWater peak=187.5MB")
     }
 
+    // MARK: - CAPTURE-D (#797): dataVolume line
+
+    func testDataVolumeLineShape() {
+        let line = DisplayTrace.dataVolumeLine(
+            DataVolume(dbRows: 1_240_000, importedDays: 365, workouts: 42, lastRenderRows: 412))
+        XCTAssertEqual(line,
+            "dataVolume dbRows=1240000 importedDays=365 workouts=42 lastRenderRows=412")
+        XCTAssertFalse(line.contains("\u{2014}"))
+    }
+
+    func testDataVolumeLineNilLastRenderPrintsNa() {
+        // No render measured yet → "n/a", never a fabricated 0.
+        let line = DisplayTrace.dataVolumeLine(
+            DataVolume(dbRows: 0, importedDays: 0, workouts: 0, lastRenderRows: nil))
+        XCTAssertEqual(line, "dataVolume dbRows=0 importedDays=0 workouts=0 lastRenderRows=n/a")
+    }
+
     func testReadoutParsesLatestDeviceMetrics() {
         let tail = [
             "[display] deviceMetrics size=320x568pt @2.0x sizeClass=compact/compact safeArea=t0 b0 l0 r0 dynamicType=M orientation=portrait theme=light",

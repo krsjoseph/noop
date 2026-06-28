@@ -620,13 +620,22 @@ private fun SessionsSection(
 ) {
     var selectedRow by remember { mutableStateOf<WorkoutRow?>(null) }
 
+    // #797: paginate the All-Sessions list. This card lives inside ONE LazyColumn item, so every session
+    // row composes eagerly: a years-deep WHOOP/Apple import (hundreds to thousands of bouts) built the
+    // whole table in one pass, a real jank/OOM contributor. Render a bounded page and grow it on demand,
+    // so a heavy history opens fast and the user pages in the rest. Reset when the windowed range changes
+    // (the row set changes identity), so switching range never leaves a stale "shown" count.
+    var shownCount by remember(rows) { mutableStateOf(SESSIONS_PAGE_SIZE) }
+    val visible = if (rows.size <= shownCount) rows else rows.take(shownCount)
+    val remaining = rows.size - visible.size
+
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
         SectionHeader(title = "All Sessions", overline = "Log", trailing = "${rows.size} total")
         NoopCard(padding = 0.dp) {
             Column {
                 SessionHeaderRow()
                 FullDivider()
-                rows.forEachIndexed { idx, row ->
+                visible.forEachIndexed { idx, row ->
                     SessionRow(
                         row = row,
                         background = if (idx % 2 == 1) Palette.surfaceInset.copy(alpha = 0.4f) else Color.Transparent,
@@ -636,7 +645,26 @@ private fun SessionsSection(
                         onDelete = onDelete,
                         onClick = { selectedRow = it },
                     )
-                    if (idx != rows.lastIndex) FullDivider(alpha = 0.5f)
+                    if (idx != visible.lastIndex) FullDivider(alpha = 0.5f)
+                }
+                // "Show more" pages in the next [SESSIONS_PAGE_SIZE] bouts. Hidden once everything is shown.
+                if (remaining > 0) {
+                    FullDivider(alpha = 0.5f)
+                    val more = minOf(remaining, SESSIONS_PAGE_SIZE)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { shownCount += SESSIONS_PAGE_SIZE }
+                            .semantics { contentDescription = "Show $more more sessions" }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "Show $more more ($remaining remaining)",
+                            style = NoopType.subhead,
+                            color = Palette.accent,
+                        )
+                    }
                 }
             }
         }
@@ -646,6 +674,10 @@ private fun SessionsSection(
         WorkoutDetailSheet(vm = vm, row = row, onDismiss = { selectedRow = null })
     }
 }
+
+/** #797: the All-Sessions list renders in pages of this size and grows on "Show more", so a years-deep
+ *  workout history doesn't compose every row in one pass inside the single enclosing card. */
+private const val SESSIONS_PAGE_SIZE = 50
 
 @Composable
 private fun SessionHeaderRow() {

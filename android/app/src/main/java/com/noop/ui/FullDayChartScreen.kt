@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.noop.analytics.HrvAnalyzer
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
@@ -39,7 +40,9 @@ import java.util.Locale
 
 private enum class TimelineMetric(val title: String) {
     Hr("Heart Rate"),
-    Hrv("HRV"),
+    // #803: this trace is a rolling rMSSD over the RR series, NOT the raw RR interval it used to plot.
+    // The honest title says exactly what the curve is (windowed rMSSD), not a bare "HRV".
+    Hrv("rMSSD (5 min)"),
     Spo2("SpO₂"),
     SkinTemp("Skin Temp"),
     Respiration("Respiration"),
@@ -269,8 +272,14 @@ private suspend fun readTimeline(
     val raw: List<TimelinePoint> = when (metric) {
         TimelineMetric.Hr -> emptyList()
         TimelineMetric.Hrv ->
-            runCatching { repo.rrIntervals(deviceId, from, to, 200_000) }.getOrDefault(emptyList())
-                .map { TimelinePoint(it.ts, it.rrMs.toDouble()) }
+            // #803: plot a rolling rMSSD (ms) over the RR series, NOT the raw RR interval. Raw RR is the
+            // beat-to-beat heart PERIOD, not variability, so labelling it "HRV" was dishonest. HrvAnalyzer
+            // applies the SAME Malik/range artifact filter the nightly RMSSD uses, then slides a 5-min
+            // window. The result is already (ts, value); skip the in-process downsample below (the
+            // windowing IS the smoothing) by returning here.
+            return runCatching { repo.rrIntervals(deviceId, from, to, 200_000) }.getOrDefault(emptyList())
+                .let { HrvAnalyzer.rollingRmssd(it) }
+                .map { (ts, v) -> TimelinePoint(ts, v) }
         TimelineMetric.Spo2 ->
             runCatching { repo.spo2Samples(deviceId, from, to, 200_000) }.getOrDefault(emptyList())
                 .mapNotNull { if (it.ir > 0) TimelinePoint(it.ts, it.red.toDouble() / it.ir) else null }

@@ -6,6 +6,39 @@ import Foundation
 // reads, and reuses Rest.composite for the final value so the trace can never disagree with the
 // score. Pure and side-effect-free. No em-dashes. Counts and ratios only.
 
+/// Where the night that drove this day's sleep figures came from (CAPTURE-C / #799). The measured BLE
+/// path (`AnalyticsEngine.analyzeDay`) emits `.measured`; the caller passes `.imported(...)` when a
+/// previously-imported sleep row WON the daily merge over the on-device night, so the trace shows the
+/// import winning instead of silently replacing the measured number. The raw wire string is the contract
+/// shape `measured` / `imported:whoop` / `imported:apple`.
+public enum SleepProvenance: Equatable, Sendable {
+    case measured
+    case imported(String)   // source tag, e.g. "whoop" / "apple"
+
+    /// The verbatim provenance token for the trace line: "measured", or "imported:<source>".
+    public var wire: String {
+        switch self {
+        case .measured: return "measured"
+        case .imported(let src): return "imported:\(src)"
+        }
+    }
+}
+
+extension AnalyticsEngine {
+
+    /// One per-day sleep PROVENANCE line for the Sleep & Rest test mode (CAPTURE-C / #799). It rides the
+    /// SAME trace sink as the Rest sub-score line, right after it, so an imported row winning the merge is
+    /// visible in the export instead of silently substituting the measured night. `hoursAsleepMin` is the
+    /// scored night's total sleep in MINUTES (the same `tstS/60` the daily rollup uses); `sourceRowId` is a
+    /// stable id for the winning row (the measured main-night's start ts, or the imported row's id). PURE.
+    public static func sleepProvenanceLine(provenance: SleepProvenance,
+                                           hoursAsleepMin: Double,
+                                           sourceRowId: String) -> String {
+        "sleepProvenance provenance=\(provenance.wire) "
+            + "hoursAsleep=\(Int(hoursAsleepMin.rounded())) sourceRowId=\(sourceRowId)"
+    }
+}
+
 extension AnalyticsEngine.Rest {
 
     /// One Rest sub-score diagnostic line. `groupFragments` / `groupInBedSeconds` describe the

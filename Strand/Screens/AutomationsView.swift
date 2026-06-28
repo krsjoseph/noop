@@ -16,6 +16,11 @@ struct AutomationsView: View {
 
     /// v5 cycle-awareness opt-in (default OFF — the most sensitive health category, manual-first).
     @AppStorage(AppModel.cycleAwarenessKey) private var cycleAwareness = false
+
+    /// Whether the cycle-awareness opt-in is offered for this profile (#801). Delegates to the shared
+    /// ``ProfileStore/cycleAwarenessApplies`` gate (mirrors HealthView's opt-in gate) so a male profile
+    /// can't enable the feature here when it can't see the Health card either.
+    private var cycleOptInApplies: Bool { model.profile.cycleAwarenessApplies }
     /// v5 Rhythm experimental gate (the screen still shows its own consent clickwrap when opened).
     @AppStorage(RhythmConsent.enabledKey) private var rhythmEnabled = false
     /// Inactivity reminder (#419) — UI-local store, persisted in UserDefaults. The buzz itself fires
@@ -317,14 +322,20 @@ struct AutomationsView: View {
                  blurb: "Optional, on-device reads from your nightly signals. Each is off by default — for awareness only, never a diagnosis.",
                  active: cycleAwareness || rhythmEnabled) {
             VStack(spacing: 0) {
-                ToggleRow(label: "Cycle awareness",
-                          help: "Reads a coarse menstrual-cycle phase from your nightly skin temperature, entirely on \(Platform.deviceNounPhrase). Awareness only — not contraception, not a fertility predictor, not a medical service. The card appears in Health.",
-                          isOn: $cycleAwareness)
-                    .onChangeCompat(of: cycleAwareness) { on in
-                        model.cycleAwarenessEnabled = on
-                        Task { await model.refreshV5Signals() }
-                    }
-                rowDivider
+                // #801: cycle awareness reads the MENSTRUAL temperature shift, so the toggle is only
+                // offered to profiles it applies to (gated the same way as the Health opt-in card,
+                // not shown for male profiles). Keeps the two surfaces consistent: a profile that can't
+                // see the Health card can't enable the feature from here either.
+                if cycleOptInApplies {
+                    ToggleRow(label: "Cycle awareness",
+                              help: "Reads a coarse menstrual-cycle phase from your nightly skin temperature, entirely on \(Platform.deviceNounPhrase). Awareness only: not contraception, not a fertility predictor, not a medical service. The card appears in Health.",
+                              isOn: $cycleAwareness)
+                        .onChangeCompat(of: cycleAwareness) { on in
+                            model.cycleAwarenessEnabled = on
+                            Task { await model.refreshV5Signals() }
+                        }
+                    rowDivider
+                }
                 ToggleRow(label: "Rhythm visualization (experimental)",
                           help: "An experimental picture of your beat-to-beat heart timing. Not an ECG and not a diagnosis. You'll read and accept an experimental note before it shows anything.",
                           isOn: $rhythmEnabled)

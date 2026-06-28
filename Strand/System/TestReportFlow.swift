@@ -54,13 +54,22 @@ enum TestReportFlow {
                     gate: ReportReviewGate,
                     entries: [FileExport.BundleEntry],
                     showToast: @escaping (String) -> Void,
-                    copyToPasteboard: @escaping (String) -> Void) {
+                    copyToPasteboard: @escaping (String) -> Void,
+                    // CAPTURE-A (#812): the questionnaire-derived one-liner seeding the form's what_happens
+                    // box. nil leaves that required field for the user. The report.txt tail is read from
+                    // `entries` below, so a report submitted without the .zip still carries the trace.
+                    whatHappensSeed: String? = nil) {
         // Review-before-share is mandatory: do nothing until the user has confirmed.
         guard shouldProceed(gate: gate) else { return }
         let name = Plan.bundleName(profile: profile, platform: platform, version: version)
         _ = FileExport.exportBundle(entries: entries, suggestedName: name)
+        // The redacted report.txt (already scrubbed by TestBundleAssembler) prefills the issue's log block
+        // so a forgotten attachment doesn't yield an empty report (#812).
+        let reportText = entries.first(where: { $0.name == "report.txt" })
+            .flatMap { String(data: $0.data, encoding: .utf8) }
         if let url = TestReportLink.reportURL(profile: profile, title: title,
-                                              version: version, platform: platform, osVersion: osVersion) {
+                                              version: version, platform: platform, osVersion: osVersion,
+                                              reportText: reportText, whatHappensSeed: whatHappensSeed) {
             #if canImport(UIKit)
             UIApplication.shared.open(url)
             #elseif canImport(AppKit)

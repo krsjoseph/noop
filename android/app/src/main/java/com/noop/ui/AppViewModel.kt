@@ -83,6 +83,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val repo: WhoopRepository get() = repository
 
+    /** The registry's active strap id (the same id the read path resolves to). Public so the Test Centre
+     *  can read the right source for the CAPTURE-D data-volume snapshot. */
+    val activeStrapId: String get() = deviceId
+
     // MARK: - Devices screen (multi-source Phase 1B)
     //
     // The Devices screen is a thin UI over the process-wide [DeviceRegistry]. Every mutation goes
@@ -394,7 +398,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the strap with no WHOOP import.
      */
     val recentDays: StateFlow<List<DailyMetric>> =
-        repository.daysMergedFlow(deviceId)
+        // #797: bound the dashboard merge window. The unbounded daysMergedFlow re-merged the WHOLE daily
+        // history on every DB change; a years-deep import made that a heavy refresh feeding Today / Trends /
+        // illness watch. recentDaysMergedFlow caps each source to RECENT_DAYS_CAP most-recent days first, so
+        // the merge stays bounded while every current surface (deepest Trends range, 7-day Fitness Age /
+        // Vitality windows) keeps its data. Same oldest-first ordering as before.
+        repository.recentDaysMergedFlow(deviceId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -663,6 +672,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             if (com.noop.testcentre.TestCentre.from(appContext)
                                     .active(com.noop.testcentre.TestDomain.STEPS))
                                 { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.STEPS) }
+                            else null,
+                        // CAPTURE-B universal diagnostic (Test Centre, domain .universal): when ANY test
+                        // mode is on, stamp each scored day's `dayOwner …` line into the .universal-tagged
+                        // strap log so EVERY export self-diagnoses the read-vs-write identity + provenance.
+                        // active(UNIVERSAL) returns true whenever any non-universal mode is on, so the
+                        // universal line rides whatever domain the user enabled. Zero-cost when all off.
+                        universalSink =
+                            if (com.noop.testcentre.TestCentre.from(appContext)
+                                    .active(com.noop.testcentre.TestDomain.UNIVERSAL))
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.UNIVERSAL) }
                             else null,
                     )
                     // analyzeRecent now hops to Dispatchers.Default; a scope cancellation surfaces as a
@@ -1649,7 +1668,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  Reads each source's banked row for the logical day and runs the pure FusionResolver per metric;
      *  no core-waterfall change. Suspend so the screen calls it from a LaunchedEffect. */
     suspend fun fusedRecordForToday(): FusedRecord =
-        FusionDayAdapter.buildFor(repository, logicalDayKeyNow())
+        // SPINE / #814: the strap + computed reads follow the registry's ACTIVE strap id (the same id the
+        // live read path resolves to), not a hardcoded "my-whoop", so a non-WHOOP active band fuses its OWN
+        // data. A single-WHOOP install resolves to "my-whoop", so this is byte-identical there.
+        FusionDayAdapter.buildFor(repository, logicalDayKeyNow(), activeStrapId = deviceId)
 
     /** Toggle strap low/full battery notifications (#368). The notifier reads NoopPrefs on each
      *  live-state update, so persisting is all that's needed — no stream to re-arm. */

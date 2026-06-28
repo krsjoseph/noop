@@ -102,7 +102,14 @@ struct RepositoryFreshness: Equatable, Sendable {
 /// two-handle BLEManager+Repository pattern safe) and publishes the dashboard caches the screens bind to.
 @MainActor
 final class Repository: ObservableObject {
-    let deviceId: String
+    /// The id of the strap whose recordings this read model surfaces. SEEDED at construction with the
+    /// legacy "my-whoop", then RE-POINTED to the device registry's `activeDeviceId` once the store opens
+    /// (see `adoptActiveDeviceId`), exactly as `BLEManager.bootstrapStore` re-points the WRITE side.
+    /// #814: a remove+re-add gives the strap a fresh id ("whoop-<uuid>"), so the Collector writes today's
+    /// raw under THAT id while the dashboard kept reading "my-whoop" and snapped to a stale day. Now the
+    /// read side follows the same active id the write side does. NOT a `let` for that reason; `private(set)`
+    /// so only `adoptActiveDeviceId` can move it.
+    private(set) var deviceId: String
     /// Source id for on-device computed scores (recovery/strain/sleep derived from the raw strap
     /// streams by IntelligenceEngine). Merged UNDER the imported `deviceId` rows at read time, so a
     /// real WHOOP import always wins and the strap-only user still gets a populated dashboard.
@@ -144,6 +151,20 @@ final class Repository: ObservableObject {
     }
 
     init(deviceId: String) { self.deviceId = deviceId }
+
+    /// Re-point the read model at the device registry's ACTIVE device id, so the dashboard reads today's
+    /// data under the SAME id the Collector wrote it (#814). Called by AppModel once the registry is wired
+    /// (and again after a device add/activate). Idempotent and best-effort: an empty/unchanged id is a
+    /// no-op, so a single-device install (active id still "my-whoop") never moves and is byte-identical to
+    /// the pre-#814 behaviour. The `computedDeviceId` sibling tracks it automatically (it's derived).
+    /// Returns true when the id actually changed (so the caller can `refresh()` the now-restapped caches).
+    @discardableResult
+    func adoptActiveDeviceId(_ id: String) -> Bool {
+        let trimmed = id.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != deviceId else { return false }
+        deviceId = trimmed
+        return true
+    }
 
     #if DEBUG
     /// Inject a pre-opened store so unit tests can exercise the read facades (e.g. `timelineSeries`)
@@ -261,6 +282,36 @@ final class Repository: ObservableObject {
 
     /// Expose the shared store handle (used by the importer to persist mapped rows).
     func storeHandle() async -> WhoopStore? { await ensureStore() }
+
+    /// CAPTURE-D (#797): the on-device DATA VOLUME read FRESH from the STORE (never the `@Published`
+    /// dashboard caches), for the Display & Performance test mode's `dataVolume` line. dbRows is the raw
+    /// decoded-stream footprint; importedDays is the count of imported daily-metric rows under the active
+    /// strap id (the #799 import surface, the SAME `deviceId` rows `importedDays` is derived from);
+    /// workouts is the recorded/detected workout-row count. Resolves the active strap id from `deviceId`
+    /// (already re-pointed to the registry's activeDeviceId, #814) so it reads the right source, not the
+    /// hardcoded legacy id. Returns nil when the store can't be opened. Pure store reads; no merge, no
+    /// scoring, no @Published mutation, so calling it never perturbs the screens it is measuring.
+    func dataVolumeSnapshot() async -> DataVolume? {
+        guard let store = await ensureStore() else { return nil }
+        let dbRows = (try? await store.storageStats().decodedRows) ?? 0
+        // Imported daily-metric rows live under the active strap id (computed scores are merged UNDER them
+        // from `computedDeviceId`). A wide day range covers the full local-history span an import can carry.
+        let imported = (try? await store.dailyMetrics(deviceId: deviceId, from: "0000-01-01", to: "9999-12-31")) ?? []
+        // Whole recordable epoch in unix seconds [0, ~2^31) so every recorded workout row is counted.
+        let workouts = (try? await store.workouts(deviceId: deviceId, from: 0, to: 4_102_444_800, limit: 1_000_000)) ?? []
+        // lastRenderRows = the size of the merged DAILY set the dashboard list/charts actually render: the
+        // union of distinct days across the three daily sources (imported strap + on-device computed + Apple)
+        // over the full local-history window. This is the read-set whose size drives the post-import list/
+        // chart lag (#797) - so the trace pairs frame stats with "how many rows it was rendering over".
+        let computed = (try? await store.dailyMetrics(deviceId: computedDeviceId, from: "0000-01-01", to: "9999-12-31")) ?? []
+        let apple = (try? await store.dailyMetrics(deviceId: Self.appleHealthSource, from: "0000-01-01", to: "9999-12-31")) ?? []
+        var renderDays = Set<String>()
+        for m in imported { renderDays.insert(m.day) }
+        for m in computed { renderDays.insert(m.day) }
+        for m in apple { renderDays.insert(m.day) }
+        return DataVolume(dbRows: dbRows, importedDays: imported.count,
+                          workouts: workouts.count, lastRenderRows: renderDays.count)
+    }
 
     /// Checkpoint the WAL into the main DB file if the store is already open, so a file-level
     /// backup captures everything. No-op (returns false) if no handle exists yet — the caller
@@ -789,7 +840,10 @@ final class Repository: ObservableObject {
         var title: String {
             switch self {
             case .hr: return "Heart Rate"
-            case .hrv: return "HRV"
+            // #803: the .hrv series is a TRAILING-WINDOW rMSSD moving across the session (HRVAnalyzer
+            // .rollingRmssd), not one opaque "HRV" figure and not raw R-R ms. Label it honestly so the
+            // pill names what the chart actually plots.
+            case .hrv: return "Windowed rMSSD"
             case .spo2: return "SpO₂"
             case .skinTemp: return "Skin Temp"
             case .respiration: return "Respiration"
@@ -824,6 +878,15 @@ final class Repository: ObservableObject {
         let steps = [2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]
         for s in steps where s >= ideal { return s }
         return steps.last!
+    }
+
+    /// The trailing-window width (seconds) for the #803 windowed-rMSSD `.hrv` series, chosen from the
+    /// visible span: a tight 2-minute rMSSD when zoomed in so short autonomic swings show, widening with
+    /// the span (capped at 10 min) so a whole-night/day view stays a readable line rather than a jagged
+    /// per-2-min trace. ~1/30 of the span, clamped to [120 s, 600 s]. Pure + static so it's unit-testable.
+    nonisolated static func hrvRollingWindowSec(spanSeconds: Int) -> Int {
+        let span = max(1, spanSeconds)
+        return min(600, max(120, span / 30))
     }
 
     /// Deep-Timeline read facade. Returns ~`targetPoints` points for `metric` over `[from, to]` from
@@ -876,10 +939,17 @@ final class Repository: ObservableObject {
         case .hr:
             return []   // handled by the caller's HR path
         case .hrv:
-            // Instantaneous HRV proxy: each RR interval in ms (a beat-to-beat view; daily rMSSD lives in
-            // Explore). Low frequency, so the raw rows are safe to load for a window.
+            // #803: plot a TRAILING-WINDOW rMSSD that MOVES across the session, not raw R-R ms mislabelled
+            // "HRV". Read the R-R rows (low frequency, safe to load for a window) and hand them to
+            // HRVAnalyzer.rollingRmssd (the SAME range + Malik ectopic filtering the nightly path uses), so
+            // each point is an honest windowed rMSSD (ms). A sparse/artifact-heavy window emits nothing
+            // rather than a noisy spike. The `to - from` span chooses the window width: a 2-min rMSSD for a
+            // zoomed-in look, widening with the visible span so a day-scale view stays readable. The thinning
+            // stride keeps a 1 Hz R-R stream from emitting a point per beat.
             let rr = (try? await store.rrIntervals(deviceId: source, from: from, to: to, limit: 200_000)) ?? []
-            return rr.map { pt($0.ts, Double($0.rrMs)) }
+            let window = Self.hrvRollingWindowSec(spanSeconds: to - from)
+            return HRVAnalyzer.rollingRmssd(rr: rr, windowSec: window, stepSec: max(1, window / 8))
+                .map { pt($0.ts, $0.rmssd) }
         case .spo2:
             // The honest raw red/IR ratio proxy (#166: no calibrated %), shown as a unitless trend.
             let s = (try? await store.spo2Samples(deviceId: source, from: from, to: to, limit: 200_000)) ?? []

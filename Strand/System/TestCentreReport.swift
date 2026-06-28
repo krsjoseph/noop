@@ -47,13 +47,20 @@ final class TestCentreReport: ObservableObject {
         let platform = "macOS"
         #endif
         let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        // CAPTURE-A (#812): seed the issue's what_happens box from the tester's own questionnaire answers so
+        // a report submitted without the .zip still opens with their words. The log tail is prefilled inside
+        // TestReportFlow from the redacted report.txt entry.
+        let seed = TestModeRegistry.mode(p.profile).flatMap {
+            TestReportLink.whatHappensSeed(questionnaire: $0.questionnaire, answers: TestCentre.answers(p.profile))
+        }
         TestReportFlow.run(
             profile: p.profile, title: p.title,
             version: version, platform: platform, osVersion: osVersion,
             gate: p.gate,
             entries: p.gate.entries,
             showToast: { [weak self] msg in self?.lastStatus = msg },
-            copyToPasteboard: { PlatformPasteboard.copy($0) })
+            copyToPasteboard: { PlatformPasteboard.copy($0) },
+            whatHappensSeed: seed)
         pending = nil
     }
 

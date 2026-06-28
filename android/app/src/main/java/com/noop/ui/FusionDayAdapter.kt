@@ -36,10 +36,16 @@ object FusionDayAdapter {
         MetricSpec("sleep_rem_min", "REM sleep"),
     )
 
-    /** Each fusion source paired with the deviceId/source string its daily rows are stored under. */
-    private val SOURCE_IDS: List<Pair<FusionSource, String>> = listOf(
-        FusionSource.WHOOP_IMPORT to WhoopRepository.WHOOP_SOURCE,
-        FusionSource.NOOP_COMPUTED to "${WhoopRepository.WHOOP_SOURCE}-noop",
+    /**
+     * Each fusion source paired with the deviceId/source string its daily rows are stored under. The strap
+     * (WHOOP_IMPORT) + its on-device computed sibling resolve against the ACTIVE strap id from the device
+     * registry, NOT the hardcoded "my-whoop" (SPINE / #814): a non-WHOOP active band stores its rows under
+     * its own id, so a hardcoded read would fuse the wrong device's data. A single-WHOOP install resolves
+     * [activeStrapId] to "my-whoop", so this is byte-identical there.
+     */
+    private fun sourceIds(activeStrapId: String): List<Pair<FusionSource, String>> = listOf(
+        FusionSource.WHOOP_IMPORT to activeStrapId,
+        FusionSource.NOOP_COMPUTED to "$activeStrapId-noop",
         FusionSource.APPLE_HEALTH to WhoopRepository.APPLE_HEALTH_SOURCE,
         FusionSource.HEALTH_CONNECT to WhoopRepository.HEALTH_CONNECT_SOURCE,
         FusionSource.XIAOMI_BAND to FusionSource.XIAOMI_BAND.id,
@@ -49,11 +55,27 @@ object FusionDayAdapter {
      * Build the [FusedRecord] for [day] ("yyyy-MM-dd"). Reads each source's row for the day, resolves each
      * metric, and degrades gracefully: a single contributing source ⇒ a plain record with no provenance
      * noise (the screen reads [FusedRecord.contributingSourceCount]). Empty when no source has the day.
+     *
+     * [activeStrapId] is the registry's active strap id (SPINE / #814): the strap + computed reads follow
+     * it instead of a hardcoded "my-whoop". Defaults to "my-whoop" so existing callers / tests on a
+     * single-WHOOP install are unaffected.
      */
-    suspend fun buildFor(repo: WhoopRepository, day: String): FusedRecord {
+    suspend fun buildFor(
+        repo: WhoopRepository,
+        day: String,
+        activeStrapId: String = WhoopRepository.WHOOP_SOURCE,
+    ): FusedRecord {
         // One row per source for the requested day (or null when that source has nothing that day).
-        val perSource: List<Pair<FusionSource, DailyMetric?>> = SOURCE_IDS.map { (source, id) ->
-            val row = runCatching { repo.days(id) }.getOrDefault(emptyList()).lastOrNull { it.day == day }
+        //
+        // #799: a source contributes ONLY the day it ACTUALLY covers. `firstOrNull { it.day == day }`
+        // matches the source's OWN row keyed to this exact day (each daily row is keyed by its own local
+        // day at write time), so a single imported sleep row can never supply a value for a day it doesn't
+        // cover (the "fused 8h57m every day" symptom). `repo.days(id)` is bounded per source and a missing
+        // day is a clean null, dropping that source out of every metric for the day rather than carrying a
+        // stale value forward. (firstOrNull over lastOrNull: day keys are unique per (deviceId, day) PK, so
+        // either is the same single row; firstOrNull is the cheaper short-circuit.)
+        val perSource: List<Pair<FusionSource, DailyMetric?>> = sourceIds(activeStrapId).map { (source, id) ->
+            val row = runCatching { repo.days(id) }.getOrDefault(emptyList()).firstOrNull { it.day == day }
             source to row
         }
 

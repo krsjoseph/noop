@@ -241,6 +241,13 @@ public enum AnalyticsEngine {
                                   // byte-identical default for pure-function callers/tests; IntelligenceEngine
                                   // threads `PuffinExperiment.experimentalSleepV2Enabled`. (V7 / #690)
                                   useSleepStagerV2: Bool = false,
+                                  // Sleep PROVENANCE for the per-day sleep trace (CAPTURE-C / #799). The
+                                  // measured BLE path is `.measured` (the default); the caller passes
+                                  // `.imported(...)` when a previously-imported sleep row WON the daily merge,
+                                  // so the trace shows the import winning instead of silently substituting the
+                                  // measured night. Trace-only: never alters the DayResult. nil/default keeps
+                                  // pure-function callers/tests byte-identical (still emits `measured`).
+                                  sleepProvenance: SleepProvenance = .measured,
                                   // Sleep & Rest test-mode trace sink (zero-cost default nil = byte-identical).
                                   // When non-nil, the gate trace from detectSleep and the Rest sub-score line
                                   // are forwarded line-by-line. Side-effect-only; never alters the DayResult.
@@ -334,6 +341,14 @@ public enum AnalyticsEngine {
                 restorativeSeconds: deepS + remS, needHours: sleepNeedHours,
                 consistency: sleepConsistency, deepSeconds: deepS,
                 groupFragments: mainGroup.count, groupInBedSeconds: inBedS))
+            // CAPTURE-C (#799): append the sleep PROVENANCE so an imported row winning the merge is visible
+            // (not silently swapped for the measured night). hoursAsleep = the scored night's tst in minutes;
+            // sourceRowId = the main-night's start ts for the measured path (stable per night), else the
+            // caller-supplied winning-row id. Trace-only; the DayResult is unchanged.
+            let mainStart = mainGroup.map { $0.start }.min() ?? matched.map { $0.start }.min() ?? 0
+            traceSink(sleepProvenanceLine(provenance: sleepProvenance,
+                                          hoursAsleepMin: tstS / 60.0,
+                                          sourceRowId: String(mainStart)))
         }
 
         // #525 NOTE: the sleep-DURATION figures above are main-night-only (the headline "your night"),

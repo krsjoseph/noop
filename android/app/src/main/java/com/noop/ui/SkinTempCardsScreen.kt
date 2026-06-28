@@ -116,6 +116,9 @@ fun CycleAwarenessCard(
     result: CyclePhaseEngine.Result,
     onLogPeriod: (() -> Unit)? = null,
     onOpenDetail: (() -> Unit)? = null,
+    // #801: symmetric off-control. When supplied, the card shows a "Turn off" action so the user can
+    // disable cycle awareness from the SAME place they enabled it (Health), not only from Automations.
+    onTurnOff: (() -> Unit)? = null,
 ) {
     val hue = Palette.restColor
     NoopCard(tint = hue) {
@@ -163,7 +166,7 @@ fun CycleAwarenessCard(
             }
 
             // Actions.
-            if (onLogPeriod != null || onOpenDetail != null) {
+            if (onLogPeriod != null || onOpenDetail != null || onTurnOff != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
                     if (onLogPeriod != null) {
                         OutlinedButton(onClick = onLogPeriod) { Text("Log period start") }
@@ -173,6 +176,10 @@ fun CycleAwarenessCard(
                             onClick = onOpenDetail,
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.accent),
                         ) { Text("View detail") }
+                    }
+                    // #801: symmetric off-control (turn cycle awareness off where it was turned on).
+                    if (onTurnOff != null) {
+                        OutlinedButton(onClick = onTurnOff) { Text("Turn off") }
                     }
                 }
             }

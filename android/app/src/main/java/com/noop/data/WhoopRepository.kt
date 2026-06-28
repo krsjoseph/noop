@@ -654,6 +654,47 @@ class WhoopRepository(private val dao: WhoopDao) {
     fun computedDeviceId(deviceId: String): String = "$deviceId-noop"
 
     /**
+     * CAPTURE-D (#797): the on-device DATA VOLUME read FRESH from the store (never the reactive dashboard
+     * caches), for the Display & Performance test mode's `dataVolume` line. Kotlin twin of the Swift
+     * Repository.dataVolumeSnapshot:
+     *   - dbRows = the raw decoded-stream footprint (HR + RR + events + the biometric streams), the dominant cost;
+     *   - importedDays = imported daily-metric rows under [strapDeviceId] (the #799 import surface);
+     *   - workouts = recorded/detected workout-row count under [strapDeviceId];
+     *   - lastRenderRows = the size of the merged DAILY set the dashboard renders: the union of distinct days
+     *     across the three daily sources (imported strap + on-device computed + Apple), the read-set whose
+     *     size drives post-import list/chart lag.
+     * [strapDeviceId] is the registry's ACTIVE strap id (SPINE / #814), so it reads the right source, not the
+     * hardcoded legacy id. Pure store reads: no merge, no scoring, nothing reactive mutates, so calling it
+     * never perturbs the screens it measures. Best-effort: a read failure contributes 0 rather than throwing.
+     */
+    suspend fun dataVolumeSnapshot(
+        strapDeviceId: String = WHOOP_SOURCE,
+    ): com.noop.analytics.DataVolume {
+        val dbRows = runCatching {
+            dao.countHr() + dao.countRr() + dao.countEvents() + dao.countSpo2() +
+                dao.countSkinTemp() + dao.countSteps() + dao.countResp() + dao.countGravity()
+        }.getOrDefault(0)
+        val imported = runCatching { dao.days(strapDeviceId) }.getOrDefault(emptyList())
+        val workouts = runCatching {
+            dao.workouts(strapDeviceId, 0L, 4_102_444_800L, 1_000_000)
+        }.getOrDefault(emptyList())
+        // The merged daily read-set the dashboard renders over: union of distinct days across the three
+        // daily sources. Mirrors the Swift renderDays union.
+        val computed = runCatching { dao.days(computedDeviceId(strapDeviceId)) }.getOrDefault(emptyList())
+        val apple = runCatching { dao.days(APPLE_HEALTH_SOURCE) }.getOrDefault(emptyList())
+        val renderDays = HashSet<String>()
+        for (m in imported) renderDays.add(m.day)
+        for (m in computed) renderDays.add(m.day)
+        for (m in apple) renderDays.add(m.day)
+        return com.noop.analytics.DataVolume(
+            dbRows = dbRows,
+            importedDays = imported.size,
+            workouts = workouts.size,
+            lastRenderRows = renderDays.size,
+        )
+    }
+
+    /**
      * All cached daily metrics for [deviceId], oldest first, MERGED with the on-device
      * computed scores from "<deviceId>-noop". Imported rows win per day; computed rows
      * fill the days the import doesn't cover. Port of macOS Repository.mergeDaily.
@@ -680,6 +721,28 @@ class WhoopRepository(private val dao: WhoopDao) {
             dao.daysFlow(computedDeviceId(deviceId)),
             dao.editedSleepSessionsFlow(computedDeviceId(deviceId)),
         ) { imported, computed, edited ->
+            mergeDaily(imported = imported, computed = computed, userEditedDays = userEditedDays(edited))
+        }
+
+    /**
+     * #797: BOUNDED reactive merged daily metrics for the dashboard. Same per-day merge as
+     * [daysMergedFlow] (imported wins, computed gap-fills, edited days keep the correction), but each
+     * source is capped to the most-recent [RECENT_DAYS_CAP] rows before the merge, so a years-deep import
+     * stops re-merging the WHOLE history on every DB change (the heavy refresh #797 is about). The cap is
+     * generous enough to cover every current dashboard surface (Trends' deepest range, the 7-day Fitness
+     * Age / Vitality windows). Rows come back oldest-first, IDENTICAL ordering to [daysMergedFlow], so the
+     * consumer (Today / illness watch / Trends) is unchanged apart from no longer carrying ancient days the
+     * UI never shows. Edited-day precedence still reads the userEdited sessions (not day-capped: the set is
+     * already tiny), so a hand-edited recent night keeps winning.
+     */
+    fun recentDaysMergedFlow(deviceId: String): Flow<List<DailyMetric>> =
+        combine(
+            dao.recentDaysFlow(deviceId, RECENT_DAYS_CAP),
+            dao.recentDaysFlow(computedDeviceId(deviceId), RECENT_DAYS_CAP),
+            dao.editedSleepSessionsFlow(computedDeviceId(deviceId)),
+        ) { imported, computed, edited ->
+            // recentDaysFlow returns newest-first (DESC LIMIT); mergeDaily re-sorts ascending by day, so the
+            // emitted order matches daysMergedFlow exactly.
             mergeDaily(imported = imported, computed = computed, userEditedDays = userEditedDays(edited))
         }
 
@@ -860,6 +923,12 @@ class WhoopRepository(private val dao: WhoopDao) {
     companion object {
         /** Default row cap on range reads. Matches the Swift call sites' bounded scans. */
         const val DEFAULT_LIMIT = 100_000
+
+        /** #797: dashboard merge window cap (days). The bounded [recentDaysMergedFlow] keeps at most this
+         *  many most-recent days per source, so a years-deep import stops re-merging the whole history on
+         *  every DB change. ~2 years comfortably covers the deepest Trends range + the rolling 7-day
+         *  Fitness Age / Vitality windows, so no current surface loses data. */
+        const val RECENT_DAYS_CAP = 800
 
         /** Canonical source ids the resolver cross-references. The strap's real id is passed in. */
         const val WHOOP_SOURCE = "my-whoop"

@@ -165,7 +165,14 @@ fun HealthScreen(
                 SkinTempSuiteSection(
                     signals = v5Signals,
                     cycleEnabled = cycleEnabled,
+                    // #801: gate the cycle-awareness OPT-IN to profiles it can apply to (sex-gated, pure
+                    // helper). Cycle phase is read from the menstrual skin-temperature shift, so the
+                    // invitation is NOT offered for male profiles. Matches iOS SkinTempSection.cycleOptInApplies.
+                    cycleOptInApplies = cycleOptInApplies(profile.sex),
                     onEnableCycle = { vm.setCycleTrackingEnabled(true) },
+                    // #801: symmetric off-control. Cycle awareness could be turned ON here but only OFF from
+                    // Automations; let the user turn it off in-place where they turned it on.
+                    onTurnOffCycle = { vm.setCycleTrackingEnabled(false) },
                 )
             }
             // CONTRIBUTORS (README screen #5, recovery detail) — the signals behind recovery as
@@ -372,11 +379,24 @@ private fun RecordRow(
 //     amber-alert treatment; never a diagnosis.
 // Every card carries its own privacy + non-clinical copy; the section header keeps the umbrella framing.
 
+/**
+ * #801: whether the cycle-awareness OPT-IN invitation should be offered for a profile with this [sex]
+ * value. Cycle phase is read from the menstrual skin-temperature shift, so the invitation is NOT offered
+ * for a male profile; "female"/"nonbinary" (and any unrecognised value, default-show rather than hide)
+ * qualify. Pure so it's unit-tested directly; mirrors the iOS SkinTempSection.cycleOptInApplies
+ * (`profile.sex.lowercased() != "male"`). ProfileStore.sex is "male" | "female" | "nonbinary".
+ */
+internal fun cycleOptInApplies(sex: String): Boolean = sex.lowercase(Locale.US) != "male"
+
 @Composable
 private fun SkinTempSuiteSection(
     signals: V5HealthSignals.Snapshot?,
     cycleEnabled: Boolean,
+    // #801: whether the cycle-awareness opt-in invitation is offered for this profile (sex-gated).
+    cycleOptInApplies: Boolean,
     onEnableCycle: () -> Unit,
+    // #801: symmetric off-control, surfaced on the live card.
+    onTurnOffCycle: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
         SectionHeader("Skin Temperature", overline = "From your nightly readings")
@@ -388,11 +408,13 @@ private fun SkinTempSuiteSection(
             }
         }
 
-        // Cycle awareness: the opt-in card until enabled, then the live result.
-        if (!cycleEnabled) {
+        // Cycle awareness (#801): when ON, the live result carries a symmetric off-control. When OFF, the
+        // opt-in invitation is shown ONLY for profiles it can apply to (sex-gated); a male profile that
+        // previously enabled it still sees its existing card, only the invitation is gated.
+        if (cycleEnabled) {
+            signals?.cycle?.let { CycleAwarenessCard(result = it, onTurnOff = onTurnOffCycle) }
+        } else if (cycleOptInApplies) {
             CycleAwarenessOptInCard(onEnable = onEnableCycle)
-        } else {
-            signals?.cycle?.let { CycleAwarenessCard(result = it) }
         }
 
         // Body clock: only when the engine produced an estimate (no faked card while the input pipe is empty).

@@ -53,7 +53,37 @@ public struct DisplayMetrics: Sendable, Equatable {
     }
 }
 
+/// A platform-resolved snapshot of the on-device DATA VOLUME (CAPTURE-D / #797): the read-set that backs
+/// the screens, so import-driven lag shows what it's rendering over, not just frame stats. Every count is
+/// already read from the STORE by the caller (never via the Repository / @Published view-models), so this
+/// type is pure data and the formatter below has no store dependency.
+public struct DataVolume: Sendable, Equatable {
+    /// Total raw stream rows in the store (HR + RR + events + the biometric streams) , the dominant cost.
+    public let dbRows: Int
+    /// Number of distinct days that carry IMPORTED daily metrics (the #799 import surface).
+    public let importedDays: Int
+    /// Total detected/recorded workout rows.
+    public let workouts: Int
+    /// Rows touched by the most recent render the caller measured, or nil when it hasn't measured one yet.
+    public let lastRenderRows: Int?
+
+    public init(dbRows: Int, importedDays: Int, workouts: Int, lastRenderRows: Int?) {
+        self.dbRows = dbRows; self.importedDays = importedDays
+        self.workouts = workouts; self.lastRenderRows = lastRenderRows
+    }
+}
+
 public enum DisplayTrace {
+
+    /// The data-volume line (CAPTURE-D / #797): one upfront `.display` summary of the store's read-set, so a
+    /// "feels laggy after import" report shows HOW MUCH data the screens are rendering over (db rows,
+    /// imported days, workouts, last render's row count), not only frame timings. A nil `lastRenderRows`
+    /// (no render measured yet) prints "n/a" rather than fabricating a 0.
+    public static func dataVolumeLine(_ v: DataVolume) -> String {
+        let last = v.lastRenderRows.map(String.init) ?? "n/a"
+        return "dataVolume dbRows=\(v.dbRows) importedDays=\(v.importedDays) "
+            + "workouts=\(v.workouts) lastRenderRows=\(last)"
+    }
 
     /// The device-metrics line: one upfront `.display` summary of the resolved DisplayMetrics, so a
     /// "screen looks wrong" report carries the exact layout environment the screen was rendered in. All

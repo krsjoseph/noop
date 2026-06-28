@@ -32,8 +32,13 @@ final class AppModel: ObservableObject {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
     }()
 
-    /// Shared device id for both live capture (BLEManager) and imported history.
-    let deviceId = "my-whoop"
+    /// Shared device id for both live capture (BLEManager) and imported history. SEEDED with the legacy
+    /// "my-whoop", then RE-POINTED to the device registry's active id once the store opens (#814), so the
+    /// WHOOP-import target, the FusionSource `.whoopImport` mapping, and a manually-saved workout all land
+    /// under the SAME id the Collector writes raw to and the read spine reads from. Single-device install:
+    /// active id stays "my-whoop", so this never moves (byte-identical). `private(set)` so only
+    /// `adoptActiveDevice` can move it.
+    private(set) var deviceId = "my-whoop"
     /// Source id for imported Apple Health data (stored beside Whoop for per-source pages + consensus).
     let appleDeviceId = "apple-health"
     /// Observable snapshot driven by the BLE engine (connection, HR, battery, log).
@@ -183,10 +188,14 @@ final class AppModel: ObservableObject {
     init() {
         let live = LiveState()
         self.live = live
-        self.ble = BLEManager(state: live, deviceId: "my-whoop")
-        self.repo = Repository(deviceId: "my-whoop")
+        // SEED every subsystem with the same id (`deviceId`, "my-whoop" at launch). The store/registry
+        // aren't open yet here, so the registry's active id can't be read synchronously; `bootstrapStore`
+        // (write side) and `wireSourceCoordinator → adoptActiveDevice` (read spine, #814) re-point them to
+        // the registry active id once the store opens. Single-device install keeps "my-whoop" throughout.
+        self.ble = BLEManager(state: live, deviceId: deviceId)
+        self.repo = Repository(deviceId: deviceId)
         self.coach = AICoachEngine(repo: repo)
-        self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: "my-whoop")
+        self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: deviceId)
         // Route the engine's per-day scoring diagnostic into the SAME shareable strap log every other
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
         // was computed per day. `live` is captured strongly (created just above) — the engine outlives the
@@ -389,6 +398,30 @@ final class AppModel: ObservableObject {
         coordinator.start()
         self.deviceRegistry = registry
         self.sourceCoordinator = coordinator
+        // #814 READ SPINE: re-point the read side (Repository) and the scoring/persist side
+        // (IntelligenceEngine) at the registry's ACTIVE device id, exactly as BLEManager.bootstrapStore
+        // already re-points the WRITE side. A remove+re-add gives the strap a fresh id ("whoop-<uuid>"),
+        // so the Collector writes today's raw under THAT id; without this the dashboard kept reading the
+        // stale "my-whoop" namespace and snapped Today onto an old day. Single-device install: active id
+        // is still "my-whoop", so this is a no-op (byte-identical to before).
+        await adoptActiveDevice(registry.activeDeviceId)
+    }
+
+    /// Re-point the read spine (Repository + IntelligenceEngine) at `activeId` and, if it actually moved,
+    /// refresh + re-score so the dashboard reads today under the SAME id the Collector wrote it (#814).
+    /// Centralised so both the initial registry wiring and a later device add/activate share one path.
+    /// A no-op (no refresh) when the id is unchanged (the common single-device case).
+    private func adoptActiveDevice(_ activeId: String) async {
+        let trimmed = activeId.trimmingCharacters(in: .whitespaces)
+        let repoMoved = repo.adoptActiveDeviceId(trimmed)
+        let engineMoved = intelligence.adoptActiveDeviceId(trimmed)
+        // Keep AppModel's own import/whoopSource id aligned with the read spine so the WHOOP-import target
+        // and FusionSource `.whoopImport` mapping follow the active strap too. Best-effort + idempotent.
+        if !trimmed.isEmpty, trimmed != deviceId { deviceId = trimmed }
+        guard repoMoved || engineMoved else { return }
+        live.append(log: "Read spine re-pointed to active device after registry change (#814).")
+        await repo.refresh()
+        await intelligence.analyzeRecent()
     }
 
     private func refreshAfterCompletedBackfill() async {
@@ -745,7 +778,15 @@ final class AppModel: ObservableObject {
     func registerDevice(_ device: PairedDevice, makeActive: Bool) {
         guard let registry = deviceRegistry else { return }
         registry.add(device)
-        if makeActive { registry.setActive(device.id) }
+        if makeActive {
+            registry.setActive(device.id)
+            // #814: a re-added strap is a NEW registry id ("whoop-<uuid>"). The write side (BLEManager)
+            // re-reads the active id on its next bootstrap, but the read spine is constructed once at
+            // launch, so re-point it now so the dashboard reads today's data under the same id the Collector
+            // will write it to, instead of staying on the stale namespace until the next relaunch. The
+            // just-activated id IS `device.id` (setActive made it active above).
+            Task { [weak self] in await self?.adoptActiveDevice(device.id) }
+        }
     }
 
     /// How many on-screen surfaces currently want the realtime HR stream (the Live tab and the

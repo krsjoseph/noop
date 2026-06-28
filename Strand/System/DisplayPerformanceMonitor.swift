@@ -43,6 +43,12 @@ final class DisplayPerformanceMonitor {
     /// nil leaves the monitor inert (e.g. before the screen wired it, or in a test with no LiveState).
     var emit: ((String) -> Void)?
 
+    /// CAPTURE-D (#797): reads the on-device DATA VOLUME straight from the STORE (never via the Repository /
+    /// @Published view-models) so import-driven lag shows its READ-SET, not just frame stats. Wired by the
+    /// screen alongside `emit`; nil leaves the dataVolume line unemitted (e.g. a test with no store). Async
+    /// because the store is an actor; `start()` fires it on a detached task and emits the one line on return.
+    var dataVolumeProvider: (() async -> DataVolume?)?
+
     private var running = false
 
     // Frame-time accumulation for the current window.
@@ -77,6 +83,7 @@ final class DisplayPerformanceMonitor {
         memoryPeakMB = 0
         sampleMemory()
         emitDeviceMetrics()
+        emitDataVolume()
 
         #if os(iOS)
         let link = CADisplayLink(target: self, selector: #selector(onFrame(_:)))
@@ -213,6 +220,22 @@ final class DisplayPerformanceMonitor {
     /// on a trait / orientation change while the mode is on.
     func emitDeviceMetrics() {
         emit?(DisplayTrace.deviceMetricsLine(Self.readMetrics()))
+    }
+
+    /// CAPTURE-D (#797): read the on-device DATA VOLUME from the store (via `dataVolumeProvider`) and emit
+    /// ONE `dataVolume` line, so an import-driven-lag report shows the read-set the screens render over, not
+    /// only frame stats. The provider is async (the store is an actor), so this fires a detached task and
+    /// emits the line on the main actor on return. No provider wired (e.g. a test without a store) → no
+    /// line, exactly as before. Side-effect-only; never touches the frame monitor.
+    private func emitDataVolume() {
+        guard let dataVolumeProvider, emit != nil else { return }
+        Task { [weak self] in
+            let volume = await dataVolumeProvider()
+            await MainActor.run {
+                guard let self, let volume else { return }
+                self.emit?(DisplayTrace.dataVolumeLine(volume))
+            }
+        }
     }
 
     /// Read the current display environment into the pure DisplayMetrics carrier. iOS reads the key

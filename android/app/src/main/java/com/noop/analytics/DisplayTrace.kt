@@ -27,7 +27,34 @@ data class DisplayMetrics(
     val theme: String,
 )
 
+/**
+ * A platform-resolved snapshot of the on-device DATA VOLUME (CAPTURE-D / #797), the Kotlin twin of the
+ * Swift DataVolume: the read-set that backs the screens, so an import-driven-lag report shows what it is
+ * rendering over, not just frame stats. Every count is already read from the STORE by the caller (never via
+ * the reactive view-model caches), so this type is pure data and the formatter has no store dependency.
+ */
+data class DataVolume(
+    /** Total raw stream rows in the store (HR + RR + events + the biometric streams), the dominant cost. */
+    val dbRows: Int,
+    /** Number of distinct days that carry IMPORTED daily metrics (the #799 import surface). */
+    val importedDays: Int,
+    /** Total detected/recorded workout rows. */
+    val workouts: Int,
+    /** Rows touched by the most recent render the caller measured, or null when it hasn't measured one. */
+    val lastRenderRows: Int?,
+)
+
 object DisplayTrace {
+
+    /** The data-volume line (CAPTURE-D / #797): one upfront DISPLAY summary of the store's read-set, so a
+     *  "feels laggy after import" report shows HOW MUCH data the screens render over (db rows, imported
+     *  days, workouts, last render's row count), not only frame timings. A null lastRenderRows (no render
+     *  measured yet) prints "n/a" rather than fabricating a 0. Byte-identical to the Swift formatter. */
+    fun dataVolumeLine(v: DataVolume): String {
+        val last = v.lastRenderRows?.toString() ?: "n/a"
+        return "dataVolume dbRows=${v.dbRows} importedDays=${v.importedDays} " +
+            "workouts=${v.workouts} lastRenderRows=$last"
+    }
 
     /** The device-metrics line: one upfront DISPLAY summary of the resolved DisplayMetrics, so a "screen
      *  looks wrong" report carries the exact layout environment. Whole-point rounding; a null size class /
