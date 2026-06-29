@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "7.4.0"
+    static let currentVersion = "7.4.1"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,16 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "7.4.1",
+            title: "Bug-fix sweep: steps, sleep export, and a battery-saving reconnect fix",
+            date: "June 2026",
+            items: [
+                "**Your steps keep counting.** Steps could freeze and stop updating partway through the day. They now keep ticking over as they should. (#843, #813)",
+                "**Sleep export keeps every night.** Exporting your sleep to CSV could quietly drop nights when a day had more than one session (a nap plus the main night). Every session is kept now, each as its own row. (#715)",
+                "**A flaky strap no longer drains your battery.** When a WHOOP kept dropping the connection, the app could loop (bond, drop, rescan, bond) forever and drain the battery. It now spots that loop, pauses the automatic reconnect, and shows the re-pair guide instead. (#844)",
+                "**Smaller fixes.** Editing and deleting hydration entries behaves correctly (#842), the date picker no longer clips on iPad (#840), and a steady-state tidy stops the app re-scoring when nothing has changed (#836).",
+            ]),
         Release(
             version: "7.4.0",
             title: "A calmer Today, your Charge explained, and new HRV science under the hood",
