@@ -6,7 +6,7 @@ import ActivityKit
 /// in the Dynamic Island while the strap is bonded and streaming heart rate.
 @MainActor
 final class LiveActivityController {
-    private var activity: Activity<NOOPActivityAttributes>?
+    private var activity: Activity<KinevaActivityAttributes>?
     private var lastPush: Date = .distantPast
     /// Cached `ActivityAuthorizationInfo` — `update` runs at ~1 Hz off the live HR stream, and
     /// instantiating this system bridge per tick is needless allocation. ActivityKit's auth status
@@ -35,7 +35,7 @@ final class LiveActivityController {
         // — which made the #336 opt-out a no-op (#341: toggle off, heart stays) and risked spawning a
         // duplicate on the start path below. Done on the HR tick rather than in `init` because
         // `Activity.activities` isn't reliably hydrated at the instant of process launch.
-        if activity == nil { activity = Activity<NOOPActivityAttributes>.activities.first }
+        if activity == nil { activity = Activity<KinevaActivityAttributes>.activities.first }
 
         // User opt-out (#336): if the in-app toggle is off, never start — and end any activity that's
         // already showing (the user just turned it off; this fires on the next ~1 Hz HR tick).
@@ -53,7 +53,7 @@ final class LiveActivityController {
         }
         guard bpm != nil else { return }
 
-        let state = NOOPActivityAttributes.ContentState(bpm: bpm, recovery: recovery, bonded: connected,
+        let state = KinevaActivityAttributes.ContentState(bpm: bpm, recovery: recovery, bonded: connected,
                                                         effort: effort)
         let staleDate = Date().addingTimeInterval(Self.staleAfter)
 
@@ -69,7 +69,7 @@ final class LiveActivityController {
             isStarting = true
             do {
                 activity = try Activity.request(
-                    attributes: NOOPActivityAttributes(title: "Live HR"),
+                    attributes: KinevaActivityAttributes(title: "Live HR"),
                     content: ActivityContent(state: state, staleDate: staleDate),
                     pushType: nil
                 )
@@ -82,10 +82,10 @@ final class LiveActivityController {
     }
 
     func end() async {
-        // End every NOOP Live Activity, not just our cached handle — covers a straggler from a prior
+        // End every Kineva Live Activity, not just our cached handle — covers a straggler from a prior
         // session we never re-adopted (#341) and any rare duplicate. Iterating the live list is the
         // only way to reach activities this controller instance never started.
-        for act in Activity<NOOPActivityAttributes>.activities {
+        for act in Activity<KinevaActivityAttributes>.activities {
             await act.end(nil, dismissalPolicy: .immediate)
         }
         self.activity = nil

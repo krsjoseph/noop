@@ -6,10 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the RHR floor-vs-mean strap-log line (#691). The recurring "NOOP's resting HR reads LOWER than
- * my sleeping-HR app" reports are NOT a bug: NOOP's restingHr is the WHOOP-style FLOOR (the lowest
+ * Pins the RHR floor-vs-mean strap-log line (#691). The recurring "Kineva's resting HR reads LOWER than
+ * my sleeping-HR app" reports are NOT a bug: Kineva's restingHr is the WHOOP-style FLOOR (the lowest
  * sustained 5-min in-bed level), whereas a "sleeping HR" app reports the night MEAN over the whole
- * asleep span. The mean always sits at-or-above the floor, so NOOP looking lower is by design. The
+ * asleep span. The mean always sits at-or-above the floor, so Kineva looking lower is by design. The
  * engine now logs BOTH per scored night so a report carries the proof. `rhrFloorMeanLogLine` is the
  * pure formatter the loop calls; it's tested directly. Mirrors the Swift `IntelligenceRhrFloorMeanTests`
  * so the two platforms log byte-identical lines.
@@ -23,7 +23,7 @@ class IntelligenceRhrFloorMeanTest {
         val line = IntelligenceEngine.rhrFloorMeanLogLine("2026-06-12", 48, bpms)
         assertEquals(
             "rhr day=2026-06-12 floor=48 nightMean=55 inBedSamples=7 " +
-                "(floor = WHOOP-style lowest-sustained = NOOP RHR; mean = sleeping-HR-app number)",
+                "(floor = WHOOP-style lowest-sustained = Kineva RHR; mean = sleeping-HR-app number)",
             line,
         )
     }
@@ -42,7 +42,7 @@ class IntelligenceRhrFloorMeanTest {
         val line = IntelligenceEngine.rhrFloorMeanLogLine("2026-06-12", 47, emptyList())
         assertEquals(
             "rhr day=2026-06-12 floor=47 nightMean=nil inBedSamples=0 " +
-                "(floor = WHOOP-style lowest-sustained = NOOP RHR; mean = sleeping-HR-app number)",
+                "(floor = WHOOP-style lowest-sustained = Kineva RHR; mean = sleeping-HR-app number)",
             line,
         )
     }
@@ -50,7 +50,7 @@ class IntelligenceRhrFloorMeanTest {
     @Test
     fun floorNeverExceedsMean_byConstruction() {
         // Sanity on the framing: across any in-bed set the floor (a min over the same span) is <= the
-        // mean, so NOOP's RHR can only read at-or-below a sleeping-HR-app's night mean.
+        // mean, so Kineva's RHR can only read at-or-below a sleeping-HR-app's night mean.
         val bpms = listOf(44, 46, 49, 53, 57, 61)
         val mean = bpms.sum().toDouble() / bpms.size
         assertTrue(bpms.min().toDouble() <= mean)

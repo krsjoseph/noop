@@ -313,7 +313,7 @@ fun TodayScreen(
         // Read each pinned card from the SAME source its own detail screen reads — the proven path that
         // already shows real numbers there (and the resolution iOS's exploreSeries uses). Stress is derived
         // from the imported strap data (StressScreen reads "my-whoop"); Fitness age + Vitality are
-        // NOOP-COMPUTED weekly scores the IntelligenceEngine writes under the "-noop" source (HealthScreen
+        // Kineva-COMPUTED weekly scores the IntelligenceEngine writes under the "-noop" source (HealthScreen
         // reads COMPUTED_SOURCE = "my-whoop-noop"). The earlier resolvedSeries("…","my-whoop") read resolved
         // empty in the demo because those two scores never live under the imported "my-whoop" source. Take
         // the latest value (series are day-ascending), null → the card shows a dash, never a fabricated number.
@@ -516,7 +516,7 @@ fun TodayScreen(
 
     // Steps for the selected day from imported Apple Health / Health Connect data — the Today Steps
     // tile's fallback when the strap itself didn't bank an on-device count. A WHOOP 4.0 DOES count
-    // steps (in the official WHOOP app), but NOOP can't yet read them off the strap over Bluetooth, so
+    // steps (in the official WHOOP app), but Kineva can't yet read them off the strap over Bluetooth, so
     // on a 4.0 the tile shows your imported steps instead of "No Data". Reloads as the day selector
     // moves. On-device WHOOP 5/MG steps still take precedence. (#150)
     var importedStepsForDay by remember { mutableStateOf<Int?>(null) }
@@ -587,7 +587,7 @@ fun TodayScreen(
     // Provenance (COMPONENT 4): the REAL per-metric merge winner for the selected day's derived scores,
     // keyed by metric key ("recovery" / "sleep_performance"); each value is the RAW source id the resolver
     // returned (e.g. "my-whoop", "my-whoop-noop", "apple-health"). resolvedSeries applies the SAME
-    // imported-WHOOP > NOOP-computed > Apple-Health precedence the dashboard merge uses field-by-field
+    // imported-WHOOP > Kineva-computed > Apple-Health precedence the dashboard merge uses field-by-field
     // (WhoopRepository.mergeDaily), so the badge under each ring names the source that ACTUALLY supplied
     // that day's number rather than a blanket day-level deviceId. Mirrors the Swift Today lane's
     // `provenanceByMetric` resolution exactly (the winner is the last resolved point on selectedDayKey).
@@ -1518,7 +1518,7 @@ private fun SupportRow(onSupport: () -> Unit) {
                 indication = null,
                 onClick = onSupport,
             )
-            .semantics { contentDescription = "Support NOOP — donate or get in touch" },
+            .semantics { contentDescription = "Support Kineva — donate or get in touch" },
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1534,7 +1534,7 @@ private fun SupportRow(onSupport: () -> Unit) {
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(Metrics.space4),
             ) {
-                Text("Support NOOP", style = NoopType.headline, color = Palette.textPrimary)
+                Text("Support Kineva", style = NoopType.headline, color = Palette.textPrimary)
                 Text(
                     "Donate or get in touch — totally optional.",
                     style = NoopType.subhead,
@@ -1585,7 +1585,7 @@ private fun ScoreHeroRow(
         val live = liveTodayStrain; val stored = day?.strain
         if (live != null && stored != null) maxOf(live, stored) else (live ?: stored)
     }
-    // Effort honours the 0–100 / WHOOP-0–21 toggle (#313). The stored strain is on NOOP's 0–100 Effort
+    // Effort honours the 0–100 / WHOOP-0–21 toggle (#313). The stored strain is on Kineva's 0–100 Effort
     // axis; render it on the user's selected scale so the arc and centre number match the app's Effort.
     val effortOutOf = if (effortScale == EffortScale.WHOOP) 21.0 else 100.0
     val effortVal = strain?.let { UnitFormatter.effortValue(it, effortScale) } ?: 0.0
@@ -2811,8 +2811,8 @@ private fun RecordingStatusChip(state: RecordingState, onConnect: () -> Unit) {
 
 /**
  * The Today provenance label for the day's REAL merge winner — extends the existing By-Day badge
- * vocabulary consistently. NOOP-computed reads "On-device" (the spec's wording for the By-Day badge,
- * versus the FusedRecord screen's terser "NOOP"), an imported strap day reads "Whoop", and a phone
+ * vocabulary consistently. Kineva-computed reads "On-device" (the spec's wording for the By-Day badge,
+ * versus the FusedRecord screen's terser "Kineva"), an imported strap day reads "Whoop", and a phone
  * aggregate reads "Apple Health" / "Health Connect". Null when no source owns the day (nothing to
  * stamp). Mirrors the Swift `provenanceBadgeLabel`. */
 internal fun dayOwnerSource(deviceId: String?): com.noop.analytics.FusionSource? = when {
@@ -2839,7 +2839,7 @@ internal fun provenanceBadgeLabel(owner: com.noop.analytics.FusionSource?): Stri
 /**
  * PURE mapper (unit-tested) — a RAW resolver source id (as returned by [WhoopRepository.resolvedSeries]'s
  * winning point, e.g. "my-whoop", "my-whoop-noop", "apple-health") onto the spec's provenance labels,
- * given the strap's real [deviceId]. The NOOP-computed strap sibling ("$deviceId-noop") reads "On-device"
+ * given the strap's real [deviceId]. The Kineva-computed strap sibling ("$deviceId-noop") reads "On-device"
  * (scored on THIS device from the raw strap stream); the imported strap source ([deviceId], normally
  * "my-whoop") reads "Whoop"; the Apple-Health source reads "Apple Health". Any other real source (Health
  * Connect, Mi Band, nutrition) keeps its [com.noop.analytics.FusionSource.displayName] — still the genuine
@@ -3036,7 +3036,7 @@ private fun MetricGrid(
             // the steps imported from Apple Health / Health Connect for the day. Only when a day has
             // NEITHER do we fall back to the on-device ESTIMATE (steps_est) a WHOOP 4.0 user gets, flagged
             // "est." so it's never mistaken for a measured count — a 4.0 counts steps in the official
-            // WHOOP app but doesn't expose them to NOOP over Bluetooth. A day with none shows "No Data".
+            // WHOOP app but doesn't expose them to Kineva over Bluetooth. A day with none shows "No Data".
             // (#107, #150)
             val realSteps = d?.steps ?: importedStepsForDay
             val steps = realSteps ?: estimatedStepsForDay
@@ -3293,7 +3293,7 @@ private fun HeartRateTrendCard(
 // time is mapped to a fractional list index by interpolating against the buckets' own timestamps —
 // markers then sit exactly on the rendered curve even when the strap history has gaps. Every layer
 // self-hides when its data is absent (no sleep, calibrating Charge, no workouts). Mirrors the macOS
-// OverviewHRChart (Packages/StrandDesign) in NOOP's own colour language. (PR #285)
+// OverviewHRChart (Packages/StrandDesign) in Kineva's own colour language. (PR #285)
 
 @Composable
 private fun OverviewHRChart(
@@ -4114,8 +4114,8 @@ internal fun latestWeightKg(apple: List<AppleDaily>, healthConnect: List<AppleDa
 /**
  * Steps for [dayKey] from the imported Apple Health / Health Connect daily aggregates, or null when
  * neither source carries a step total for that day. Backs the Today Steps-tile fallback for straps
- * NOOP can't read steps off over Bluetooth — notably the WHOOP 4.0, which DOES count steps (in the
- * official WHOOP app) but doesn't expose them to NOOP — so on a 4.0 the tile shows imported steps
+ * Kineva can't read steps off over Bluetooth — notably the WHOOP 4.0, which DOES count steps (in the
+ * official WHOOP app) but doesn't expose them to Kineva — so on a 4.0 the tile shows imported steps
  * rather than "No Data". On-device WHOOP 5/MG steps (DailyMetric.steps) still take precedence at the
  * call site. When both sources report the same day, the larger (most-complete) total wins so we never
  * sum and double-count. Mirrors the macOS TodayView, which already falls back to imported steps. (#150)

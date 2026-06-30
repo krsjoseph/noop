@@ -99,7 +99,7 @@ struct SmartAlarmView: View {
                     Text("The strap alarm is a silent buzz, not a sound")
                         .font(StrandFont.headline)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Text("The wake-alarm above buzzes your wrist from the strap's own firmware. It can't sound a loud alarm, and a sideloaded app can't sound a reliable background wake on this device either (that needs a critical-alert permission this build doesn't have). Keep your phone's built-in Clock alarm as a backup. NOOP's phone-based smart wake (light-sleep detection) is available on the Android app.")
+                    Text("The wake-alarm above buzzes your wrist from the strap's own firmware. It can't sound a loud alarm, and a sideloaded app can't sound a reliable background wake on this device either (that needs a critical-alert permission this build doesn't have). Keep your phone's built-in Clock alarm as a backup. Kineva's phone-based smart wake (light-sleep detection) is available on the Android app.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -111,7 +111,7 @@ struct SmartAlarmView: View {
     // MARK: - Strap silent wake-alarm (#766, moved here from Automations)
 
     // The strap's own firmware alarm: a silent wrist buzz at the chosen time, armed over BLE so it fires
-    // even if the phone is asleep or NOOP is closed. Lifted verbatim (behaviour intact) out of
+    // even if the phone is asleep or Kineva is closed. Lifted verbatim (behaviour intact) out of
     // AutomationsView.alarmCard so users stop conflating it with the wind-down reminder below.
     private var strapAlarmCard: some View {
         StrandCard(padding: 20, tint: behavior.smartAlarmEnabled ? StrandPalette.accent : nil) {
@@ -133,7 +133,7 @@ struct SmartAlarmView: View {
                         Text("Wake me with a strap buzz")
                             .font(StrandFont.body)
                             .foregroundStyle(StrandPalette.textPrimary)
-                        Text("Arms the strap to buzz at your wake time, even if NOOP is closed. Still experimental on WHOOP 4.0, so keep a backup alarm until you've confirmed it wakes you.")
+                        Text("Arms the strap to buzz at your wake time, even if Kineva is closed. Still experimental on WHOOP 4.0, so keep a backup alarm until you've confirmed it wakes you.")
                             .font(StrandFont.footnote)
                             .foregroundStyle(StrandPalette.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +157,7 @@ struct SmartAlarmView: View {
                     .frame(minHeight: 42)
                     Divider().overlay(StrandPalette.hairline)
                     alarmWeekdayPicker
-                    Text("Armed on the strap itself, so it can buzz at your wake time even if your phone is asleep or NOOP is closed. We send the same alarm command the official app sends, but a strap-driven wake-up hasn't been confirmed on our side yet, so please keep a backup alarm for now.")
+                    Text("Armed on the strap itself, so it can buzz at your wake time even if your phone is asleep or Kineva is closed. We send the same alarm command the official app sends, but a strap-driven wake-up hasn't been confirmed on our side yet, so please keep a backup alarm for now.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)

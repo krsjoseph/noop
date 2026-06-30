@@ -268,7 +268,7 @@ struct StressView: View {
         return date.formatted(.dateTime.hour())
     }
 
-    // MARK: 1 · Hero — the NOOP count-up PipBar (the needle/speedometer is gone).
+    // MARK: 1 · Hero — the Kineva count-up PipBar (the needle/speedometer is gone).
     //
     // Aaron's call: "remove the needle, it's not needed" + "straight horizontal bars that
     // almost count up separated by pips". So the hero reads as one clean WHOOP-style block —
@@ -307,7 +307,7 @@ struct StressView: View {
                         .fixedSize(horizontal: true, vertical: false)
                 }
 
-                // The NOOP signature: a count-up PipBar on the 0…3 scale, band-tinted.
+                // The Kineva signature: a count-up PipBar on the 0…3 scale, band-tinted.
                 PipBar(
                     value: model.score,
                     range: 0...3,

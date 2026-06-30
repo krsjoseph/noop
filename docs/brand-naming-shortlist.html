@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kineva Naming Shortlist - Ranked Brand Options</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101316;
+      --panel: #171b20;
+      --panel-2: #1d2329;
+      --line: #313a43;
+      --text: #f3f6f7;
+      --muted: #a9b3bc;
+      --faint: #737f89;
+      --blue: #69a7d8;
+      --green: #70bd89;
+      --amber: #d1a557;
+      --rose: #d57777;
+      --ink: #090b0d;
+      --radius: 8px;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+      font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 80% 0%, rgba(105, 167, 216, 0.16), transparent 28rem),
+        linear-gradient(180deg, #11161a 0%, var(--bg) 32%, #0d1012 100%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    .hero {
+      min-height: 72dvh;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      align-items: center;
+      gap: 48px;
+      border-bottom: 1px solid var(--line);
+      padding: 24px 0 44px;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 34px;
+      height: 1px;
+      background: var(--amber);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin-top: 22px;
+      max-width: 820px;
+      font-size: clamp(42px, 8vw, 86px);
+      font-weight: 850;
+    }
+
+    h2 {
+      font-size: clamp(28px, 4vw, 44px);
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .lead {
+      max-width: 720px;
+      margin-top: 24px;
+      color: #c7d0d7;
+      font-size: 19px;
+    }
+
+    .hero-aside {
+      position: relative;
+      min-height: 470px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero-aside::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
+    }
+
+    .brand-card {
+      position: absolute;
+      left: 34px;
+      right: 34px;
+      top: 34px;
+      padding: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      background: rgba(16, 19, 22, 0.78);
+      backdrop-filter: blur(18px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .brand-mark img {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      object-fit: cover;
+      background: #20262c;
+    }
+
+    .brand-name {
+      font-size: 44px;
+      font-weight: 850;
+    }
+
+    .mini-chart {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .metric {
+      min-height: 102px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 8px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 28px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric span {
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .scope-list {
+      position: absolute;
+      left: 34px;
+      right: 34px;
+      bottom: 34px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .scope-list div {
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #d9e0e5;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin: 28px 0 46px;
+    }
+
+    .summary {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .summary span {
+      display: block;
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .summary strong {
+      display: block;
+      margin-top: 8px;
+      color: var(--text);
+      font-size: 22px;
+    }
+
+    section {
+      padding: 54px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-intro {
+      max-width: 760px;
+      margin-bottom: 26px;
+      font-size: 17px;
+    }
+
+    .criteria {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .criterion {
+      min-height: 138px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .criterion strong {
+      display: block;
+      margin-bottom: 9px;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .criterion p {
+      font-size: 13px;
+    }
+
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .recommendation {
+      padding: 28px;
+      border: 1px solid rgba(112, 189, 137, 0.34);
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, rgba(112, 189, 137, 0.14), rgba(105, 167, 216, 0.06)),
+        var(--panel);
+    }
+
+    .recommendation .name {
+      margin-top: 12px;
+      color: #ffffff;
+      font-size: clamp(44px, 7vw, 76px);
+      font-weight: 900;
+      line-height: 0.95;
+    }
+
+    .recommendation .tagline {
+      margin-top: 16px;
+      color: #d8e5dc;
+      font-size: 20px;
+    }
+
+    .why-list {
+      margin: 24px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .why-list li {
+      padding-left: 18px;
+      position: relative;
+      color: #c7d0d7;
+    }
+
+    .why-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.72em;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--green);
+    }
+
+    .runner-up {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .runner-up + .runner-up {
+      margin-top: 16px;
+    }
+
+    .runner-up h3 {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .score {
+      color: var(--amber);
+      font-size: 14px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1040px;
+    }
+
+    th,
+    td {
+      padding: 14px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      width: 48px;
+      color: var(--amber);
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .candidate {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .domain,
+    .handle {
+      display: inline-flex;
+      align-items: center;
+      margin: 0 6px 6px 0;
+      padding: 4px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      color: #d5dde3;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .domain.good,
+    .handle.good {
+      border-color: rgba(112, 189, 137, 0.38);
+      color: #a9d9b8;
+    }
+
+    .domain.warn {
+      border-color: rgba(209, 165, 87, 0.42);
+      color: #dfc386;
+    }
+
+    .domain.bad {
+      border-color: rgba(213, 119, 119, 0.42);
+      color: #e2a0a0;
+    }
+
+    .brand-systems {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .system-card {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .system-card.featured {
+      grid-column: span 2;
+      background:
+        linear-gradient(135deg, rgba(105, 167, 216, 0.13), rgba(112, 189, 137, 0.08)),
+        var(--panel);
+    }
+
+    .system-card .label {
+      display: inline-block;
+      margin-bottom: 12px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      color: #d8e0e6;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .note {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    .small {
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    footer {
+      padding-top: 34px;
+      color: var(--faint);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        width: min(100% - 28px, 760px);
+        padding-top: 24px;
+      }
+
+      .hero,
+      .top-grid,
+      .summary-grid,
+      .criteria,
+      .brand-systems,
+      .notes {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .hero-aside {
+        min-height: 520px;
+      }
+
+      .system-card.featured {
+        grid-column: span 1;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .scope-list,
+      .mini-chart {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-aside {
+        min-height: 680px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <span class="kicker">Brand naming shortlist</span>
+        <h1>A name that can grow from wearable intelligence into full training.</h1>
+        <p class="lead">
+          This pass treats the current product as a local-first fitness intelligence app:
+          wearable data, readiness, recovery, sleep, stress, workouts, haptics, AI coaching,
+          and future workout plans with exercise demos.
+        </p>
+        <div class="summary-grid" aria-label="Summary">
+          <div class="summary">
+            <span>Recommendation</span>
+            <strong>Kineva</strong>
+          </div>
+          <div class="summary">
+            <span>Best continuity play</span>
+            <strong>Kineva Fit</strong>
+          </div>
+          <div class="summary">
+            <span>Cleanest product promise</span>
+            <strong>ReadyForm</strong>
+          </div>
+        </div>
+      </div>
+
+      <aside class="hero-aside" aria-label="Brand preview">
+        <div class="brand-card">
+          <div class="brand-mark">
+            <img src="assets/logo-v3.png" alt="Current Kineva app icon">
+            <div>
+              <div class="brand-name">Kineva</div>
+              <p>Train from the signal.</p>
+            </div>
+          </div>
+          <div class="mini-chart" aria-label="Product pillars">
+            <div class="metric">
+              <span>Charge</span>
+              <strong style="color: var(--green);">84</strong>
+            </div>
+            <div class="metric">
+              <span>Effort</span>
+              <strong style="color: var(--blue);">42</strong>
+            </div>
+            <div class="metric">
+              <span>Rest</span>
+              <strong style="color: var(--amber);">7.4</strong>
+            </div>
+          </div>
+        </div>
+        <div class="scope-list">
+          <div>Wearable data</div>
+          <div>Workout plans</div>
+          <div>Exercise demos</div>
+          <div>Recovery coaching</div>
+        </div>
+      </aside>
+    </header>
+
+    <section>
+      <h2>Method</h2>
+      <p class="section-intro">
+        I scored names against five stress tests: can it carry the current local-first wearable
+        intelligence story, can it expand into workout programming and exercise demos, can people
+        say and spell it, can it support product naming, and does it have a practical launch path
+        for domains and handles.
+      </p>
+      <div class="criteria">
+        <div class="criterion">
+          <strong>Expansion fit</strong>
+          <p>Does not trap the product as a WHOOP utility, sleep app, or data viewer only.</p>
+        </div>
+        <div class="criterion">
+          <strong>Signal fit</strong>
+          <p>Still feels right for recovery, HRV, live heart rate, haptics, and sensor data.</p>
+        </div>
+        <div class="criterion">
+          <strong>Workout fit</strong>
+          <p>Can credibly hold plans, exercise demos, form work, and coaching content.</p>
+        </div>
+        <div class="criterion">
+          <strong>Brandability</strong>
+          <p>Short, ownable, app-icon friendly, and not locked to a generic fitness phrase.</p>
+        </div>
+        <div class="criterion">
+          <strong>Availability</strong>
+          <p>Checked through live RDAP and direct profile probes on June 27, 2026.</p>
+        </div>
+      </div>
+      <p class="small" style="margin-top: 18px;">
+        Availability note: RDAP "not found" is a strong registration-availability signal, but it is not
+        a purchase guarantee. X and other social platforms can be bot-protected, so handles are
+        treated as signals, not final reservations. Run a trademark lawyer search before launch.
+      </p>
+    </section>
+
+    <section>
+      <h2>Top Recommendation</h2>
+      <div class="top-grid">
+        <div class="recommendation">
+          <span class="kicker">Rank 1</span>
+          <div class="name">Kineva</div>
+          <p class="tagline">Train from the signal.</p>
+          <ul class="why-list">
+            <li>Best balance of premium, broad, and fitness-adjacent without sounding like a generic gym app.</li>
+            <li>Works for the current product: kinesis, kinetics, movement, sensor intelligence, and recovery.</li>
+            <li>Works for the future: Kineva Coach, Kineva Workouts, Kineva Form, Kineva Live, Kineva Library.</li>
+            <li>Practical domain path: kineva.com is registered, but joinkineva.com, kinevaapp.com, kinevafit.com, trainkineva.com, and gokineva.com returned not found.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="runner-up">
+            <h3>Kineva Fit <span class="score">Rank 2</span></h3>
+            <p>Keeps current equity, has the strongest verified availability path, and lets the app evolve without a cold rename.</p>
+          </div>
+          <div class="runner-up">
+            <h3>ReadyForm <span class="score">Rank 3</span></h3>
+            <p>The clearest promise for an all-in-one direction: readiness tells you when to train; form tells you how to train.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Ranked Twenty</h2>
+      <p class="section-intro">
+        Domain labels below use these meanings: "registered" means exact .com is already registered;
+        "not found" means the checked .com variant returned no RDAP record. Handles are practical
+        routes from GitHub/X probes, usually exact or "get/app/fit" variants.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Name</th>
+              <th>Core read</th>
+              <th>Domain path</th>
+              <th>Handle path</th>
+              <th>Stress test</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td><span class="candidate">Kineva</span></td>
+              <td>Movement intelligence; premium and flexible.</td>
+              <td><span class="domain bad">kineva.com registered</span><span class="domain good">joinkineva.com not found</span><span class="domain good">kinevaapp.com not found</span><span class="domain good">kinevafit.com not found</span></td>
+              <td><span class="handle good">@getkineva signal</span><span class="handle good">@kinevaapp signal</span></td>
+              <td>Best overall. Needs a clean pronunciation cue: "kih-NEH-vah" or "KIN-eh-vah".</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><span class="candidate">Kineva Fit</span></td>
+              <td>Current equity plus explicit fitness expansion.</td>
+              <td><span class="domain good">noopfit.com not found</span><span class="domain good">getnoopfit.com not found</span><span class="domain good">noopfitapp.com not found</span></td>
+              <td><span class="handle good">@noopfit signal</span><span class="handle good">@getnoopfit signal</span></td>
+              <td>Strongest continuity. Risk: "noop" can read as "does nothing" and may be confused with Noom.</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td><span class="candidate">ReadyForm</span></td>
+              <td>Readiness plus movement quality.</td>
+              <td><span class="domain bad">readyform.com registered</span><span class="domain good">getreadyform.com not found</span><span class="domain good">readyformapp.com not found</span><span class="domain good">readyformfit.com not found</span></td>
+              <td><span class="handle good">@readyform signal</span><span class="handle good">@getreadyform signal</span></td>
+              <td>Very clear for future demos. Slightly more descriptive than distinctive.</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td><span class="candidate">FitThread</span></td>
+              <td>Data threads stitched into training.</td>
+              <td><span class="domain bad">fitthread.com registered</span><span class="domain good">getfitthread.com not found</span><span class="domain good">fitthreadapp.com not found</span></td>
+              <td><span class="handle good">@fitthread signal</span><span class="handle good">@fitthreadapp signal</span></td>
+              <td>Good bridge from Strand. Risk: "fit" makes it more generic and less premium.</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td><span class="candidate">Formlane</span></td>
+              <td>A lane for form, training, and progression.</td>
+              <td><span class="domain bad">formlane.com registered</span><span class="domain good">getformlane.com not found</span><span class="domain good">formlaneapp.com not found</span></td>
+              <td><span class="handle good">@formlane signal</span><span class="handle good">@getformlane signal</span></td>
+              <td>Strong for exercise demos. Less naturally tied to recovery and health analytics.</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td><span class="candidate">Trainkind</span></td>
+              <td>A human, less macho training brand.</td>
+              <td><span class="domain bad">trainkind.com registered</span><span class="domain good">gettrainkind.com not found</span><span class="domain good">trainkindapp.com not found</span></td>
+              <td><span class="handle good">@trainkind signal</span><span class="handle good">@gettrainkind signal</span></td>
+              <td>Warm and memorable. Softer tone may undersell technical sensor depth.</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td><span class="candidate">Metrava</span></td>
+              <td>Metrics plus movement; data-forward.</td>
+              <td><span class="domain bad">metrava.com registered</span><span class="domain good">getmetrava.com not found</span><span class="domain good">metravaapp.com not found</span><span class="domain good">metravafit.com not found</span></td>
+              <td><span class="handle good">@getmetrava signal</span><span class="handle good">@metravaapp signal</span></td>
+              <td>Good for analytics. Workout demos need stronger product copy to feel native.</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td><span class="candidate">Vitaloop</span></td>
+              <td>Vitals plus feedback loop.</td>
+              <td><span class="domain bad">vitaloop.com registered</span><span class="domain good">vitaloopfit.com not found</span><span class="domain good">tryvitaloop.com not found</span></td>
+              <td><span class="handle good">@vitaloop signal</span><span class="handle good">@getvitaloop signal</span></td>
+              <td>Very product-relevant. Risk: "vital" can drift too medical if copy is not careful.</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td><span class="candidate">Pacewell</span></td>
+              <td>Train at the right pace; wellness without hype.</td>
+              <td><span class="domain bad">pacewell.com registered</span><span class="domain good">getpacewell.com not found</span><span class="domain good">pacewellapp.com not found</span></td>
+              <td><span class="handle good">@getpacewell signal</span><span class="handle good">@pacewellapp signal</span></td>
+              <td>Calm and broad. Somewhat generic in the wellness category.</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td><span class="candidate">BodySignal</span></td>
+              <td>Your body data translated into action.</td>
+              <td><span class="domain bad">bodysignal.com registered</span><span class="domain good">bodysignalfit.com not found</span><span class="domain good">trybodysignal.com not found</span></td>
+              <td><span class="handle good">@getbodysignal signal</span><span class="handle good">@bodysignalapp signal</span></td>
+              <td>Clear and credible. Less emotional; feels more like a dashboard than a workout brand.</td>
+            </tr>
+            <tr>
+              <td>11</td>
+              <td><span class="candidate">Kineora</span></td>
+              <td>Kinetic aura; premium coined name.</td>
+              <td><span class="domain bad">kineora.com registered</span><span class="domain good">getkineora.com not found</span><span class="domain good">kineoraapp.com not found</span><span class="domain good">kineorafit.com not found</span></td>
+              <td><span class="handle good">@kineora signal</span><span class="handle good">@getkineora signal</span></td>
+              <td>Distinctive. Slightly harder to spell and explain than Kineva.</td>
+            </tr>
+            <tr>
+              <td>12</td>
+              <td><span class="candidate">Kinavo</span></td>
+              <td>Kinetics, navigation, VO2 undertone.</td>
+              <td><span class="domain bad">kinavo.com registered</span><span class="domain good">getkinavo.com not found</span><span class="domain good">kinavoapp.com not found</span><span class="domain good">kinavofit.com not found</span></td>
+              <td><span class="handle good">@kinavo signal</span><span class="handle good">@getkinavo signal</span></td>
+              <td>Short and app-friendly. Meaning is less immediate without a tagline.</td>
+            </tr>
+            <tr>
+              <td>13</td>
+              <td><span class="candidate">FormSignal</span></td>
+              <td>Technique and sensor data together.</td>
+              <td><span class="domain bad">formsignal.com registered</span><span class="domain good">formsignalapp.com not found</span><span class="domain good">formsignalfit.com not found</span></td>
+              <td><span class="handle good">@formsignal signal</span><span class="handle good">@getformsignal signal</span></td>
+              <td>Directly maps to exercise demos. Less elegant as a parent brand.</td>
+            </tr>
+            <tr>
+              <td>14</td>
+              <td><span class="candidate">CadenceIQ</span></td>
+              <td>Training rhythm plus intelligence.</td>
+              <td><span class="domain bad">cadenceiq.com registered</span><span class="domain good">getcadenceiq.com not found</span><span class="domain good">cadenceiqapp.com not found</span></td>
+              <td><span class="handle good">@getcadenceiq signal</span><span class="handle good">@cadenceiqapp signal</span></td>
+              <td>Strong for endurance. "IQ" is a bit common and can sound dated.</td>
+            </tr>
+            <tr>
+              <td>15</td>
+              <td><span class="candidate">EffortLab</span></td>
+              <td>Current Effort score turned into a training lab.</td>
+              <td><span class="domain bad">effortlab.com registered</span><span class="domain good">geteffortlab.com not found</span><span class="domain good">effortlabapp.com not found</span></td>
+              <td><span class="handle good">@geteffortlab signal</span><span class="handle good">@effortlabapp signal</span></td>
+              <td>Good internal logic. "Lab" may feel experimental rather than polished consumer fitness.</td>
+            </tr>
+            <tr>
+              <td>16</td>
+              <td><span class="candidate">RestForge</span></td>
+              <td>Recovery and strength adaptation.</td>
+              <td><span class="domain bad">restforge.com registered</span><span class="domain good">getrestforge.com not found</span><span class="domain good">restforgeapp.com not found</span></td>
+              <td><span class="handle good">@getrestforge signal</span><span class="handle good">@restforgeapp signal</span></td>
+              <td>Memorable. The "forge" side may push the brand toward strength only.</td>
+            </tr>
+            <tr>
+              <td>17</td>
+              <td><span class="candidate">PulseKit</span></td>
+              <td>Heart-rate tools and training modules.</td>
+              <td><span class="domain bad">pulsekit.com registered</span><span class="domain good">pulsekitapp.com not found</span><span class="domain good">pulsekitfit.com not found</span></td>
+              <td><span class="handle good">@pulsekitapp signal</span><span class="handle good">@getpulsekit signal</span></td>
+              <td>Easy to understand. "Kit" can sound like a developer SDK or accessory bundle.</td>
+            </tr>
+            <tr>
+              <td>18</td>
+              <td><span class="candidate">LivForm</span></td>
+              <td>Live form, living fitness, movement quality.</td>
+              <td><span class="domain bad">livform.com registered</span><span class="domain good">getlivform.com not found</span><span class="domain good">livformapp.com not found</span></td>
+              <td><span class="handle good">@livform signal</span><span class="handle good">@getlivform signal</span></td>
+              <td>Nice meaning. Spelling ambiguity: people may type LiveForm instead.</td>
+            </tr>
+            <tr>
+              <td>19</td>
+              <td><span class="candidate">ToniqFit</span></td>
+              <td>Energy, tone, fitness readiness.</td>
+              <td><span class="domain good">toniqfit.com not found</span><span class="domain good">gettoniqfit.com not found</span><span class="domain good">toniqfitapp.com not found</span></td>
+              <td><span class="handle good">@toniqfit signal</span><span class="handle good">@gettoniqfit signal</span></td>
+              <td>Best availability among coined names. The "q" spelling feels gimmicky unless the visual identity is very restrained.</td>
+            </tr>
+            <tr>
+              <td>20</td>
+              <td><span class="candidate">Calyra Fit</span></td>
+              <td>Calm, polished fitness brand.</td>
+              <td><span class="domain good">calyrfit.com not found</span><span class="domain good">getcalyrfit.com not found</span><span class="domain good">calyrfitapp.com not found</span></td>
+              <td><span class="handle good">@calyrfit signal</span><span class="handle good">@getcalyrfit signal</span></td>
+              <td>Good availability. Weaker product meaning and awkward missing "a" in the domain route.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Starter Brand Systems</h2>
+      <p class="section-intro">
+        These are not final identities. They are enough to hear the names in product copy and see
+        whether they can carry a real app, not just a domain.
+      </p>
+      <div class="brand-systems">
+        <article class="system-card featured">
+          <span class="label">Recommended route</span>
+          <h3>Kineva</h3>
+          <p><strong style="color: var(--text);">Positioning:</strong> Fitness intelligence that turns your own body signals into training, recovery, and form guidance.</p>
+          <p style="margin-top: 10px;"><strong style="color: var(--text);">Taglines:</strong> Train from the signal. / Know when to push. Know how to move. / Your data, turned into training.</p>
+          <div class="pill-row">
+            <span class="pill">Kineva Today</span>
+            <span class="pill">Kineva Coach</span>
+            <span class="pill">Kineva Workouts</span>
+            <span class="pill">Kineva Form</span>
+            <span class="pill">Kineva Live</span>
+          </div>
+        </article>
+        <article class="system-card">
+          <span class="label">Continuity route</span>
+          <h3>Kineva Fit</h3>
+          <p><strong style="color: var(--text);">Positioning:</strong> The current Kineva promise, expanded from owning your data into training with it.</p>
+          <p style="margin-top: 10px;"><strong style="color: var(--text);">Tagline:</strong> Own your data. Train with it.</p>
+          <div class="pill-row">
+            <span class="pill">Kineva Today</span>
+            <span class="pill">Kineva Coach</span>
+            <span class="pill">Kineva Workouts</span>
+            <span class="pill">Kineva Form</span>
+          </div>
+        </article>
+        <article class="system-card">
+          <span class="label">Clarity route</span>
+          <h3>ReadyForm</h3>
+          <p><strong style="color: var(--text);">Positioning:</strong> Readiness plus exercise form in one place: the app tells you what your body can handle and how to execute.</p>
+          <p style="margin-top: 10px;"><strong style="color: var(--text);">Tagline:</strong> Ready to train. Built to move.</p>
+          <div class="pill-row">
+            <span class="pill">Readiness</span>
+            <span class="pill">Form Library</span>
+            <span class="pill">Workout Builder</span>
+            <span class="pill">Recovery Plan</span>
+          </div>
+        </article>
+        <article class="system-card">
+          <span class="label">Data-thread route</span>
+          <h3>FitThread</h3>
+          <p><strong style="color: var(--text);">Positioning:</strong> A daily thread from sleep and recovery through effort, workout selection, and movement progress.</p>
+          <p style="margin-top: 10px;"><strong style="color: var(--text);">Tagline:</strong> Every signal has a next step.</p>
+          <div class="pill-row">
+            <span class="pill">Daily Thread</span>
+            <span class="pill">Training Thread</span>
+            <span class="pill">Recovery Thread</span>
+            <span class="pill">Form Thread</span>
+          </div>
+        </article>
+        <article class="system-card">
+          <span class="label">Workout route</span>
+          <h3>Formlane</h3>
+          <p><strong style="color: var(--text);">Positioning:</strong> A training app that starts with how you move and uses body data to set the right lane for the day.</p>
+          <p style="margin-top: 10px;"><strong style="color: var(--text);">Tagline:</strong> Follow the signal. Fix the form.</p>
+          <div class="pill-row">
+            <span class="pill">Today Lane</span>
+            <span class="pill">Form Library</span>
+            <span class="pill">Workout Lanes</span>
+            <span class="pill">Coach Lane</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Decision Notes</h2>
+      <div class="notes">
+        <div class="note">
+          <strong>If you want the safest move</strong>
+          <p>Use Kineva Fit as the near-term public name. It has the cleanest verified availability path and preserves the existing community, repo recognition, subreddit, and mirror story.</p>
+        </div>
+        <div class="note">
+          <strong>If you want the strongest long-term consumer brand</strong>
+          <p>Move toward Kineva. It is less tied to the current interoperability story and better suited to a future with built-in workouts, demo videos, form coaching, and subscription-level polish.</p>
+        </div>
+        <div class="note">
+          <strong>Names I would avoid</strong>
+          <p>Do not lead with Strand as the public brand. It is meaningful internally, but too common and not clearly fitness. I would also avoid anything directly tied to WHOOP, "strap", or "recovery only" because the future product scope is broader.</p>
+        </div>
+        <div class="note">
+          <strong>Pre-launch checklist</strong>
+          <p>Buy the target domain, reserve exact and variant handles, run USPTO/WIPO/App Store/Play Store searches, test pronunciation with five people, and mock one App Store screenshot before committing to the rename.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Prepared for the Kineva project on June 27, 2026. Domain and handle checks were live signals,
+      not legal advice or a guarantee of registration.
+    </footer>
+  </main>
+</body>
+</html>

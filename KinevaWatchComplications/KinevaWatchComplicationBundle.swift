@@ -5,8 +5,8 @@ import SwiftUI
 /// can place it in any of the supported accessory families. The watch app (the glance UI) lives in a
 /// separate target; this extension only draws the face complication.
 @main
-struct NOOPWatchComplicationBundle: WidgetBundle {
+struct KinevaWatchComplicationBundle: WidgetBundle {
     var body: some Widget {
-        NOOPChargeComplication()
+        KinevaChargeComplication()
     }
 }

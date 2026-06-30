@@ -159,7 +159,7 @@ object NoopPrefs {
     /** "Keep connected in the background" — drives [com.noop.ble.WhoopConnectionService]. Default on. */
     const val KEY_BACKGROUND_CONNECTION = "noop.backgroundConnection"
 
-    /** "Continuous HRV capture" — when on (AND background connection is on), NOOP holds the dense
+    /** "Continuous HRV capture" — when on (AND background connection is on), Kineva holds the dense
      *  realtime HR stream armed even with no Live screen open, so the strap banks beat-to-beat R-R 24/7
      *  for far better overnight HRV/recovery/sleep. Uses more battery (continuous HR streaming). Default
      *  OFF. Drives [com.noop.ble.WhoopBleClient.setKeepStreamForData] via [AppViewModel]. */
@@ -174,7 +174,7 @@ object NoopPrefs {
      *  "Share strap log" export) work regardless. See [com.noop.ble.WhoopBleClient.debugLogcat]. */
     const val KEY_DEBUG_LOGGING = "noop.debugLogging"
 
-    /** "Broadcast heart rate" — when on, NOOP acts as a standard BLE Heart Rate peripheral (0x180D /
+    /** "Broadcast heart rate" — when on, Kineva acts as a standard BLE Heart Rate peripheral (0x180D /
      *  0x2A37) and re-broadcasts the live strap HR so a gym treadmill / Zwift / Peloton can read it.
      *  LOCAL Bluetooth only, nothing leaves the device. Default OFF. Drives [com.noop.ble.HrBroadcaster]
      *  via [AppViewModel]. Distinct from the WHOOP strap's own "broadcast HR" firmware config. */
@@ -183,7 +183,7 @@ object NoopPrefs {
     fun of(context: Context): SharedPreferences =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
-    /** Whether NOOP should hold the strap connection open via a foreground service. Default true. */
+    /** Whether Kineva should hold the strap connection open via a foreground service. Default true. */
     fun backgroundConnection(context: Context): Boolean =
         of(context).getBoolean(KEY_BACKGROUND_CONNECTION, true)
 
@@ -191,7 +191,7 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_BACKGROUND_CONNECTION, enabled).apply()
     }
 
-    /** Whether NOOP keeps the dense realtime HR stream armed 24/7 for continuous HRV capture. Default
+    /** Whether Kineva keeps the dense realtime HR stream armed 24/7 for continuous HRV capture. Default
      *  false. Only takes effect while [backgroundConnection] is also on. */
     fun continuousHrv(context: Context): Boolean =
         of(context).getBoolean(KEY_CONTINUOUS_HRV, false)
@@ -208,7 +208,7 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_DEBUG_LOGGING, enabled).apply()
     }
 
-    /** Whether NOOP re-broadcasts its live HR as a standard BLE Heart Rate peripheral. Default OFF. */
+    /** Whether Kineva re-broadcasts its live HR as a standard BLE Heart Rate peripheral. Default OFF. */
     fun hrBroadcast(context: Context): Boolean =
         of(context).getBoolean(KEY_HR_BROADCAST, false)
 
@@ -256,7 +256,7 @@ object NoopPrefs {
         }.apply()
     }
 
-    /** Health Connect periodic auto-sync (Samsung Health → Health Connect → NOOP). Default OFF.
+    /** Health Connect periodic auto-sync (Samsung Health → Health Connect → Kineva). Default OFF.
      *  Interval in hours (default 12). Last successful sync as epoch millis (0 = never). */
     const val KEY_HC_AUTO_SYNC = "noop.hcAutoSync"
     const val KEY_HC_SYNC_HOURS = "noop.hcSyncHours"
@@ -283,7 +283,7 @@ object NoopPrefs {
         of(context).edit().putLong(KEY_HC_LAST_SYNC, epochMs).apply()
     }
 
-    /** Health Connect writeback (NOOP's computed metrics → HC, for other apps). Default OFF. */
+    /** Health Connect writeback (Kineva's computed metrics → HC, for other apps). Default OFF. */
     const val KEY_HC_WRITEBACK = "noop.hcWriteback"
 
     fun hcWriteback(context: Context): Boolean =
@@ -448,7 +448,7 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_COACH_SIGNALS, enabled).apply()
     }
 
-    /** "Auto-detect workouts" (MVP, opt-in, on-device, NON-DESTRUCTIVE). When ON, NOOP scans the last
+    /** "Auto-detect workouts" (MVP, opt-in, on-device, NON-DESTRUCTIVE). When ON, Kineva scans the last
      *  day or two of strap HR for a sustained-elevated bout and surfaces ONE dismissible Today card
      *  suggesting you save it — it NEVER creates a workout on its own (the user taps Save). Default OFF;
      *  when off no detection runs and no card shows. Mirrors macOS/iOS @AppStorage("autoDetectWorkouts"). */
@@ -608,7 +608,7 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_TS_HEAL_PENDING, pending).apply()
     }
 
-    /** The last strap we bonded to (address + model), persisted so NOOP can reconnect to it directly on
+    /** The last strap we bonded to (address + model), persisted so Kineva can reconnect to it directly on
      *  the next launch — e.g. after an APK update restarts the process (#67). On-device only; never sent. */
     const val KEY_LAST_DEVICE_ADDR = "noop.lastDeviceAddress"
     const val KEY_LAST_DEVICE_MODEL = "noop.lastDeviceModel"

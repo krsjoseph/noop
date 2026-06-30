@@ -1084,7 +1084,7 @@ private fun ManualWorkoutDialog(
 /**
  * Sport field for the manual add/edit dialog — a searchable PICKER over the shared catalogue
  * ([WorkoutSport.all], the SAME list the live "Start a workout" sheet uses) with a free-text
- * FALLBACK so an unusual sport NOOP doesn't enumerate still saves exactly as typed (#519). The text
+ * FALLBACK so an unusual sport Kineva doesn't enumerate still saves exactly as typed (#519). The text
  * field IS the value: typing filters the catalogue beneath it; tapping a match fills the field; not
  * tapping anything keeps whatever was typed. The list only shows while the typed text is a partial
  * match (an exact catalogue hit, or a free-typed sport, collapses it).

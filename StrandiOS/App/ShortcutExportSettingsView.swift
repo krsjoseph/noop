@@ -4,7 +4,7 @@ import StrandDesign
 
 /// #155 — the opt-in surface for the Apple-Health-free export. Sideloaded installs (free 7-day
 /// signing) can't carry the HealthKit entitlement, so HealthKitBridge never runs for them; this
-/// toggle instead has NOOP rewrite Documents/noop_sync.txt on every background transition, and the
+/// toggle instead has Kineva rewrite Documents/noop_sync.txt on every background transition, and the
 /// user's Siri Shortcut reads the file and logs the rows into Apple Health. Default OFF.
 struct ShortcutExportSettingsView: View {
     @AppStorage(ShortcutHealthExport.enabledKey) private var enabled = false
@@ -27,7 +27,7 @@ struct ShortcutExportSettingsView: View {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 SettingsGroup(
                     header: "Apple Health",
-                    footer: "When this is on, NOOP rewrites a plain-text file — On My iPhone › NOOP › noop_sync.txt — each time you leave the app: one line per 15 minutes of heart rate, HRV and steps, read straight from your strap. Pair it with the Siri Shortcut that reads the file and logs everything into Apple Health — no HealthKit entitlement needed, so it works on sideloaded installs. The setup guide and the pre-built Shortcut live in the project wiki on GitHub."
+                    footer: "When this is on, Kineva rewrites a plain-text file — On My iPhone › Kineva › noop_sync.txt — each time you leave the app: one line per 15 minutes of heart rate, HRV and steps, read straight from your strap. Pair it with the Siri Shortcut that reads the file and logs everything into Apple Health — no HealthKit entitlement needed, so it works on sideloaded installs. The setup guide and the pre-built Shortcut live in the project wiki on GitHub."
                 ) {
                     SettingsRow(icon: "square.and.arrow.up.on.square.fill",
                                 title: "Export for Shortcuts",

@@ -20,7 +20,7 @@ struct ImportedSleepFigures: Equatable {
 // Product surfaces (Compare, Insights, Stress, Explore, Today) historically read rows under the EXACT
 // requested source. That hid freshly-computed and Apple-compatible data that sat under a different
 // device id. `Repository.resolvedSeries` resolves a metric over an explicit source PRECEDENCE — imported
-// WHOOP wins, NOOP-computed fills the days it doesn't cover, and Apple Health only fills declared-
+// WHOOP wins, Kineva-computed fills the days it doesn't cover, and Apple Health only fills declared-
 // compatible vitals on days neither strap source has. These types model that resolution; the exact-source
 // reads (`series(key:source:)`) stay available for surfaces that must not mix sources.
 
@@ -120,7 +120,7 @@ final class Repository: ObservableObject {
     /// Data Sources "Freshness Pipeline" card so the user can see imported vs computed vs Apple coverage.
     @Published private(set) var freshness: RepositoryFreshness = .empty
     /// Daily metric rows with source provenance, used by vital-sign surfaces that need honest
-    /// "WHOOP import / NOOP computed / Apple Health" captions instead of a silent merged row.
+    /// "WHOOP import / Kineva computed / Apple Health" captions instead of a silent merged row.
     @Published private(set) var vitalRows: [SourcedDailyMetric] = []
     /// Monotonic counter bumped on every successful `refresh()`. Intraday-updating views key their
     /// data load on this so they reload when fresh strap data lands — `today?.day` alone is a stable
@@ -920,7 +920,7 @@ final class Repository: ObservableObject {
     /// Product-facing daily series for a metric across every COMPATIBLE source, freshest-wins. Use this
     /// on surfaces where the user expects the best available signal (Compare/Insights/Stress/Explore/
     /// Today); use `series(key:source:)` where a single source must be honoured verbatim. Precedence is
-    /// explicit per `sourceCandidates`: imported WHOOP > NOOP-computed > declared-compatible Apple Health.
+    /// explicit per `sourceCandidates`: imported WHOOP > Kineva-computed > declared-compatible Apple Health.
     func resolvedSeries(key: String, source preferredSource: String, days: Int = 4000) async -> MetricSeriesResolution {
         let candidates = Self.sourceCandidates(forKey: key, preferredSource: preferredSource,
                                                actualWhoopSource: deviceId)
@@ -1026,7 +1026,7 @@ final class Repository: ObservableObject {
         }
     }
 
-    /// Whether the NOOP-computed strap source may fill an Apple-preferred metric. Only the two daily
+    /// Whether the Kineva-computed strap source may fill an Apple-preferred metric. Only the two daily
     /// totals the strap genuinely estimates (steps, calories) — never a derived WHOOP score.
     private static func noopComputedCanFillAppleMetric(_ key: String) -> Bool {
         switch key {

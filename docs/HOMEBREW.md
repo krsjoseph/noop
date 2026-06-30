@@ -1,6 +1,6 @@
 # Homebrew Cask (macOS)
 
-macOS users install + auto-update NOOP with:
+macOS users install + auto-update Kineva with:
 
 ```bash
 brew tap noopapp/noop
@@ -21,11 +21,11 @@ attached to each release. (The tap is also mirrored at `noop.fans/NoopApp/homebr
 > right-click-Open below: you're vouching for code you can read — the cask is one short file in the
 > public tap, and the app's full source is in this repo.
 
-> **Unsigned-app note.** NOOP ships anonymously with no Apple Developer ID, so it isn't notarized.
+> **Unsigned-app note.** Kineva ships anonymously with no Apple Developer ID, so it isn't notarized.
 > Homebrew can't strip the quarantine flag for an un-notarized app, so on **first launch** Gatekeeper
-> blocks it. On **macOS 15 Sequoia and later**: try to open NOOP once, then **System Settings →
-> Privacy & Security**, scroll down, and click **"Open Anyway"** next to NOOP. (On macOS 14 and
-> earlier you can right-click NOOP in `/Applications` → **Open** → **Open**.) The cask's `caveats`
+> blocks it. On **macOS 15 Sequoia and later**: try to open Kineva once, then **System Settings →
+> Privacy & Security**, scroll down, and click **"Open Anyway"** next to Kineva. (On macOS 14 and
+> earlier you can right-click Kineva in `/Applications` → **Open** → **Open**.) The cask's `caveats`
 > says this. Updates after that are just `brew upgrade`.
 
 ## How it stays current

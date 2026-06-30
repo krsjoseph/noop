@@ -5,7 +5,7 @@ import org.junit.Test
 
 /**
  * Pins the exact conversion factors and the formatted-string shapes for the Imperial/Metric display
- * layer (D#103). NOOP stores everything in SI; this is the only place the conversions live, so a wrong
+ * layer (D#103). Kineva stores everything in SI; this is the only place the conversions live, so a wrong
  * factor here would silently mis-display every weight/distance/height/temperature in the app. These
  * tests exist specifically so that can't ship. Mirrors the macOS UnitFormatterTests case-for-case.
  */

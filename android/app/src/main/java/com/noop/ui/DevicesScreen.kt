@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
 
 // MARK: - Devices
 //
-// Pair and manage the bands NOOP reads from. WHOOP-FIRST: the WHOOP is the primary, fully-supported
+// Pair and manage the bands Kineva reads from. WHOOP-FIRST: the WHOOP is the primary, fully-supported
 // device; generic heart-rate straps (Polar / Wahoo / Coospo / Garmin HRM …) are an early, in-development
 // addition. The screen is a thin UI over [com.noop.data.DeviceRegistry] (the Phase 1A/1B data layer):
 // every mutation goes through an [AppViewModel] registry op, and the [SourceCoordinator] (wired in
@@ -104,14 +104,14 @@ fun DevicesScreen(viewModel: AppViewModel) {
     // Conditional rows use `if (cond) { item/items }` so a hidden section adds no row.
     LazyScreenScaffold(
         title = "Devices",
-        subtitle = "Pair and manage the bands NOOP reads from.",
+        subtitle = "Pair and manage the bands Kineva reads from.",
     ) {
         if (devices == null) {
             // The registry resolves a beat after launch. Show a calm pending note in that brief window.
             item {
             DataPendingNote(
                 title = "Getting your devices ready",
-                body = "NOOP is opening your on-device data. Your paired bands will appear here in a moment.",
+                body = "Kineva is opening your on-device data. Your paired bands will appear here in a moment.",
             )
             }
             return@LazyScreenScaffold
@@ -194,7 +194,7 @@ fun DevicesScreen(viewModel: AppViewModel) {
     removeTarget?.let { device ->
         ConfirmDialog(
             title = "Remove this device?",
-            message = "Remove ${displayName(device)}? NOOP will stop connecting to it. Its recorded data is " +
+            message = "Remove ${displayName(device)}? Kineva will stop connecting to it. Its recorded data is " +
                 "kept and you can re-add it any time.",
             confirmLabel = "Remove",
             destructive = true,
@@ -293,7 +293,7 @@ private fun DeviceCard(
             // What this device CAPTURES — honest, per-model (not the generic stored set, which would
             // mislabel e.g. a "Blood oxygen" chip when no SpO₂ % ever comes off the strap).
             CapabilityInfoRow(Icons.Filled.FavoriteBorder, profile.captures)
-            // What NOOP USES it for — the scores / screens this device drives.
+            // What Kineva USES it for — the scores / screens this device drives.
             CapabilityInfoRow(Icons.Filled.Bolt, profile.powers)
             // Honest footnote: the "*" estimates + the SpO₂/steps caveats.
             if (profile.footnote.isNotEmpty()) {
@@ -431,7 +431,7 @@ private fun WhoopFirstFooter() {
             modifier = Modifier.size(16.dp),
         )
         Text(
-            "WHOOP is NOOP's primary, fully-supported band. Other heart-rate straps are an early, " +
+            "WHOOP is Kineva's primary, fully-supported band. Other heart-rate straps are an early, " +
                 "in-development addition — they stream live heart rate and HRV, but not WHOOP's deeper " +
                 "sleep and recovery data.",
             style = NoopType.footnote,
@@ -638,7 +638,7 @@ private fun deviceIcon(device: PairedDeviceRow): ImageVector = when {
 private data class DeviceCapabilityProfile(
     val displayModel: String,  // clean card subtitle (replaces the redundant "WHOOP · WHOOP")
     val captures: String,      // "·"-joined honest capture labels for THIS model
-    val powers: String,        // the NOOP scores / screens this device drives
+    val powers: String,        // the Kineva scores / screens this device drives
     val footnote: String,      // one short honest caveat line ("*" estimates + the SpO₂/steps notes)
 )
 
@@ -661,7 +661,7 @@ private fun deviceProfile(device: PairedDeviceRow): DeviceCapabilityProfile {
             captures = "Heart rate (live, best-effort)",
             powers = "Powers the live console + Effort — no Charge, Rest or Sleep",
             footnote = "Experimental: live heart rate where the band exposes it. Some bands need a pairing " +
-                "we can't do yet — NOOP will say so honestly and never show a made-up number. No sleep, " +
+                "we can't do yet — Kineva will say so honestly and never show a made-up number. No sleep, " +
                 "recovery, skin temp, SpO₂ or steps.",
         )
     }
@@ -687,7 +687,7 @@ private fun deviceProfile(device: PairedDeviceRow): DeviceCapabilityProfile {
                 "motion count (#78). No SpO₂ % off the strap; import a WHOOP CSV for a real %.",
         )
     }
-    // WHOOP 4.0 — NOOP's primary band; no steps over BLE.
+    // WHOOP 4.0 — Kineva's primary band; no steps over BLE.
     if (model.contains("4")) {
         return DeviceCapabilityProfile(
             displayModel = "WHOOP 4.0",

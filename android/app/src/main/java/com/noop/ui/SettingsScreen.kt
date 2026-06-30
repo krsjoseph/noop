@@ -104,7 +104,7 @@ import kotlin.math.roundToInt
 // Profile (the numbers that power HR zones / calories / recovery baselines), a
 // Backup & restore section wiring DataBackup export/import through the Storage
 // Access Framework, and an About section with version + attribution + a Support
-// link. Re-skinned to the locked NOOP component system: every surface is a
+// link. Re-skinned to the locked Kineva component system: every surface is a
 // NoopCard, every status uses StatePill, the two-column form feel is preserved.
 //
 // macOS parity notes:
@@ -300,13 +300,13 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
     // "How your scores work" explainer sheet, reachable any time from About (macOS/iOS parity).
     var showScoringGuide by remember { mutableStateOf(false) }
 
-    // "How NOOP works" primer sheet (COMPONENT 5 of the explainability layer), reachable any time
+    // "How Kineva works" primer sheet (COMPONENT 5 of the explainability layer), reachable any time
     // from About — the plain-English tour of sleep sorting, scores, recording and provenance.
     var showHowNoopWorks by remember { mutableStateOf(false) }
 
     // "WHOOP 4.0 vs 5.0/MG: what each can read and why" explainer (FI-2 / #490), reachable from the
     // Strap section by BOTH model owners. Clears up which features each strap supports — e.g. why the
-    // strap-firmware broadcast-out is 5/MG-only while NOOP's own re-broadcast works on any strap.
+    // strap-firmware broadcast-out is 5/MG-only while Kineva's own re-broadcast works on any strap.
     var showModelComparison by remember { mutableStateOf(false) }
 
     // "Recalibrate Charge baseline" confirm dialog (Charge advanced). Writes now-seconds to BOTH the
@@ -390,7 +390,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
     var temperatureRaw by remember {
         mutableStateOf(NoopPrefs.of(context).getString(NoopPrefs.KEY_TEMPERATURE_UNIT, "") ?: "")
     }
-    // Effort display scale (#268) — show NOOP's native 0–100 Effort or WHOOP's 0–21 Day Strain axis.
+    // Effort display scale (#268) — show Kineva's native 0–100 Effort or WHOOP's 0–21 Day Strain axis.
     // Display-only; the stored value never changes. Mirrors into local state like the toggles above.
     var effortScale by remember { mutableStateOf(UnitPrefs.effortScale(context)) }
 
@@ -432,7 +432,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         }
     }
 
-    // CSV export — the 4-CSV WHOOP-format zip NOOP's own importers re-import (Android + Mac).
+    // CSV export — the 4-CSV WHOOP-format zip Kineva's own importers re-import (Android + Mac).
     val csvExportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
@@ -469,7 +469,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
             when (result) {
                 is DataBackup.ImportResult.NeedsRestart -> Toast.makeText(
                     context,
-                    "Backup imported. Fully close and reopen NOOP for it to take effect.",
+                    "Backup imported. Fully close and reopen Kineva for it to take effect.",
                     Toast.LENGTH_LONG,
                 ).show()
                 is DataBackup.ImportResult.Failed -> Toast.makeText(
@@ -498,7 +498,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
 
     ScreenScaffold(
         title = "Settings",
-        subtitle = "Your numbers, your strap, and how NOOP works. All on this phone.",
+        subtitle = "Your numbers, your strap, and how Kineva works. All on this phone.",
     ) {
         // Read the revision counter so every profile write recomposes this subtree
         // (SharedPreferences is not observable; `mutate` bumps `rev` after each write).
@@ -513,7 +513,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Outlined.AccountCircle,
             title = "Profile photo",
-            blurb = "Optional. Add a photo for the avatar in the top-left. Stored only on this phone — NOOP is offline, so it's never uploaded.",
+            blurb = "Optional. Add a photo for the avatar in the top-left. Stored only on this phone — Kineva is offline, so it's never uploaded.",
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -706,13 +706,13 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     )
                 }
                 Text(
-                    "Counter ticks per step — leave at 1.0 unless your steps run high. On a WHOOP 5/MG they can run very high (10× or more), so this goes up to 30. Walk a known 1,000 steps and divide NOOP's count by the real count to get your value.",
+                    "Counter ticks per step — leave at 1.0 unless your steps run high. On a WHOOP 5/MG they can run very high (10× or more), so this goes up to 30. Walk a known 1,000 steps and divide Kineva's count by the real count to get your value.",
                     style = NoopType.footnote,
                     color = Palette.textTertiary,
                 )
                 RowDivider()
                 // Tap-through to the WHOOP 4.0 steps-ESTIMATE calibration (a SEPARATE thing from the 5/MG
-                // @57 counter divisor above): a 4.0 sends no step count, so NOOP estimates steps from
+                // @57 counter divisor above): a 4.0 sends no step count, so Kineva estimates steps from
                 // motion and calibrates that to the phone. Opens the explainer + fit + comparison + manual
                 // override screen. Mirrors the macOS Profile "Steps estimate" row.
                 val stepsSummary = when {
@@ -749,7 +749,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     )
                 }
                 Text(
-                    "For a WHOOP 4.0, which sends no step count: NOOP estimates steps from motion, calibrated to your phone. Tap to see how close it is and adjust it.",
+                    "For a WHOOP 4.0, which sends no step count: Kineva estimates steps from motion, calibrated to your phone. Tap to see how close it is and adjust it.",
                     style = NoopType.footnote,
                     color = Palette.textTertiary,
                 )
@@ -758,7 +758,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
 
         // --- Units ---
         // Imperial/Metric display toggle + a separate temperature override. Display-only — nothing
-        // stored changes; NOOP keeps everything in SI and converts at the point of display. Mirrors the
+        // stored changes; Kineva keeps everything in SI and converts at the point of display. Mirrors the
         // macOS Settings → Units card.
         SettingsSection(
             icon = Icons.Filled.Straighten,
@@ -798,7 +798,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     )
                 }
                 RowDivider()
-                // Effort scale (#268) — NOOP's native 0–100 Effort or WHOOP's 0–21 Day Strain axis.
+                // Effort scale (#268) — Kineva's native 0–100 Effort or WHOOP's 0–21 Day Strain axis.
                 // Display-only; the stored value never changes, so a flip just re-labels every read-out.
                 FormRow(label = "Effort scale") {
                     SegmentedPillControl(
@@ -889,7 +889,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Palette,
             title = "App icon",
-            blurb = "Choose how NOOP looks on your home screen. The launcher may take a moment to refresh the icon after you change it.",
+            blurb = "Choose how Kineva looks on your home screen. The launcher may take a moment to refresh the icon after you change it.",
         ) {
             FormRow(label = "Icon") {
                 SegmentedPillControl(
@@ -908,7 +908,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Sensors,
             title = "Strap",
-            blurb = "NOOP pairs directly with your WHOOP over Bluetooth — no WHOOP app, no cloud.",
+            blurb = "Kineva pairs directly with your WHOOP over Bluetooth — no WHOOP app, no cloud.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(
@@ -996,7 +996,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     }
                 }
 
-                // Keep streaming when the app is closed (Android foreground service). On Mac, NOOP
+                // Keep streaming when the app is closed (Android foreground service). On Mac, Kineva
                 // already keeps your strap connected from the menu bar — just close the window.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1010,7 +1010,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                             color = Palette.textPrimary,
                         )
                         Text(
-                            "Keeps streaming from your strap with an ongoing notification, even after you close NOOP. Turn off to disconnect when the app is closed.",
+                            "Keeps streaming from your strap with an ongoing notification, even after you close Kineva. Turn off to disconnect when the app is closed.",
                             style = NoopType.footnote,
                             color = Palette.textTertiary,
                         )
@@ -1047,7 +1047,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                             color = Palette.textPrimary,
                         )
                         Text(
-                            "Keeps the detailed beat-to-beat stream running all day and night, not just while a live screen is open, so NOOP captures much more for overnight HRV, recovery and sleep. Uses more battery (your strap streams heart rate continuously). Needs \"Keep connected in the background\" on.",
+                            "Keeps the detailed beat-to-beat stream running all day and night, not just while a live screen is open, so Kineva captures much more for overnight HRV, recovery and sleep. Uses more battery (your strap streams heart rate continuously). Needs \"Keep connected in the background\" on.",
                             style = NoopType.footnote,
                             color = Palette.textTertiary,
                         )
@@ -1119,7 +1119,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
 
                 // "WHOOP 4.0 vs 5.0/MG — what each can read and why" (FI-2 / #490). Shown to BOTH model
                 // owners, so a 4.0 user understands their strap is fully supported (and why the firmware
-                // broadcast-out is 5/MG-only while NOOP's own re-broadcast in Data Sources works on a 4.0).
+                // broadcast-out is 5/MG-only while Kineva's own re-broadcast in Data Sources works on a 4.0).
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1193,7 +1193,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     )
                 }
                 Text(
-                    "On a 5/MG connection NOOP will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0.",
+                    "On a 5/MG connection Kineva will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0.",
                     style = NoopType.caption,
                     color = Palette.textTertiary,
                 )
@@ -1279,7 +1279,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                         onClick = { vm.ble.enableWhoop5DeepData() },
                     )
                     Text(
-                        if (!live.encryptedBond) "Needs the full encrypted bond — close the official WHOOP app and pair the strap to NOOP first (a live-HR-only link can't carry the unlock)."
+                        if (!live.encryptedBond) "Needs the full encrypted bond — close the official WHOOP app and pair the strap to Kineva first (a live-HR-only link can't carry the unlock)."
                         else if (!live.worn) "Put the strap on first — the deep stream is on-wrist only."
                         else "Wear the strap, tap once, then let it sync and share your strap log.",
                         style = NoopType.caption,
@@ -1339,7 +1339,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     )
                 }
                 Text(
-                    "Records the raw frames of each 5/MG history sync to a file on this phone, so you can share them and help NOOP learn to decode 5/MG sleep, recovery and strain. The file contains raw biometric frames (heart rate, R-R, skin temperature, motion) and the strap's own diagnostic text. Nothing leaves the phone unless you share it. Off by default.",
+                    "Records the raw frames of each 5/MG history sync to a file on this phone, so you can share them and help Kineva learn to decode 5/MG sleep, recovery and strain. The file contains raw biometric frames (heart rate, R-R, skin temperature, motion) and the strap's own diagnostic text. Nothing leaves the phone unless you share it. Off by default.",
                     style = NoopType.caption,
                     color = Palette.textTertiary,
                 )
@@ -1370,7 +1370,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Science,
             title = "Diagnostics",
-            blurb = "A read-only export of the decoded sensor streams NOOP already stores. Works on any strap — nothing is written to your device, and nothing is uploaded.",
+            blurb = "A read-only export of the decoded sensor streams Kineva already stores. Works on any strap — nothing is written to your device, and nothing is uploaded.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // --- Experimental sleep staging (V2) — opt-in, default OFF, every model. (V7 Pillar 3b) ---
@@ -1457,7 +1457,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Storage,
             title = "Scheduled debug export (#510)",
-            blurb = "Once a day at a time you choose, NOOP writes a timestamped strap log (plus the raw 5/MG capture, if you have one) to its export folder — no sharing, nothing leaves the phone. Useful for chasing an intermittent overnight fault. Off by default.",
+            blurb = "Once a day at a time you choose, Kineva writes a timestamped strap log (plus the raw 5/MG capture, if you have one) to its export folder — no sharing, nothing leaves the phone. Useful for chasing an intermittent overnight fault. Off by default.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
@@ -1591,7 +1591,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                 RowDivider()
                 ToggleRow(
                     title = "Auto-detect workouts",
-                    detail = "After a sync, NOOP looks over your recent heart rate for a sustained, raised stretch that looks like exercise and offers to save it. It only ever suggests — nothing is saved until you tap Save, and you can dismiss any suggestion. Deliberately conservative, so the odd workout may be missed. On this phone only.",
+                    detail = "After a sync, Kineva looks over your recent heart rate for a sustained, raised stretch that looks like exercise and offers to save it. It only ever suggests — nothing is saved until you tap Save, and you can dismiss any suggestion. Deliberately conservative, so the odd workout may be missed. On this phone only.",
                     checked = autoDetectWorkouts,
                     onCheckedChange = {
                         autoDetectWorkouts = it
@@ -1611,7 +1611,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                 RowDivider()
                 ToggleRow(
                     title = "Stress check-ins (haptic)",
-                    detail = "Lets NOOP notice a fresh HRV dip while you're still and offer a minute to breathe. \"Stress\" here is an autonomic proxy from your own baseline — never a diagnosis. The strap gives one light confirming buzz; no push notification.",
+                    detail = "Lets Kineva notice a fresh HRV dip while you're still and offer a minute to breathe. \"Stress\" here is an autonomic proxy from your own baseline — never a diagnosis. The strap gives one light confirming buzz; no push notification.",
                     checked = stressCheckIn,
                     onCheckedChange = {
                         stressCheckIn = it
@@ -1689,7 +1689,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Favorite,
             title = "Charge",
-            blurb = "Charge is NOOP's daily readiness score, learned from your own HRV, resting heart rate and more over time. Your history stays.",
+            blurb = "Charge is Kineva's daily readiness score, learned from your own HRV, resting heart rate and more over time. Your history stays.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1743,7 +1743,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                             vm.syncNow()
                             Toast.makeText(
                                 context,
-                                "Charge baseline reset. NOOP will re-learn it from tonight. Your history stays, and it takes a few nights to settle.",
+                                "Charge baseline reset. Kineva will re-learn it from tonight. Your history stays, and it takes a few nights to settle.",
                                 Toast.LENGTH_LONG,
                             ).show()
                         },
@@ -1760,7 +1760,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Storage,
             title = "Backup & restore",
-            blurb = "Move all your NOOP data to another phone. Export saves everything — history, sleeps, workouts, settings — to a single file you can copy across; import replaces this phone's data with a backup.",
+            blurb = "Move all your Kineva data to another phone. Export saves everything — history, sleeps, workouts, settings — to a single file you can copy across; import replaces this phone's data with a backup.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Three equal-width buttons share the row (each takes a third via weight) — mirrors the
@@ -1821,8 +1821,8 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                 NoteRow(
                     icon = Icons.Filled.Info,
                     iconTint = Palette.textTertiary,
-                    text = "Importing overwrites everything currently on this phone. Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect. " +
-                        "Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into NOOP on Android or Mac — on-device computed rows are marked APPROXIMATE in its Source column; the .noopbak backup stays the lossless restore path.",
+                    text = "Importing overwrites everything currently on this phone. Your old data is kept in a side file just in case. Kineva needs a relaunch for an import to take effect. " +
+                        "Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into Kineva on Android or Mac — on-device computed rows are marked APPROXIMATE in its Source column; the .noopbak backup stays the lossless restore path.",
                 )
             }
         }
@@ -1831,18 +1831,18 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
         SettingsSection(
             icon = Icons.Filled.Info,
             title = "About",
-            blurb = "NOOP — all your data, none of the cloud.",
+            blurb = "Kineva — all your data, none of the cloud.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text("NOOP", style = NoopType.title2, color = Palette.textPrimary)
+                    Text("Kineva", style = NoopType.title2, color = Palette.textPrimary)
                     StatePill("v${BuildConfig.VERSION_NAME}", tone = StrandTone.Neutral, showsDot = false)
                 }
 
-                // Project home — NOOP's code, releases, issues and wiki live on GitHub
+                // Project home — Kineva's code, releases, issues and wiki live on GitHub
                 // (canonical; noop.fans is kept as a mirror).
                 Box(
                     modifier = Modifier
@@ -2009,7 +2009,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                         .border(1.dp, Palette.hairline, RoundedCornerShape(10.dp))
                         .clickable { showWhatsNew = true }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
-                        .semantics { contentDescription = "What's new in NOOP ${AppChangelog.CURRENT_VERSION}" },
+                        .semantics { contentDescription = "What's new in Kineva ${AppChangelog.CURRENT_VERSION}" },
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2069,7 +2069,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                     }
                 }
 
-                // How NOOP works — the plain-English primer (COMPONENT 5 of the explainability layer):
+                // How Kineva works — the plain-English primer (COMPONENT 5 of the explainability layer):
                 // how sleep is sorted, how scores + calibration work, what recording means, and where
                 // each number comes from. The one "?" entry point into the primer (macOS/iOS parity).
                 Box(
@@ -2080,7 +2080,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                         .border(1.dp, Palette.hairline, RoundedCornerShape(10.dp))
                         .clickable { showHowNoopWorks = true }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
-                        .semantics { contentDescription = "How NOOP works" },
+                        .semantics { contentDescription = "How Kineva works" },
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2094,7 +2094,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                             modifier = Modifier.size(18.dp),
                         )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("How NOOP works", style = NoopType.headline, color = Palette.textPrimary)
+                            Text("How Kineva works", style = NoopType.headline, color = Palette.textPrimary)
                             Text(
                                 "Sleep sorting, scores, recording, and where your numbers come from.",
                                 style = NoopType.footnote,
@@ -2123,7 +2123,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        "NOOP is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.",
+                        "Kineva is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.",
                         style = NoopType.footnote,
                         color = Palette.textSecondary,
                     )
@@ -2145,7 +2145,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                 RowDivider()
 
                 // Support link — opens the project's contact email (same address the
-                // Support screen lists). NOOP is anonymous, so email is the support channel.
+                // Support screen lists). Kineva is anonymous, so email is the support channel.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2155,7 +2155,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
                         .clickable {
                             val intent = Intent(Intent.ACTION_SENDTO).apply {
                                 data = Uri.parse("mailto:$SUPPORT_EMAIL")
-                                putExtra(Intent.EXTRA_SUBJECT, "NOOP support")
+                                putExtra(Intent.EXTRA_SUBJECT, "Kineva support")
                             }
                             try {
                                 context.startActivity(intent)
@@ -2209,7 +2209,7 @@ fun SettingsScreen(vm: AppViewModel, onOpenTestCentre: () -> Unit = {}) {
             }
         }
 
-        // "How NOOP works" primer sheet, opened from the About row above. Same full-screen Dialog idiom.
+        // "How Kineva works" primer sheet, opened from the About row above. Same full-screen Dialog idiom.
         if (showHowNoopWorks) {
             Dialog(
                 onDismissRequest = { showHowNoopWorks = false },
@@ -2356,7 +2356,7 @@ private val SEX_OPTIONS = listOf(
 
 /**
  * A grouped settings card: a "Settings" overline + icon + title header, an explanatory blurb, then
- * content. A faint brand-green wash anchors the card to NOOP's neutral chrome (mirrors macOS).
+ * content. A faint brand-green wash anchors the card to Kineva's neutral chrome (mirrors macOS).
  */
 @Composable
 private fun SettingsSection(

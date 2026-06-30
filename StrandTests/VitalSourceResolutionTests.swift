@@ -3,7 +3,7 @@ import WhoopStore
 @testable import Strand
 
 /// Pins the source-aware vital-sign resolution (PR#261): the field-by-field daily merge, the per-metric
-/// source precedence (imported WHOOP > NOOP-computed > Apple Health), skin temp's deliberate exclusion of
+/// source precedence (imported WHOOP > Kineva-computed > Apple Health), skin temp's deliberate exclusion of
 /// Apple, the provenance captions, and the "latest day that has a value" fallback. All pure — no store.
 final class VitalSourceResolutionTests: XCTestCase {
     func testMergeDailyFillsOnlyMissingImportedFields() {

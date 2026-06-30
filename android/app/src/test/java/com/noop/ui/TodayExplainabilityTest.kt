@@ -239,7 +239,7 @@ class TodayExplainabilityTest {
     // ── COMPONENT 4 — PER-METRIC provenance (provenanceDisplayLabel) ─────────────────────────────────────
     //
     // The Today rings each badge their OWN metric's real merge winner, resolved field-by-field per
-    // WhoopRepository.mergeDaily (imported WHOOP > NOOP-computed > Apple Health). `provenanceDisplayLabel`
+    // WhoopRepository.mergeDaily (imported WHOOP > Kineva-computed > Apple Health). `provenanceDisplayLabel`
     // is the PURE raw-source-id → label mapper that the per-ring badge uses. It must mirror the Swift
     // `provenanceDisplayLabel(rawSource:deviceId:)` EXACTLY: the computed sibling reads "On-device", the
     // imported strap source reads "Whoop", Apple Health reads "Apple Health", and any OTHER source keeps
@@ -247,7 +247,7 @@ class TodayExplainabilityTest {
 
     @Test
     fun perMetric_computedSibling_readsOnDevice() {
-        // The "$deviceId-noop" sibling is a score NOOP computed on THIS device from the raw strap stream.
+        // The "$deviceId-noop" sibling is a score Kineva computed on THIS device from the raw strap stream.
         assertEquals("On-device", provenanceDisplayLabel("my-whoop-noop"))
     }
 

@@ -1,10 +1,10 @@
-# NOOP — TestFlight automation.
+# Kineva — TestFlight automation.
 require "spaceship"
 #
 # Quick start:
 #   1. Put your App Store Connect API key creds in fastlane/.env (gitignored) — see .env.example.
 #   2. One-time, create/verify signing identifiers:                   bundle exec fastlane setup_signing
-#   3. If needed, create the App Store Connect app record manually with bundle id com.aretetechnologies.noop,
+#   3. If needed, create the App Store Connect app record manually with bundle id com.aretetechnologies.kineva,
 #      then verify Fastlane can see it:                               bundle exec fastlane setup_app
 #   4. Ship a build:                                                  bundle exec fastlane beta
 #
@@ -20,10 +20,10 @@ require "spaceship"
 
 default_platform(:ios)
 
-APP_NAME = "NOOP".freeze
-APP_IDENTIFIER = "com.aretetechnologies.noop".freeze
-APP_GROUP_ID = "group.com.aretetechnologies.noop".freeze
-SCHEME = "NOOPiOS".freeze
+APP_NAME = "Kineva".freeze
+APP_IDENTIFIER = "com.aretetechnologies.kineva".freeze
+APP_GROUP_ID = "group.com.aretetechnologies.kineva".freeze
+SCHEME = "KinevaiOS".freeze
 TEAM_ID = "7A97GB45TD".freeze
 PROJECT_YML = "../project.yml".freeze
 
@@ -180,7 +180,7 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       output_directory: "build",
-      output_name: "NOOP.ipa",
+      output_name: "Kineva.ipa",
       clean: true,
       xcargs: provisioning_xcargs,
       export_options: {

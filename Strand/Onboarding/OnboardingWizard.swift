@@ -5,12 +5,12 @@ import WhoopStore
 
 // MARK: - OnboardingWizard
 //
-// A full-screen, paged onboarding + pairing flow for NOOP. Cinematic and calm:
+// A full-screen, paged onboarding + pairing flow for Kineva. Cinematic and calm:
 // a dark surfaceBase substrate with a slow ambient glow, a bottom progress "thread"
 // that fills as you advance, Back always available, and a forward CTA per step.
 //
 // Steps:
-//  1 Welcome           — NOOP + "all your data, none of the cloud"
+//  1 Welcome           — Kineva + "all your data, none of the cloud"
 //  2 What it does      — 3 calm value slides
 //  3 Bluetooth priming — explain BEFORE the OS prompt
 //  4 Wear & wake       — put your strap on, make sure it's charged
@@ -190,7 +190,7 @@ public struct OnboardingWizard: View {
         case .importData: return "Continue"
         case .notifications: return "Continue"
         case .appearance: return "Continue"
-        case .done:       return "Enter NOOP"
+        case .done:       return "Enter Kineva"
         }
     }
 
@@ -299,7 +299,7 @@ private struct WhatItDoesStep: View {
     ]
 
     var body: some View {
-        StepShell(title: "What NOOP does", subtitle: "Three quiet promises.") {
+        StepShell(title: "What Kineva does", subtitle: "Three quiet promises.") {
             VStack(spacing: 14) {
                 ForEach(Array(slides.enumerated()), id: \.element.id) { index, slide in
                     SlideRow(slide: slide, index: index)
@@ -383,7 +383,7 @@ private struct ExpectationsStep: View {
                 expectationRow(
                     icon: "iphone.gen3",
                     title: "Installed outside the App Store",
-                    body: "On iPhone this is a sideloaded build. Re-sign it about every 7 days on a free Apple ID (longer on a paid account). After your phone reboots, unlock it once so NOOP can read and sync its data."
+                    body: "On iPhone this is a sideloaded build. Re-sign it about every 7 days on a free Apple ID (longer on a paid account). After your phone reboots, unlock it once so Kineva can read and sync its data."
                 )
                 .opacity(shown ? 1 : 0)
                 .offset(y: shown ? 0 : 8)
@@ -447,10 +447,10 @@ private struct BluetoothStep: View {
                     icon: "lock.fill",
                     tint: StrandPalette.statusPositive,
                     title: "Nothing leaves your \(Platform.deviceNoun)",
-                    message: "NOOP talks to your strap directly over Bluetooth Low Energy. There's no server in the middle — the connection is local, and so is every reading it pulls in."
+                    message: "Kineva talks to your strap directly over Bluetooth Low Energy. There's no server in the middle — the connection is local, and so is every reading it pulls in."
                 )
 
-                Text("When the system prompt appears, choose Allow so NOOP can find your strap.")
+                Text("When the system prompt appears, choose Allow so Kineva can find your strap.")
                     .font(StrandFont.subhead)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .multilineTextAlignment(.center)
@@ -506,7 +506,7 @@ private struct ScanStep: View {
 
     var body: some View {
         StepShell(title: "Find your strap",
-                  subtitle: live.bonded ? "Bonded. You're set." : "Pick your strap below, then tap Scan — NOOP will find it.") {
+                  subtitle: live.bonded ? "Bonded. You're set." : "Pick your strap below, then tap Scan — Kineva will find it.") {
             VStack(spacing: 24) {
                 RadarSweep(active: scanning && !live.bonded, bonded: live.bonded)
                     .frame(width: 220, height: 220)
@@ -548,7 +548,7 @@ private struct ScanStep: View {
 
                     if showHelp { reassurance }
 
-                    // WHOOP is NOOP's primary band, so onboarding leads with it — but it isn't required.
+                    // WHOOP is Kineva's primary band, so onboarding leads with it — but it isn't required.
                     // Make that obvious so a non-WHOOP user doesn't feel stuck here: they can continue now
                     // and pair a heart-rate strap or import data afterwards (in Devices / Data Sources).
                     Text("No WHOOP? You can still continue. Pair a heart-rate strap (Polar, Wahoo, Coospo, Garmin HRM…) or a gym machine under Devices, or import from WHOOP, Apple Health, Oura, Fitbit, Garmin and more under Data Sources. You can do either any time.")
@@ -610,7 +610,7 @@ private struct ScanStep: View {
                         .foregroundStyle(StrandPalette.textPrimary)
                 }
 
-                Text("WHOOP straps don't appear in your \(Platform.deviceNoun)'s Bluetooth settings. They advertise on a custom profile that only apps like NOOP can find — so there's nothing to pair there, and you shouldn't try.")
+                Text("WHOOP straps don't appear in your \(Platform.deviceNoun)'s Bluetooth settings. They advertise on a custom profile that only apps like Kineva can find — so there's nothing to pair there, and you shouldn't try.")
                     .font(StrandFont.subhead)
                     .foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -913,7 +913,7 @@ private struct NotificationsStep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         StepShell(title: "Stay in the loop",
-                  subtitle: "NOOP can tap your wrist when your \(Platform.deviceNoun) needs you — no glance at the screen required.") {
+                  subtitle: "Kineva can tap your wrist when your \(Platform.deviceNoun) needs you — no glance at the screen required.") {
             VStack(spacing: 24) {
                 ZStack {
                     Circle()
@@ -933,13 +933,13 @@ private struct NotificationsStep: View {
                 #if os(iOS)
                 // iOS gives an app no way to observe *other* apps' notifications, and the per-app picker
                 // behind it is NSWorkspace-based (macOS-only). So drop the cross-app relay claim here and
-                // keep only what iOS genuinely does: NOOP's own strain nudges + smart alarm buzz the strap
+                // keep only what iOS genuinely does: Kineva's own strain nudges + smart alarm buzz the strap
                 // directly over BLE.
                 InfoCard(
                     icon: "applewatch.radiowaves.left.and.right",
                     tint: StrandPalette.statusPositive,
                     title: "A buzz, not a banner",
-                    message: "NOOP taps your strap so an alert lands on your wrist instead of your screen — no need to reach for it. Everything stays on \(Platform.deviceNounPhrase)."
+                    message: "Kineva taps your strap so an alert lands on your wrist instead of your screen — no need to reach for it. Everything stays on \(Platform.deviceNounPhrase)."
                 )
 
                 VStack(spacing: 12) {
@@ -952,7 +952,7 @@ private struct NotificationsStep: View {
                     icon: "applewatch.radiowaves.left.and.right",
                     tint: StrandPalette.statusPositive,
                     title: "A buzz, not a banner",
-                    message: "When the \(Platform.deviceNoun) apps you choose send a notification, NOOP taps your strap — Slack, Calendar, Messages, whatever matters. Everything stays on \(Platform.deviceNounPhrase)."
+                    message: "When the \(Platform.deviceNoun) apps you choose send a notification, Kineva taps your strap — Slack, Calendar, Messages, whatever matters. Everything stays on \(Platform.deviceNounPhrase)."
                 )
 
                 VStack(spacing: 12) {
@@ -997,7 +997,7 @@ private struct DoneStep: View {
                     Text("Your thread starts here.")
                         .font(StrandFont.title1)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Text("Every beat, every night, every day — woven into one quiet picture of you. Welcome to NOOP.")
+                    Text("Every beat, every night, every day — woven into one quiet picture of you. Welcome to Kineva.")
                         .font(StrandFont.body)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .multilineTextAlignment(.center)
@@ -1025,7 +1025,7 @@ private struct AppearanceStep: View {
     }
     var body: some View {
         StepShell(title: "Make it yours",
-                  subtitle: "Choose how NOOP looks — the whole app updates as you tap. You can change this any time in Settings → Appearance.") {
+                  subtitle: "Choose how Kineva looks — the whole app updates as you tap. You can change this any time in Settings → Appearance.") {
             VStack(spacing: 28) {
                 Image(systemName: "circle.lefthalf.filled")
                     .font(.system(size: 56, weight: .light))

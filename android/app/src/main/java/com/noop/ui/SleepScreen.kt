@@ -248,7 +248,7 @@ fun SleepScreen(
             ) {
                 Text("Good morning!", style = NoopType.title2, color = Palette.textPrimary)
                 Text(
-                    "Your night data is in. Logging how you felt helps NOOP learn what drives your best recovery.",
+                    "Your night data is in. Logging how you felt helps Kineva learn what drives your best recovery.",
                     style = NoopType.subhead,
                     color = Palette.textSecondary,
                 )
@@ -495,7 +495,7 @@ private fun SleepMarkCard(onMark: (SleepMarkType) -> Unit) {
 // The Rest world's opening: a scenic indigo [ScenicHeroBackground] with — when the night carries a
 // 0–100 sleep-performance score — a layered [BevelGauge] in the Rest gradient; else a big rounded
 // hours-slept headline over the same backdrop. A [SourceBadge] states whether the score is WHOOP's
-// own imported figure or NOOP's on-device estimate. Mirrors the macOS SleepView.restHero. The number
+// own imported figure or Kineva's on-device estimate. Mirrors the macOS SleepView.restHero. The number
 // comes straight from the existing model figures — presentation-only.
 
 @Composable
@@ -561,7 +561,7 @@ private fun sleepScoreWord(score: Double): String = when {
 }
 
 /**
- * Whether the night's sleep-performance score is WHOOP's own imported figure or NOOP's on-device
+ * Whether the night's sleep-performance score is WHOOP's own imported figure or Kineva's on-device
  * approximation — so the hero is honest about provenance, like Today's badges. Mirrors the macOS
  * SleepView.sleepScoreSource.
  */
@@ -625,7 +625,7 @@ private fun Hero(
                 trailing = durationText(s.asleep),
                 tint = Palette.restColor,
                 footer = {
-                    // WHOOP-style stage rows in the NOOP pip language: swatch + UPPERCASE stage +
+                    // WHOOP-style stage rows in the Kineva pip language: swatch + UPPERCASE stage +
                     // coloured % + a segmented PipBar of the share-of-night + right-aligned duration.
                     // Same minutes/percentages the old "label · value" footer carried — no new numbers.
                     // Mirrors the macOS SleepView.stageBreakdownRows. (PipBar)
@@ -953,7 +953,7 @@ private fun NapRow(
 /**
  * The four WHOOP-style stage rows that replace the old "label · value" footer grid, read like WHOOP's
  * sleep detail: a colour swatch, the UPPERCASE stage name, the share-of-night % in the stage colour, a
- * segmented [PipBar] (the NOOP signature) tinted in the stage colour, and the right-aligned duration.
+ * segmented [PipBar] (the Kineva signature) tinted in the stage colour, and the right-aligned duration.
  * Same data as the prior footer (rem / deep / light / awake over total) — no new numbers. Mirrors the
  * macOS SleepView.stageBreakdownRows. (PipBar)
  */
@@ -1005,7 +1005,7 @@ private fun StageBreakdownRow(stage: String, minutes: Double, total: Double, col
             maxLines = 1,
             modifier = Modifier.width(38.dp),
         )
-        // The NOOP signature: a segmented bar that counts up to the share-of-night fraction, tinted in
+        // The Kineva signature: a segmented bar that counts up to the share-of-night fraction, tinted in
         // the stage colour over the canonical inset track. Flat, crisp, no glow. Takes the remaining width.
         PipBar(
             value = (fraction * 100.0).toFloat(),

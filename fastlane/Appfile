@@ -3,7 +3,7 @@
 # Auth is via an App Store Connect API key (see fastlane/.env.example), so no `apple_id` /
 # password is needed here — only the identifiers that pin which app + team we act on.
 
-app_identifier("com.aretetechnologies.noop") # the NOOP iOS app bundle id (watch + widgets nest under it)
+app_identifier("com.aretetechnologies.kineva") # the Kineva iOS app bundle id (watch + widgets nest under it)
 team_id("7A97GB45TD")                # Apple Developer Portal team (code-signing / provisioning)
 
 # If this Apple ID belongs to more than one App Store Connect team, also set the ASC team:

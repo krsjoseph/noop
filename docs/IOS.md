@@ -1,11 +1,11 @@
 # iOS — Install & Build
 
-> **iOS is now a direct download (v1.96).** Grab **`NOOP-v<version>-ios.ipa`** from the
+> **iOS is now a direct download (v1.96).** Grab **`Kineva-v<version>-ios.ipa`** from the
 > [Releases](https://github.com/NoopApp/noop/releases) page and install it with **AltStore** or **SideStore** — see
 > **[Install (sideload)](#install-sideload)** below. No Mac, no Xcode, no App Store, and no Apple
-> Developer account needed — **and NOOP stays anonymous**, because the `.ipa` we ship is *unsigned*
-> and **you** sign it on your own iPhone with your own free Apple ID. The app target (`NOOPiOS` +
-> `NOOPiOSWidgets`) also still builds from source in Xcode if you'd rather (**[Build from source](#build-from-source)**).
+> Developer account needed — **and Kineva stays anonymous**, because the `.ipa` we ship is *unsigned*
+> and **you** sign it on your own iPhone with your own free Apple ID. The app target (`KinevaiOS` +
+> `KinevaiOSWidgets`) also still builds from source in Xcode if you'd rather (**[Build from source](#build-from-source)**).
 > A CI job ([`app-build.yml`](../.github/workflows/app-build.yml)) compiles both the macOS and iOS
 > targets on every change so iOS can't silently break.
 
@@ -13,20 +13,20 @@
 
 The `.ipa` is **unsigned on purpose** — that's what keeps the project anonymous. iOS won't run an
 unsigned app, so a free sideloading tool signs it **on your device, with your own free Apple ID**.
-Nothing about this touches NOOP's identity or Apple's servers on our side.
+Nothing about this touches Kineva's identity or Apple's servers on our side.
 
 1. **Install a sideloader on your computer** — [AltStore](https://altstore.io) or
    [SideStore](https://sidestore.io) (both free). Follow their one-time setup (it installs a helper +
    AltStore/SideStore onto your iPhone using your own Apple ID).
-2. **Download `NOOP-v<version>-ios.ipa`** from [Releases](https://github.com/NoopApp/noop/releases) to your iPhone (or your
+2. **Download `Kineva-v<version>-ios.ipa`** from [Releases](https://github.com/NoopApp/noop/releases) to your iPhone (or your
    computer, then AirDrop/transfer it).
 3. **Open the `.ipa` with AltStore/SideStore** (Share → AltStore, or the app's "+" button). It signs
-   and installs NOOP. First launch may need **Settings → General → VPN & Device Management → trust
+   and installs Kineva. First launch may need **Settings → General → VPN & Device Management → trust
    your Apple ID**.
 
-### Add NOOP as a source (recommended — auto-updates)
+### Add Kineva as a source (recommended — auto-updates)
 
-So you never have to manually re-download, add NOOP's **source** to AltStore/SideStore once — new
+So you never have to manually re-download, add Kineva's **source** to AltStore/SideStore once — new
 releases then show up (and re-sign) automatically:
 
 **Source URL:** `https://raw.githubusercontent.com/NoopApp/noop/main/altstore-source.json`
@@ -37,7 +37,7 @@ releases then show up (and re-sign) automatically:
 > `https://noop.fans/NoopApp/noop/raw/branch/main/altstore-source.json`.)
 
 - **AltStore:** open AltStore → **Browse** tab → tap **＋** (top-left) → paste the URL → **Add Source**.
-  NOOP appears under the source; tap **Free** / **Get** to install. From then on it updates itself on
+  Kineva appears under the source; tap **Free** / **Get** to install. From then on it updates itself on
   AltStore's background refresh (you can also pull-to-refresh **My Apps**).
 - **SideStore:** open SideStore → **Browse** / **Sources** → **＋ Add Source** → paste the same URL → add.
 
@@ -47,12 +47,12 @@ hunting for the `.ipa` each time.
 > ### Two honest limitations of free-Apple-ID sideloading
 > - **7-day expiry.** Apps signed with a *free* Apple ID stop launching after 7 days and need
 >   re-signing. **AltStore/SideStore refresh this automatically** in the background — keep the
->   sideloader installed and NOOP keeps working.
+>   sideloader installed and Kineva keeps working.
 > - **Some Apple-only features may be limited.** A free signing identity can't grant certain Apple
 >   entitlements, so **Apple Health (HealthKit) read/write and the Live Activity / lock-screen
 >   widgets may not work** on a free-signed sideload. The core app — pairing your strap, live HR,
 >   recovery/strain/sleep, history, the AI Coach, everything on-device — works regardless. This is an
->   Apple signing constraint, not a NOOP limitation, and it's why a HealthKit toggle can appear to do
+>   Apple signing constraint, not a Kineva limitation, and it's why a HealthKit toggle can appear to do
 >   nothing on a sideloaded build. (Building from source with your own Apple ID in Xcode grants these
 >   entitlements normally.)
 
@@ -64,13 +64,13 @@ are very welcome.
 ## Build from source
 
 Prefer to build it yourself (which also grants HealthKit/widgets under your own Apple ID)? Run
-`xcodegen generate`, then build the **`NOOPiOS`** scheme in Xcode. The reconciliation that brought the
+`xcodegen generate`, then build the **`KinevaiOS`** scheme in Xcode. The reconciliation that brought the
 [PR #42](../../../pull/42) port onto current `main` is summarised in **"Lessons from the fold-in"**
 below.
 
 > 🛠️ **Signing it under your own Apple ID** (thanks @gingerbeardman for the recipe). Apple requires a
 > bundle id and an app group that are unique to *your* developer account, so for each target that has
-> them (the `NOOPiOS` app **and** the `NOOPiOSWidgets` extension):
+> them (the `KinevaiOS` app **and** the `KinevaiOSWidgets` extension):
 > 1. **Select your Team** (Signing & Capabilities).
 > 2. **Change the bundle id** to your own reverse-domain prefix (e.g. `com.yourdomain.noop`).
 > 3. **Change the App Group** to match (e.g. `group.com.yourdomain.noop`) — the app and the widget
@@ -88,15 +88,15 @@ below.
 > Swift↔Kotlin parity discipline, and the playbook for adding a feature across all three. Read that
 > first if you're building something that should land on more than one client.
 
-This document describes how NOOP — a standalone, fully offline companion app for
+This document describes how Kineva — a standalone, fully offline companion app for
 WHOOP straps — is positioned for iOS, what already works, and the concrete plan
 for a native iOS app target.
 
-> **Not affiliated with WHOOP.** NOOP is an independent, unofficial project. It is
+> **Not affiliated with WHOOP.** Kineva is an independent, unofficial project. It is
 > not affiliated with, endorsed by, or connected to WHOOP, Inc. "WHOOP" is used
 > nominatively only to identify the hardware the app interoperates with — your own
-> device and your own data. NOOP performs no DRM circumvention and ships no WHOOP
-> proprietary code, firmware, or assets. **NOOP is not a medical device;** all
+> device and your own data. Kineva performs no DRM circumvention and ships no WHOOP
+> proprietary code, firmware, or assets. **Kineva is not a medical device;** all
 > metrics (HR, HRV, recovery, strain, sleep, SpO₂, temperature) are approximations
 > and not clinically validated.
 
@@ -118,7 +118,7 @@ the WHOOP 5.0 / MG protocol from **`b-nnett/goose`**. See [`../ATTRIBUTION.md`](
 - **CoreBluetooth is fully available on iOS** and the BLE engine is already written
   with iOS background collection in mind (state restoration hooks exist).
 - **HealthKit is available on iOS** (it is not on macOS), so iOS can do *two-way*
-  Apple Health: read live, and write NOOP-computed metrics back. On macOS, Apple
+  Apple Health: read live, and write Kineva-computed metrics back. On macOS, Apple
   Health is import-only via the static `export.xml` / `export.zip` file.
 
 ---
@@ -363,16 +363,16 @@ static func runShortcut(_ name: String) {
   "double-tap runs an arbitrary Shortcut while my phone is in my pocket" pattern
   unreliable on iOS.
 - The robust iOS approach is to **publish App Intents** (the App Intents framework)
-  from NOOP — e.g. "Mark a moment", "Start live HR", "Buzz strap", "Log recovery". The
-  user then builds Shortcuts/Automations that call *NOOP's* intents, and NOOP also
+  from Kineva — e.g. "Mark a moment", "Start live HR", "Buzz strap", "Log recovery". The
+  user then builds Shortcuts/Automations that call *Kineva's* intents, and Kineva also
   appears in Spotlight, Siri, and the Shortcuts gallery.
-- For invoking *other* apps from NOOP, support **x-callback-url** style deep links
+- For invoking *other* apps from Kineva, support **x-callback-url** style deep links
   (`x-callback-url` is the de-facto inter-app callback convention) and the standard
   `shortcuts://x-callback-url/run-shortcut?name=…&x-success=…` form so control can
-  return to NOOP after the external shortcut completes.
+  return to Kineva after the external shortcut completes.
 
 > Net: replace the macOS `runShortcut(_:)` plumbing with (a) **App Intents exposed by
-> NOOP** for inbound automation and (b) **x-callback-url / `shortcuts://` deep links**
+> Kineva** for inbound automation and (b) **x-callback-url / `shortcuts://` deep links**
 > for outbound calls, and remove `lockScreen` from the iOS action set.
 
 ### 4. Pasteboard
@@ -413,7 +413,7 @@ This is the biggest *additive* opportunity on iOS.
 | Direction | iOS capability |
 |---|---|
 | **Read** | Query HealthKit live (`HKHealthStore`, `HKSampleQuery`, anchored/observer queries) for HR, RHR, HRV SDNN, SpO₂, wrist/body temperature, respiratory rate, sleep stages, workouts, body composition — the same types `relevantTypes` already enumerates in `AppleHealthImporter`. No manual export needed. |
-| **Write** | Write NOOP-computed values back into Apple Health: HR / HRV / SpO₂ / temperature samples decoded from the strap, sleep analysis from `StrandAnalytics.SleepStager`, and workouts from `WorkoutDetector` — so NOOP data shows up across the user's Health ecosystem. |
+| **Write** | Write Kineva-computed values back into Apple Health: HR / HRV / SpO₂ / temperature samples decoded from the strap, sleep analysis from `StrandAnalytics.SleepStager`, and workouts from `WorkoutDetector` — so Kineva data shows up across the user's Health ecosystem. |
 | **Background delivery** | `HKObserverQuery` + `enableBackgroundDelivery` to keep the on-device store in sync without opening the app. |
 
 Because `AppleHealthImporter` already defines the canonical type set, units, and
@@ -423,7 +423,7 @@ the static-export importer and the live HealthKit importer converge on one schem
 
 > **Entitlement/Info.plist on iOS:** add the **HealthKit** capability and supply
 > `NSHealthShareUsageDescription` (read) and `NSHealthUpdateUsageDescription` (write).
-> Keep both directions strictly opt-in and on-device — consistent with NOOP's
+> Keep both directions strictly opt-in and on-device — consistent with Kineva's
 > offline, no-cloud stance.
 
 ---
@@ -446,9 +446,9 @@ StrandiOS/                   # NEW iOS app target
 │   └── HealthKitBridge.swift       # two-way HealthKit (read + write)
 ├── System/
 │   ├── iOSActions.swift            # UIPasteboard, App Intents, x-callback-url
-│   └── NOOPAppIntents.swift        # App Intents exposed to Shortcuts/Siri
+│   └── KinevaAppIntents.swift        # App Intents exposed to Shortcuts/Siri
 ├── Widgets/
-│   └── NOOPWidget.swift            # Home/Lock-Screen widget (menu-bar analogue)
+│   └── KinevaWidget.swift            # Home/Lock-Screen widget (menu-bar analogue)
 └── Resources/
     └── Info.plist                  # UIBackgroundModes, Health + Bluetooth usage strings
 
@@ -472,7 +472,7 @@ in an Xcode project generated by XcodeGen / Tuist, or a `Package.swift` app targ
 import PackageDescription
 
 let package = Package(
-    name: "NOOPiOS",
+    name: "KinevaiOS",
     platforms: [.iOS(.v16)],
     dependencies: [
         .package(path: "Packages/WhoopProtocol"),
@@ -483,7 +483,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "NOOPiOS",
+            name: "KinevaiOS",
             dependencies: [
                 "WhoopProtocol",
                 "WhoopStore",
@@ -502,7 +502,7 @@ them under the target's `dependencies:`):
 
 ```yaml
 targets:
-  NOOPiOS:
+  KinevaiOS:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
@@ -512,30 +512,30 @@ targets:
     info:
       path: StrandiOS/Resources/Info.plist
       properties:
-        CFBundleName: NOOP
-        CFBundleDisplayName: NOOP
+        CFBundleName: Kineva
+        CFBundleDisplayName: Kineva
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         UIBackgroundModes:
           - bluetooth-central
         NSBluetoothAlwaysUsageDescription: >-
-          NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate,
+          Kineva connects directly to your WHOOP strap over Bluetooth to read heart rate,
           R-R intervals, battery, and sensor data locally on your iPhone. Nothing leaves
           your device.
         NSHealthShareUsageDescription: >-
-          NOOP reads your own Apple Health data on-device to compute recovery, strain,
+          Kineva reads your own Apple Health data on-device to compute recovery, strain,
           and sleep. Nothing leaves your device.
         NSHealthUpdateUsageDescription: >-
-          NOOP writes the metrics it computes from your strap back into Apple Health,
+          Kineva writes the metrics it computes from your strap back into Apple Health,
           on-device and only when you allow it.
     entitlements:
-      path: StrandiOS/Resources/NOOP.entitlements
+      path: StrandiOS/Resources/Kineva.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.noopapp.noop
-        PRODUCT_NAME: NOOP
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva
+        PRODUCT_NAME: Kineva
     dependencies:
       - package: WhoopProtocol
       - package: WhoopStore
@@ -555,16 +555,16 @@ targets:
 
 ## Port checklist — done in the v1.94 fold-in
 
-- [x] `StrandiOS` + `NOOPiOSWidgets` app targets depending on the five existing packages (no package changes).
+- [x] `StrandiOS` + `KinevaiOSWidgets` app targets depending on the five existing packages (no package changes).
 - [x] `CBCentralManager` built with `CBCentralManagerOptionRestoreIdentifierKey` (in `AppModel+iOS`).
 - [x] `UIBackgroundModes: [bluetooth-central]` + `NSBluetoothAlwaysUsageDescription` in the iOS Info.plist.
 - [x] `MenuBarExtra` replaced by a WidgetKit widget + Live Activity (`StrandiOSWidgets`), reusing `StrandDesign`.
-- [x] iOS action layer: `lockScreen` returns false on iOS, `buzzBack`/`markMoment` portable, **App Intents** exposed (`StrandiOS/System/NOOPAppIntents.swift`).
+- [x] iOS action layer: `lockScreen` returns false on iOS, `buzzBack`/`markMoment` portable, **App Intents** exposed (`StrandiOS/System/KinevaAppIntents.swift`).
 - [x] Clipboard + URL-open routed through `Platform.swift` (`PlatformPasteboard`/`PlatformOpen`).
-- [x] `HealthKitBridge` two-way Apple Health (read live + write NOOP metrics). _(See the device-id follow-up flagged below.)_
+- [x] `HealthKitBridge` two-way Apple Health (read live + write Kineva metrics). _(See the device-id follow-up flagged below.)_
 - [ ] **Still TODO (needs hardware):** verify BLE on a **physical iPhone** with a real strap — CoreBluetooth has no Simulator. This is the one thing CI/compile can't cover.
 
-> **Open follow-up:** `HealthKitBridge.writeBack` reads NOOP-computed metrics under `deviceId = "my-whoop"`, but the on-device *computed* scores (recovery/HRV/…) are persisted under the **computed** id `"my-whoop-noop"` — so the Apple-Health write-back may read little/nothing for a strap-only user. Behavioural (not a compile issue); fix when the iOS HealthKit path gets device-tested.
+> **Open follow-up:** `HealthKitBridge.writeBack` reads Kineva-computed metrics under `deviceId = "my-whoop"`, but the on-device *computed* scores (recovery/HRV/…) are persisted under the **computed** id `"my-whoop-noop"` — so the Apple-Health write-back may read little/nothing for a strap-only user. Behavioural (not a compile issue); fix when the iOS HealthKit path gets device-tested.
 
 ---
 
@@ -580,6 +580,6 @@ How PR #42's port was brought onto current `main` — useful the next time a scr
 
 ---
 
-*NOOP keeps everything on-device. The iOS plan changes the front door (menu bar →
+*Kineva keeps everything on-device. The iOS plan changes the front door (menu bar →
 widgets, AppKit → UIKit, file import → HealthKit) but not the principle: your strap,
 your data, no cloud.*

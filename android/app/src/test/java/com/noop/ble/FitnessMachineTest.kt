@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * Spec-deterministic FTMS field-decode contract — the JVM twin of WhoopProtocol's FTMSDecodeTests.
  * Fixtures are built BYTE-BY-BYTE from the Bluetooth SIG Fitness Machine Service field tables (not a
- * real capture), asserting the exact flag→field mapping + fixed-point→unit scaling for the fields NOOP
+ * real capture), asserting the exact flag→field mapping + fixed-point→unit scaling for the fields Kineva
  * surfaces. Pure decode → no android.bluetooth.
  */
 class FitnessMachineTest {

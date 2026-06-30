@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 import StrandDesign
 
-// MARK: - NOOP watch-face complication
+// MARK: - Kineva watch-face complication
 //
 // The headline feature of M3: Charge (recovery) on the wrist. The iPhone is the brain
 // (M1 computes Charge / Effort / Rest with confidence + provenance); this complication ONLY
@@ -11,7 +11,7 @@ import StrandDesign
 //
 // The honesty rule carries through from M1: a CALIBRATING score has a nil number plus its
 // Calibrating flag set, and we render a dash with a subtle "cal" marker, never a fabricated
-// number. When there is no snapshot at all we show a NEUTRAL placeholder (a dash + the NOOP
+// number. When there is no snapshot at all we show a NEUTRAL placeholder (a dash + the Kineva
 // glyph), not a zero, so an empty face never reads as "your Charge is 0".
 //
 // Families: accessoryCircular (ring + number), accessoryCorner, accessoryInline (text), and
@@ -22,7 +22,7 @@ import StrandDesign
 // We read the app group directly here rather than depending on a loader symbol from the bridge
 // lane, so this extension only needs the shared `WatchScoreSnapshot` type from StrandDesign. The
 // suite + key match the cross-lane contract: the phone-side bridge writes the latest snapshot to
-// `group.com.noopapp.noop` under `latestWatchSnapshot`, and the watch app + this complication read
+// `group.com.aretetechnologies.kineva` under `latestWatchSnapshot`, and the watch app + this complication read
 // it. The suite name is read from the extension's own Info.plist (AppGroupIdentifier) so it lives
 // in one place, with the canonical group as a fallback.
 
@@ -135,7 +135,7 @@ private enum ScoreReadout {
 
 // MARK: - The complication view
 
-struct NOOPChargeView: View {
+struct KinevaChargeView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ChargeEntry
 
@@ -201,7 +201,7 @@ struct NOOPChargeView: View {
 
     // MARK: accessoryCircular — a ring + the Charge number
     //
-    // The clean NOOP ring, scaled to the watch face. WidgetKit tints accessory complications with the
+    // The clean Kineva ring, scaled to the watch face. WidgetKit tints accessory complications with the
     // face's vibrant colour by default; we use a Gauge so the system renders a crisp circular ring,
     // and tint it to the Charge colour where we have a real value. A small "cal" marker replaces the
     // number when Charge is calibrating.
@@ -265,14 +265,14 @@ struct NOOPChargeView: View {
             // "cal" (which means "needs more data", a different thing).
             return isStale ? "Charge · \(freshness ?? "stale")" : "Charge · cal"
         case .missing:
-            return noSnapshot ? "Open NOOP" : "Charge"
+            return noSnapshot ? "Open Kineva" : "Charge"
         }
     }
 
     // MARK: accessoryInline — a single line of text along the top of the face
 
     private var inlineText: String {
-        if noSnapshot { return "NOOP · open on iPhone" }
+        if noSnapshot { return "Kineva · open on iPhone" }
         // When the snapshot has aged out we never print the old number; we say it is stale and how old.
         if isStale { return "Charge stale · \(freshness ?? "old")" }
         switch charge {
@@ -297,7 +297,7 @@ struct NOOPChargeView: View {
 
     // MARK: accessoryRectangular — a compact card showing all three scores
     //
-    // The richest family: a small NOOP header line plus the Charge / Effort / Rest triplet, each a
+    // The richest family: a small Kineva header line plus the Charge / Effort / Rest triplet, each a
     // number (or a dash + cal marker) over its label. This is the only place all three scores live, so
     // it doubles as the "everything at a glance" face.
 
@@ -305,7 +305,7 @@ struct NOOPChargeView: View {
         VStack(alignment: .leading, spacing: 3) {
             // Header: the wordmark + the snapshot age (or a sync hint when empty).
             HStack(spacing: 4) {
-                Text("NOOP")
+                Text("Kineva")
                     .font(StrandFont.rounded(11, weight: .bold))
                     .tracking(0.5)
                     .foregroundStyle(StrandPalette.textSecondary)
@@ -392,17 +392,17 @@ struct NOOPChargeView: View {
     private var accessibilityCharge: String {
         // A stale snapshot collapses to the calibrating dash visually, but for VoiceOver we say WHY it
         // is a dash plainly so it is never mistaken for "still calibrating".
-        if isStale { return "Charge out of date, last synced \(freshness ?? "a while ago"). Open NOOP on iPhone." }
+        if isStale { return "Charge out of date, last synced \(freshness ?? "a while ago"). Open Kineva on iPhone." }
         switch charge {
         case .value(let v):    return "Charge \(v) out of 100"
         case .calibrating:     return "Charge calibrating, needs more data"
-        case .missing:         return noSnapshot ? "No data, open NOOP on iPhone" : "Charge unavailable"
+        case .missing:         return noSnapshot ? "No data, open Kineva on iPhone" : "Charge unavailable"
         }
     }
 
     private var accessibilityRectangular: String {
-        if noSnapshot { return "NOOP. No data yet, open NOOP on your iPhone to sync." }
-        if isStale { return "NOOP. Scores out of date, last synced \(freshness ?? "a while ago"). Open NOOP on iPhone to refresh." }
+        if noSnapshot { return "Kineva. No data yet, open Kineva on your iPhone to sync." }
+        if isStale { return "Kineva. Scores out of date, last synced \(freshness ?? "a while ago"). Open Kineva on iPhone to refresh." }
         func phrase(_ label: String, _ r: ScoreReadout) -> String {
             switch r {
             case .value(let v):  return "\(label) \(v)"
@@ -410,7 +410,7 @@ struct NOOPChargeView: View {
             case .missing:       return "\(label) unavailable"
             }
         }
-        return "NOOP. \(phrase("Charge", charge)), \(phrase("Effort", effort)), \(phrase("Rest", rest))."
+        return "Kineva. \(phrase("Charge", charge)), \(phrase("Effort", effort)), \(phrase("Rest", rest))."
     }
 
     // Snapshot recency now comes straight from the shared contract (`freshnessText` / `isStale` on
@@ -420,15 +420,15 @@ struct NOOPChargeView: View {
 
 // MARK: - Widget declaration
 
-struct NOOPChargeComplication: Widget {
-    let kind = "NOOPChargeComplication"
+struct KinevaChargeComplication: Widget {
+    let kind = "KinevaChargeComplication"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: ChargeProvider()) { entry in
-            NOOPChargeView(entry: entry)
+            KinevaChargeView(entry: entry)
                 .containerBackground(StrandPalette.surfaceBase, for: .widget)
         }
-        .configurationDisplayName("NOOP Charge")
+        .configurationDisplayName("Kineva Charge")
         .description("Your Charge (recovery) on the watch face, with Effort and Rest in the rectangular card.")
         .supportedFamilies([
             .accessoryCircular,

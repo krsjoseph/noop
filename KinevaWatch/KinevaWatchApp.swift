@@ -1,7 +1,7 @@
 import SwiftUI
 import StrandDesign
 
-// MARK: - NOOPWatch — the watchOS glance app
+// MARK: - KinevaWatch — the watchOS glance app
 //
 // The iPhone is the brain. M1 already computes Charge / Effort / Rest with confidence and provenance;
 // this watch app ONLY displays the latest snapshot the phone pushes over WatchConnectivity. It never
@@ -16,7 +16,7 @@ import StrandDesign
 // Both are created once here and handed to the glance as environment objects so the view stays pure.
 
 @main
-struct NOOPWatchApp: App {
+struct KinevaWatchApp: App {
     // Created once for the app's lifetime. The store activates WCSession on init so a snapshot the
     // phone sent while the app was backgrounded is delivered as soon as we come up.
     @StateObject private var store = WatchScoreStore()
@@ -39,12 +39,12 @@ struct NOOPWatchApp: App {
         }
     }
 
-    // Normally the glance. In DEBUG only, a NOOP_DEMO_SCREEN env var can root the app directly at one of
+    // Normally the glance. In DEBUG only, a KINEVA_DEMO_SCREEN env var can root the app directly at one of
     // the active features so each can be screenshotted on the simulator (which can't tap to navigate).
     // Compiled out of release builds.
     @ViewBuilder private var rootView: some View {
         #if DEBUG
-        switch ProcessInfo.processInfo.environment["NOOP_DEMO_SCREEN"] {
+        switch ProcessInfo.processInfo.environment["KINEVA_DEMO_SCREEN"] {
         case "breathe":   WatchBreatheView()
         case "workout":   WatchWorkoutView()
         case "intervals": WatchIntervalView()
@@ -58,7 +58,7 @@ struct NOOPWatchApp: App {
 
     #if DEBUG
     /// DEBUG-ONLY screenshot aid. On a fresh sim there is no paired phone to push scores, so the glance
-    /// would sit on its empty "open NOOP on your iPhone" state and the rings never render. When nothing
+    /// would sit on its empty "open Kineva on your iPhone" state and the rings never render. When nothing
     /// has ever synced we write ONE believable sample snapshot into the shared app group so the rings
     /// draw for screenshots. Guarded so it never overwrites a real synced snapshot, and the whole thing
     /// is compiled out of release builds, so it can never ship.

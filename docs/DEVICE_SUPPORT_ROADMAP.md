@@ -1,6 +1,6 @@
 # Device support — roadmap & protocol notes
 
-NOOP's north star is **WHOOP**, fully supported. Everything else is an opportunistic, easy-first
+Kineva's north star is **WHOOP**, fully supported. Everything else is an opportunistic, easy-first
 expansion that must never regress the WHOOP experience. This file records where each additional
 source stands and the protocol facts we've verified, so the next build can pick up cleanly.
 
@@ -13,7 +13,7 @@ source stands and the protocol facts we've verified, so the next build can pick 
 | **Xiaomi Smart Band — live BLE sync** | 🔬 Protocol researched, decoder not built | Mi protobuf-v2 over BLE GATT + `encryptKey` handshake (below) — hardware-gated |
 | **Polar deep streams** (ECG / PPG / ACC / PPI) | 🔬 Protocol verified, decoder not built | PMD service (below) — alpha, hardware-gated |
 | **Garmin** (sleep / HRV / Body Battery / SpO₂ / FIT) | 📋 Researched, not built | Local BLE re-derive (Gadgetbridge-informed, **never** GPLv3 copy) |
-| **Amazfit / Zepp** (incl. Helio deep) | 📋 Researched, not built | Encrypted Huami BLE — needs a one-time **user-pasted** vendor key (NOOP never logs into the vendor cloud) |
+| **Amazfit / Zepp** (incl. Helio deep) | 📋 Researched, not built | Encrypted Huami BLE — needs a one-time **user-pasted** vendor key (Kineva never logs into the vendor cloud) |
 | **Oura** | 📋 Researched, not built | Cloud API v2 — off-by-default OAuth **import** lane only |
 | **Fitbit / Google** | 📋 Researched, not built | Build against **Google Health** API (Fitbit Web API sunsets Sept 2026) — off-by-default import |
 
@@ -45,16 +45,16 @@ the radio while the strap is active. Needs the reporter's detail + an H10 in han
 
 ## Xiaomi Smart Band (Mi Band) — shipped import lane
 
-NOOP imports a Mi Band's full history **without Bluetooth, a Xiaomi account, or any
+Kineva imports a Mi Band's full history **without Bluetooth, a Xiaomi account, or any
 cloud** by reading the data the **Mi Fitness iOS app already stored on the phone**. This
 is the same "import data you already own" model as the WHOOP-CSV and Apple-Health lanes,
 and it's fully offline.
 
 - **What the user does:** on the iPhone, *Files → On My iPhone → Mi Fitness*, long-press
-  the folder → *Compress*, then bring that `.zip` to NOOP (*Data Sources → Xiaomi Smart
+  the folder → *Compress*, then bring that `.zip` to Kineva (*Data Sources → Xiaomi Smart
   Band*). The bare `<user_id>.db` or an unzipped folder (macOS) also work.
 - **Where the data is:** `DataBase/<user_id>/de/<user_id>.db` — one SQLite row per sample
-  with a JSON `value` column. NOOP opens it **read-only** (GRDB) and never writes to it.
+  with a JSON `value` column. Kineva opens it **read-only** (GRDB) and never writes to it.
 - **Tables read** (`deleted = 0` only):
   - Day rollups → `dailyMetric` + `metricSeries`: `steps_day` (steps, distance),
     `calories_day` (active kcal), `heart_rate_day` (`avg_rhr` resting, avg/min/max + HR
@@ -62,11 +62,11 @@ and it's fully offline.
     (`avg_stress`, 0–100), `spo2_day` (`avg_spo2`), `intensity_day`, `valid_stand_day`,
     `vitality` (`latest_accumulated_vitality`).
   - `sleep` (interval) → `sleepSession`: each row's `items[]` is the **real per-epoch
-    hypnogram** (`{start_time, end_time, state}`), giving NOOP a native
+    hypnogram** (`{start_time, end_time, state}`), giving Kineva a native
     `[{start,end,stage}]` timeline rather than just stage totals.
 - **Sleep-stage codes** (verified against a real Mi Band 10 export):
-  `1 = awake, 2 = light, 3 = deep, 4 = REM, 5 = awake-in-bed` → NOOP `wake/light/deep/rem`.
-- **Not present in the export** (left `nil`, NOOP derives what it can): HRV, recovery,
+  `1 = awake, 2 = light, 3 = deep, 4 = REM, 5 = awake-in-bed` → Kineva `wake/light/deep/rem`.
+- **Not present in the export** (left `nil`, Kineva derives what it can): HRV, recovery,
   respiration rate, skin temperature.
 - **Partition:** all rows land under `deviceId = "xiaomi-band"`, so it appears as its own
   Data Source for the per-source pages and cross-source consensus/compare views.
@@ -91,7 +91,7 @@ band in an iterative BLE test loop. Verified facts to pick up from:
 - **Auth:** the per-device **`encryptKey`** (32 hex chars) the vendor app holds — the user
   already extracts it as `auth.key` via the same Mi Fitness export. Pairing is a
   nonce-exchange handshake (send phone nonce → receive watch nonce → derive session keys),
-  after which traffic is **AES-CCM** encrypted with **HMAC** integrity. NOOP would take the
+  after which traffic is **AES-CCM** encrypted with **HMAC** integrity. Kineva would take the
   key as a one-time **user-pasted value** (same stance as the Amazfit/Zepp lane) and never
   log into the Xiaomi cloud.
 - **Data fetch:** once authenticated, request **activity sync** — the watch streams the same

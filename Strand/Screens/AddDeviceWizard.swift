@@ -200,10 +200,10 @@ struct AddDeviceWizard: View {
         VStack(alignment: .leading, spacing: 10) {
             typeRow(.whoop5mg, icon: "applewatch.side.right",
                     title: "WHOOP 5.0 / MG",
-                    subtitle: "Newer WHOOP band — experimental in NOOP")
+                    subtitle: "Newer WHOOP band — experimental in Kineva")
             typeRow(.whoop4, icon: "applewatch.side.right",
                     title: "WHOOP 4.0",
-                    subtitle: "NOOP's primary, fully-supported band")
+                    subtitle: "Kineva's primary, fully-supported band")
             typeRow(.hrStrap, icon: "heart.circle",
                     title: "Heart-rate strap",
                     subtitle: "Polar, Wahoo, Coospo, Garmin HRM, Amazfit Helio broadcast")
@@ -325,45 +325,45 @@ struct AddDeviceWizard: View {
             return [
                 "Put your WHOOP 4.0 on your wrist and make sure it's awake.",
                 "Make sure it's NOT connected to the official WHOOP app right now.",
-                "NOOP will look for it nearby.",
+                "Kineva will look for it nearby.",
             ]
         case .whoop5mg:
             return [
                 "WHOOP 5.0 / MG bonds to one device at a time — unpair it from the official WHOOP app first.",
                 "Put the band into pairing mode, on your wrist and awake.",
-                "NOOP will look for it nearby.",
+                "Kineva will look for it nearby.",
             ]
         case .hrStrap:
             return [
                 "Wake your strap — put it on, or dampen the contacts.",
                 "Make sure it isn't connected to another app (a bike computer, the brand's own app…).",
-                "NOOP will look for it nearby.",
+                "Kineva will look for it nearby.",
             ]
         case .gymEquipment:
             return [
                 "Wake the machine — start pedalling, walking or rowing so it powers on its Bluetooth.",
                 "Make sure it isn't already connected to another app (Zwift, the gym's app, a bike computer…).",
-                "NOOP looks for machines that broadcast the standard Bluetooth Fitness Machine service.",
+                "Kineva looks for machines that broadcast the standard Bluetooth Fitness Machine service.",
             ]
         case .amazfit:
             return [
                 "Wake your Amazfit / Zepp band and make sure it isn't connected to the Zepp app right now.",
-                "NOOP reads live heart rate when the band exposes it. Some bands need a pairing we can't do yet — if so, we'll say so honestly.",
+                "Kineva reads live heart rate when the band exposes it. Some bands need a pairing we can't do yet — if so, we'll say so honestly.",
                 "Experimental: this is best-effort. If live doesn't work, you can export from Zepp and import the file.",
             ]
         case .miBand:
             return [
                 "Wake your Mi Band and make sure it isn't connected to the Mi Fitness / Zepp Life app right now.",
-                "NOOP reads live heart rate on bands that don't require pairing. Newer bands need an auth handshake we can't do yet.",
+                "Kineva reads live heart rate on bands that don't require pairing. Newer bands need an auth handshake we can't do yet.",
                 "Experimental: if your band needs pairing, we'll tell you honestly rather than show a fake reading.",
             ]
         case .garmin:
             return GarminBroadcast.broadcastHint
         case .oura:
             return [
-                "The Oura ring is proprietary and only syncs to the Oura app, so there's no open live stream NOOP can read.",
+                "The Oura ring is proprietary and only syncs to the Oura app, so there's no open live stream Kineva can read.",
                 "We'll scan for your ring and check its Bluetooth services so you can see we looked.",
-                "Then we'll point you at file import, which is the honest way to get your Oura data into NOOP.",
+                "Then we'll point you at file import, which is the honest way to get your Oura data into Kineva.",
             ]
         }
     }
@@ -657,7 +657,7 @@ struct AddDeviceWizard: View {
             Image(systemName: "flask")
                 .foregroundStyle(StrandPalette.statusWarning)
                 .accessibilityHidden(true)
-            Text("WHOOP 5.0 / MG support is newer and still experimental in NOOP.")
+            Text("WHOOP 5.0 / MG support is newer and still experimental in Kineva.")
                 .font(StrandFont.footnote)
                 .foregroundStyle(StrandPalette.statusWarning)
                 .fixedSize(horizontal: false, vertical: true)
@@ -673,7 +673,7 @@ struct AddDeviceWizard: View {
             Image(systemName: "info.circle")
                 .foregroundStyle(StrandPalette.textTertiary)
                 .accessibilityHidden(true)
-            Text("WHOOP is NOOP's primary, fully-supported band. Other heart-rate straps stream live heart rate and HRV, but not WHOOP's deeper sleep and recovery data.")
+            Text("WHOOP is Kineva's primary, fully-supported band. Other heart-rate straps stream live heart rate and HRV, but not WHOOP's deeper sleep and recovery data.")
                 .font(StrandFont.footnote)
                 .foregroundStyle(StrandPalette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

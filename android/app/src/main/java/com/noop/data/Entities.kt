@@ -334,7 +334,7 @@ data class LabMarkerRow(
     val unit: String,
     val source: String,
     val note: String? = null,
-    val referenceText: String? = null, // user-entered range, shown verbatim; NOOP ships none
+    val referenceText: String? = null, // user-entered range, shown verbatim; Kineva ships none
 )
 
 /**

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo-v3.png" alt="NOOP" width="72">
+  <img src="docs/assets/logo-v3.png" alt="Kineva" width="72">
 </p>
 
-<h1 align="center">NOOP</h1>
+<h1 align="center">Kineva</h1>
 
 <p align="center"><b>Your strap. Your data. Your machine. Offline, on-device, no cloud.</b></p>
 
@@ -27,12 +27,12 @@
 </p>
 
 <p align="center">
-  <a href="#keeping-noop-alive"><img alt="Keep NOOP alive" src="https://img.shields.io/badge/%E2%99%A5-keep%20NOOP%20alive-C8902F?style=for-the-badge"></a>
+  <a href="#keeping-kineva-alive"><img alt="Keep Kineva alive" src="https://img.shields.io/badge/%E2%99%A5-keep%20Kineva%20alive-C8902F?style=for-the-badge"></a>
 </p>
-<p align="center"><sub><b>NOOP is free, account-free and ad-free</b> &mdash; and it costs us real money to keep running (servers + development time). Only a handful of people chip in. If NOOP&rsquo;s earned a place on your wrist, <a href="#keeping-noop-alive"><b>buy us a coffee&nbsp;&#9749;</b></a> &mdash; it genuinely keeps the lights on.</sub></p>
+<p align="center"><sub><b>Kineva is free, account-free and ad-free</b> &mdash; and it costs us real money to keep running (servers + development time). Only a handful of people chip in. If Kineva&rsquo;s earned a place on your wrist, <a href="#keeping-kineva-alive"><b>buy us a coffee&nbsp;&#9749;</b></a> &mdash; it genuinely keeps the lights on.</sub></p>
 
 <p align="center">
-  <a href="#keeping-noop-alive">♥&nbsp;Support</a> ·
+  <a href="#keeping-kineva-alive">♥&nbsp;Support</a> ·
   <a href="#download">⬇&nbsp;Download</a> ·
   <a href="https://noop.fans">🪞&nbsp;Mirror</a> ·
   <a href="https://github.com/NoopApp/noop/wiki/FAQ">❓&nbsp;FAQ</a> ·
@@ -54,15 +54,15 @@
 
 ---
 
-## Keeping NOOP alive
+## Keeping Kineva alive
 
-NOOP is **free, forever** — no account, no cloud, no subscription, every feature unlocked, no nag. That doesn't change.
+Kineva is **free, forever** — no account, no cloud, no subscription, every feature unlocked, no nag. That doesn't change.
 
-But here's the honest reality, up front: **NOOP is built and maintained by one person, out of pocket.** Building interoperability support for WHOOP's hardware — and keeping up as its firmware changes — takes real time and real test hardware. **The project continues if the people who use it help fund it. If that doesn't happen, it can't.** No drama, no guilt — just the maths of an unfunded project.
+But here's the honest reality, up front: **Kineva is built and maintained by one person, out of pocket.** Building interoperability support for WHOOP's hardware — and keeping up as its firmware changes — takes real time and real test hardware. **The project continues if the people who use it help fund it. If that doesn't happen, it can't.** No drama, no guilt — just the maths of an unfunded project.
 
-📰 **Featured in** [AOL](https://www.aol.com/articles/open-source-app-lets-whoop-231700000.html) · [Yahoo](https://tech.yahoo.com/wearables/articles/open-source-app-lets-whoop-081754863.html) · [Android Authority](https://www.androidauthority.com/open-source-whoop-app-3673542/) · [TechRadar](https://www.techradar.com/health-fitness/fitness-trackers/this-looks-awesome-theres-now-an-unofficial-open-source-app-for-reading-whoop-data-that-doesnt-need-a-subscription) · [BGR](https://www.bgr.com/2193528/noop-app-use-whoop-band-without-subscription-fee/) · [Android Central](https://www.androidcentral.com/wearables/this-open-source-app-lets-you-use-your-whoop-without-a-monthly-fee) · [Android Police](https://www.androidpolice.com/i-tried-open-source-whoop-app/) · [Notebookcheck](https://www.notebookcheck.net/Whoop-users-could-soon-be-free-from-expensive-subscriptions-thanks-to-this-open-source-app.1314364.0.html) · [Trusted Reviews](https://www.trustedreviews.com/news/this-open-source-app-could-let-whoop-users-ditch-the-subscription) — **and used by thousands.** If even a small fraction of them tipped, NOOP's future would be secure for a long time to come.
+📰 **Featured in** [AOL](https://www.aol.com/articles/open-source-app-lets-whoop-231700000.html) · [Yahoo](https://tech.yahoo.com/wearables/articles/open-source-app-lets-whoop-081754863.html) · [Android Authority](https://www.androidauthority.com/open-source-whoop-app-3673542/) · [TechRadar](https://www.techradar.com/health-fitness/fitness-trackers/this-looks-awesome-theres-now-an-unofficial-open-source-app-for-reading-whoop-data-that-doesnt-need-a-subscription) · [BGR](https://www.bgr.com/2193528/noop-app-use-whoop-band-without-subscription-fee/) · [Android Central](https://www.androidcentral.com/wearables/this-open-source-app-lets-you-use-your-whoop-without-a-monthly-fee) · [Android Police](https://www.androidpolice.com/i-tried-open-source-whoop-app/) · [Notebookcheck](https://www.notebookcheck.net/Whoop-users-could-soon-be-free-from-expensive-subscriptions-thanks-to-this-open-source-app.1314364.0.html) · [Trusted Reviews](https://www.trustedreviews.com/news/this-open-source-app-could-let-whoop-users-ditch-the-subscription) — **and used by thousands.** If even a small fraction of them tipped, Kineva's future would be secure for a long time to come.
 
-If NOOP saves you a subscription, or you just want WHOOP 5.0/MG support finished and the work to keep going, **chipping in is what genuinely decides that.** It's optional, one-off, and tied to nothing about your data or access — there's no server and no record of who has or hasn't.
+If Kineva saves you a subscription, or you just want WHOOP 5.0/MG support finished and the work to keep going, **chipping in is what genuinely decides that.** It's optional, one-off, and tied to nothing about your data or access — there's no server and no record of who has or hasn't.
 
 ### How to donate — 2 minutes, even if you've never touched crypto
 
@@ -83,7 +83,7 @@ Donations are **crypto-only**, on purpose: staying anonymous (for the project *a
 
 Each address also has a scan-to-donate **QR code** in the app under **Support** (and they're listed in [`docs/DONATIONS.md`](docs/DONATIONS.md)). *Always copy the full address and double-check the first and last characters; crypto transactions are irreversible, and only ever send a coin to its own network.*
 
-**Can't or would rather not?** Also genuinely valued: **⭐ star this repo**, file a good bug report, share a strap log, test on hardware you own, or just tell another WHOOP user. That moves NOOP forward too. **Want to help directly? → [Roadmap & help wanted](https://github.com/NoopApp/noop/issues/132)** lists exactly what we need — some of NOOP's biggest blockers are data only your strap can provide (a single raw frame capture can unlock a feature for everyone on that firmware).
+**Can't or would rather not?** Also genuinely valued: **⭐ star this repo**, file a good bug report, share a strap log, test on hardware you own, or just tell another WHOOP user. That moves Kineva forward too. **Want to help directly? → [Roadmap & help wanted](https://github.com/NoopApp/noop/issues/132)** lists exactly what we need — some of Kineva's biggest blockers are data only your strap can provide (a single raw frame capture can unlock a feature for everyone on that firmware).
 
 ---
 
@@ -98,25 +98,25 @@ Pre-built apps you can run right now:
 
 | Platform | Build | Notes |
 |---|---|---|
-| **macOS** | `NOOP.app` (see [Releases](https://github.com/NoopApp/noop/releases)) or Homebrew: `brew tap noopapp/noop && brew trust noopapp/noop && brew install --cask noop` | Apple Silicon + Intel. Drag to Applications. Not notarized — see **First launch on macOS** below. The one-time `brew trust noopapp/noop` is needed on Homebrew 6.0+ (harmless on older versions) — see [Homebrew docs](docs/HOMEBREW.md). |
-| **Android** | `NOOP-full.apk` (see [Releases](https://github.com/NoopApp/noop/releases)) | The full app. `minSdk 26` (Android 8+). Sideload — enable "install unknown apps". Blocked by Play Protect? See **Installing on Android** below. |
-| **iOS** | `NOOP-vX-ios.ipa` (see [Releases](https://github.com/NoopApp/noop/releases)) — sideload with AltStore/SideStore | Now a **direct download**. The `.ipa` is unsigned; **you** sign it on your iPhone with your own free Apple ID (no App Store, no developer account — NOOP stays anonymous). Re-signs every 7 days (AltStore automates it); Apple Health + Live Activity widgets may be limited under a free signing identity. See [docs/IOS.md](docs/IOS.md). Or build from source in Xcode. |
+| **macOS** | `Kineva.app` (see [Releases](https://github.com/NoopApp/noop/releases)) or Homebrew: `brew tap noopapp/noop && brew trust noopapp/noop && brew install --cask noop` | Apple Silicon + Intel. Drag to Applications. Not notarized — see **First launch on macOS** below. The one-time `brew trust noopapp/noop` is needed on Homebrew 6.0+ (harmless on older versions) — see [Homebrew docs](docs/HOMEBREW.md). |
+| **Android** | `Kineva-full.apk` (see [Releases](https://github.com/NoopApp/noop/releases)) | The full app. `minSdk 26` (Android 8+). Sideload — enable "install unknown apps". Blocked by Play Protect? See **Installing on Android** below. |
+| **iOS** | `Kineva-vX-ios.ipa` (see [Releases](https://github.com/NoopApp/noop/releases)) — sideload with AltStore/SideStore | Now a **direct download**. The `.ipa` is unsigned; **you** sign it on your iPhone with your own free Apple ID (no App Store, no developer account — Kineva stays anonymous). Re-signs every 7 days (AltStore automates it); Apple Health + Live Activity widgets may be limited under a free signing identity. See [docs/IOS.md](docs/IOS.md). Or build from source in Xcode. |
 
-> **First launch on macOS.** NOOP is **not notarized** by Apple — notarization needs a paid Apple
+> **First launch on macOS.** Kineva is **not notarized** by Apple — notarization needs a paid Apple
 > Developer ID tied to a real identity, which doesn't fit an anonymous, free project. The app *is*
 > sandboxed and ad-hoc code-signed, and the full source is here to inspect. Because it isn't notarized,
 > macOS Gatekeeper blocks it on first open (you may see *"damaged"* or *"unverified developer"* — that's
 > the download quarantine flag, not real damage). To open it, do one of these **once**:
 >
-> - **Terminal (most reliable):** drag `NOOP.app` to Applications, then run
->   `xattr -dr com.apple.quarantine /Applications/NOOP.app` and open NOOP normally.
-> - **No Terminal:** double-click NOOP (it'll be blocked), then open **System Settings → Privacy &
->   Security**, scroll to the bottom, and click **"Open Anyway"** next to NOOP. (On macOS 14 and
+> - **Terminal (most reliable):** drag `Kineva.app` to Applications, then run
+>   `xattr -dr com.apple.quarantine /Applications/Kineva.app` and open Kineva normally.
+> - **No Terminal:** double-click Kineva (it'll be blocked), then open **System Settings → Privacy &
+>   Security**, scroll to the bottom, and click **"Open Anyway"** next to Kineva. (On macOS 14 and
 >   earlier you can also right-click the app → **Open**.)
 >
 > Prefer to avoid this entirely? Build from source — see [Quickstart](#quickstart-macos).
 
-> **Installing on Android (Play Protect blocked it?).** NOOP isn't on the Play Store — it's an
+> **Installing on Android (Play Protect blocked it?).** Kineva isn't on the Play Store — it's an
 > **unsigned, source-available APK** you sideload, because the project is anonymous and has no paid
 > Play identity to publish or sign under. So Android treats it as an "unknown app" and **Google
 > Play Protect** may warn or block on install (most stubbornly on stock Pixel / recent Android).
@@ -128,8 +128,8 @@ Pre-built apps you can run right now:
 >   file manager you're installing from**, turn on **"Allow from this source"**, then open the APK again.
 > - **Still blocked by Play Protect?** It's your call to make for an unsigned app you trust: open the
 >   **Play Store → your profile icon → Play Protect → ⚙ Settings**, toggle **"Scan apps with Play
->   Protect" off**, install NOOP, then switch it **back on**.
-> - **Reinstalling is safe.** Uninstalling and installing again won't hurt anything — NOOP keeps all
+>   Protect" off**, install Kineva, then switch it **back on**.
+> - **Reinstalling is safe.** Uninstalling and installing again won't hurt anything — Kineva keeps all
 >   data on-device with `allowBackup=false`, so a reinstall simply starts fresh. There's no cloud copy
 >   to lose either way.
 
@@ -139,7 +139,7 @@ Everything runs **offline**. The only feature that ever uses the network is the 
 
 ---
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and
+Kineva is a standalone, fully **offline** companion app for WHOOP straps (4.0 and
 5.0). It pairs directly with the strap over Bluetooth, stores everything on your
 own device in SQLite, imports your existing WHOOP and Apple Health history, and
 computes recovery, strain, HRV, and sleep **locally**, with no WHOOP account and
@@ -149,18 +149,18 @@ It is built on prior community interoperability work and exists for one
 reason: to let someone who owns a WHOOP strap read **their own biometric data**
 from **their own device**, on a machine **they** control.
 
-> **Not affiliated with WHOOP.** NOOP is an independent, unofficial
+> **Not affiliated with WHOOP.** Kineva is an independent, unofficial
 > interoperability project. It is not affiliated with, endorsed by, or connected
-> to WHOOP, Inc. "WHOOP" is used only to identify the hardware NOOP talks to. Use
+> to WHOOP, Inc. "WHOOP" is used only to identify the hardware Kineva talks to. Use
 > it only with a device you own, and not in breach of any agreement that applies
-> to you. **NOOP is not a medical device**; every derived metric is an
+> to you. **Kineva is not a medical device**; every derived metric is an
 > approximation, not clinical data. See [`DISCLAIMER.md`](DISCLAIMER.md).
 
 ---
 
 ## Contents
 
-- [Why NOOP](#why-noop)
+- [Why Kineva](#why-kineva)
 - [Features](#features)
 - [Platform status](#platform-status)
 - [Architecture](#architecture)
@@ -175,16 +175,16 @@ from **their own device**, on a machine **they** control.
 
 ---
 
-## Why NOOP
+## Why Kineva
 
-You bought the strap. The biometric stream it produces is yours. NOOP is built on
+You bought the strap. The biometric stream it produces is yours. Kineva is built on
 that premise:
 
-- **Own your data.** NOOP reads heart rate, R-R intervals, SpO₂, skin temperature,
+- **Own your data.** Kineva reads heart rate, R-R intervals, SpO₂, skin temperature,
   respiration, accelerometer/gravity, battery, and event data straight off the
   strap over Bluetooth and writes it to a local SQLite database. Nothing is
   uploaded anywhere.
-- **Account-free and local.** NOOP never logs into a WHOOP account and never hits
+- **Account-free and local.** Kineva never logs into a WHOOP account and never hits
   a WHOOP server. It does not bypass any login, paywall, or DRM; it simply talks to
   a device you own and reads data you generated.
 - **Bring your history.** Already have years of data in the official app or in
@@ -210,7 +210,7 @@ shared cross-platform code.
 | **Today** (Control Center) | Home dashboard: recovery ring, a "today's synthesis" insight, a grid of stat tiles (recovery, strain, sleep, HRV, RHR, SpO₂, respiratory, steps, weight, calories) each with a 14-day sparkline, live strap **battery %** and HR trend, recent workouts, and a data-sources footer. |
 | **Readiness** | An on-device "should you push today?" read that synthesizes established sports-science signals from your own history — HRV vs your baseline (Plews/Buchheit), resting-HR drift (Lamberts), sleeping respiratory-rate drift, training-load balance (acute:chronic workload ratio, Gabbett) and training monotony (Foster) — into a single headline (Primed / Balanced / Strained / Run down) with the drivers behind it. Pure local math, not medical advice. |
 | **Live** | Real-time view of the connected strap — heart rate and frame stream as they arrive (~1 Hz). |
-| **Breathe** | **HRV haptic breathing biofeedback.** The strap both *measures* HRV (R-R intervals) and *buzzes* its haptic motor, so NOOP paces your breath with felt cues (one buzz inhale, two exhale) and shows live HR + rolling RMSSD responding as the session deepens. Presets: Relax 4-6, Coherence 5.5, Box 4-4. Each session reports a **pre/post HRV outcome** so you can see how much you settled. |
+| **Breathe** | **HRV haptic breathing biofeedback.** The strap both *measures* HRV (R-R intervals) and *buzzes* its haptic motor, so Kineva paces your breath with felt cues (one buzz inhale, two exhale) and shows live HR + rolling RMSSD responding as the session deepens. Presets: Relax 4-6, Coherence 5.5, Box 4-4. Each session reports a **pre/post HRV outcome** so you can see how much you settled. |
 | **Intervals** | **Silent haptic HIIT timer.** The strap buzzes every transition (triple-buzz into WORK, single into REST, 3-2-1 tick at phase ends, long buzz on finish) so you train hands-free. Falls back to a glanceable visual timer with no strap. |
 | **Explore** (Metric Explorer) | Interrogate any single metric over time, built from the metric catalog (`Strand/Data/MetricCatalog.swift`). |
 | **Compare** | Plot two metrics together / against each other over a shared timeline. |
@@ -243,21 +243,21 @@ and an in-app **"What's new"** changelog shown after each update.
   the `shortcuts://` URL scheme, so it's sandbox-friendly).
 - **Wear & presence.** Lock the Mac (or run a Shortcut) the moment the strap
   leaves your wrist; run a Shortcut when it goes back on. *(macOS reserves true
-  auto-**unlock** for Apple Watch — NOOP can lock, not unlock.)*
+  auto-**unlock** for Apple Watch — Kineva can lock, not unlock.)*
 - **Haptic coaching.** HR-zone coaching and an experimental resting-stress nudge —
   the strap buzzes so you don't have to watch a screen.
 - **Inactivity reminder.** An optional gentle wrist buzz after you've been sitting
   still too long — your idle threshold, your active hours, a re-nudge cooldown,
   respects quiet hours, **off by default**.
 - **Smart alarm.** Arms the strap's own **firmware** alarm to buzz at your wake
-  time (still fires if the Mac is asleep or NOOP is closed), with an optional
+  time (still fires if the Mac is asleep or Kineva is closed), with an optional
   light-sleep wake window when the Mac stays awake and connected.
 
 ---
 
 ## Platform status
 
-NOOP's logic lives in cross-platform Swift packages, and the same protocol,
+Kineva's logic lives in cross-platform Swift packages, and the same protocol,
 storage, analytics, and scoring is ported to Kotlin on Android. Both apps pair
 with the strap and **score recovery, strain and sleep on your own device** — no
 import required.
@@ -277,7 +277,7 @@ import required.
 
 ### Strap support
 
-NOOP is an independent, **experimental** project — capable, but a work in progress.
+Kineva is an independent, **experimental** project — capable, but a work in progress.
 
 | Strap | Status |
 |---|---|
@@ -286,7 +286,7 @@ NOOP is an independent, **experimental** project — capable, but a work in prog
 
 > ### WHOOP 5.0 / MG analysis limits
 >
-> NOOP's analysis screens and algorithms can only be as complete as the sensor inputs it can
+> Kineva's analysis screens and algorithms can only be as complete as the sensor inputs it can
 > reliably decode. On WHOOP 5.0 / MG, important overnight inputs remain unavailable or incomplete:
 >
 > | Input / output | Current direct-from-strap status |
@@ -305,8 +305,8 @@ NOOP is an independent, **experimental** project — capable, but a work in prog
 > ### Pairing a WHOOP 5.0 / MG — read this first
 >
 > A WHOOP strap holds an encrypted Bluetooth **bond with only one device at a time**, and yours is
-> normally bonded to the **official WHOOP app** on your phone. **You can't just scan for it in NOOP** —
-> if the strap is still bonded to the WHOOP app, NOOP's pairing is refused and the strap log shows
+> normally bonded to the **official WHOOP app** on your phone. **You can't just scan for it in Kineva** —
+> if the strap is still bonded to the WHOOP app, Kineva's pairing is refused and the strap log shows
 > *"Encryption is insufficient"* / *"bond refused."* (Live **heart rate** is the exception — it rides the
 > standard Bluetooth heart-rate profile, so it streams without a bond. But pairing — needed for the
 > deeper features — does not.)
@@ -316,7 +316,7 @@ NOOP is an independent, **experimental** project — capable, but a work in prog
 >    it isn't holding the bond.
 > 2. **Put the strap in pairing mode** — on a 5.0/MG, **tap the band repeatedly** (firm taps on the
 >    sensor) until the **LEDs flash blue**.
-> 3. In NOOP: **Live → choose "WHOOP 5.0 / MG" → Scan & Connect.** Success looks like
+> 3. In Kineva: **Live → choose "WHOOP 5.0 / MG" → Scan & Connect.** Success looks like
 >    *"CLIENT_HELLO acked — link established"* in the strap log (not *"bond refused"*). It can take a
 >    couple of attempts.
 >
@@ -326,7 +326,7 @@ NOOP is an independent, **experimental** project — capable, but a work in prog
 > If HR streams fine yet **buzz, alarm, double-tap and history don't work**, that's the tell: the strap
 > isn't truly bonded to this device. Free it from everything else, then pair here.
 >
-> Bonding to NOOP may take the strap's bond away from the WHOOP app, so the official app might need to
+> Bonding to Kineva may take the strap's bond away from the WHOOP app, so the official app might need to
 > re-pair afterwards. This is the **hardest part of 5/MG support** — if it refuses, you're almost
 > certainly still bonded to the WHOOP app (or another device); free the strap and retry.
 
@@ -334,7 +334,7 @@ The app always tells you what's live now versus still building, both in onboardi
 
 ### What to expect when you start
 
-NOOP computes your scores on your own device, so like any recovery wearable it
+Kineva computes your scores on your own device, so like any recovery wearable it
 needs a little data before everything fills in:
 
 - **Live heart rate** shows the moment the strap connects.
@@ -369,7 +369,7 @@ Fixtures/                sample WHOOP export for tests
 
 Platform-pure (no CoreBluetooth import) so it runs in tests and CLI tools
 unchanged. It implements the on-wire frame format for both strap generations,
-so NOOP can speak to a device you own:
+so Kineva can speak to a device you own:
 
 ```swift
 public enum DeviceFamily: String, Sendable, CaseIterable {
@@ -449,8 +449,8 @@ The Xcode project is generated from [`project.yml`](project.yml) with
 
 ```bash
 # 1. Clone
-git clone <your-fork-url> NOOP
-cd NOOP
+git clone <your-fork-url> Kineva
+cd Kineva
 
 # 2. (Re)generate the Xcode project from project.yml
 brew install xcodegen   # if you don't have it
@@ -458,12 +458,12 @@ xcodegen generate
 
 # 3. Open and run
 open Strand.xcodeproj
-# Select the "Strand" scheme → Run (⌘R). The built app is named NOOP.
+# Select the "Strand" scheme → Run (⌘R). The built app is named Kineva.
 ```
 
 Notes:
 
-- Bundle id `com.noopapp.noop`, product name **NOOP**, sandboxed with the
+- Bundle id `com.aretetechnologies.kineva`, product name **Kineva**, sandboxed with the
   Bluetooth and user-selected-files entitlements.
 - Swift Package Manager resolves the only third-party dependencies automatically:
   **GRDB.swift** (SQLite) and **ZIPFoundation** (export unzip).
@@ -500,7 +500,7 @@ Every arrow stays on your machine.
 
 ## Privacy
 
-**Offline by design.** NOOP has no server, no telemetry, and no account. Your
+**Offline by design.** Kineva has no server, no telemetry, and no account. Your
 strap data, imports, and computed metrics live in a local SQLite database on your
 device and never leave it.
 
@@ -508,25 +508,25 @@ device and never leave it.
 
 ## Attribution
 
-NOOP stands on community interoperability and protocol-documentation work. With
+Kineva stands on community interoperability and protocol-documentation work. With
 thanks:
 
 - **`johnmiddleton12/my-whoop`** — the WHOOP 4.0 BLE protocol; the `WhoopProtocol`
   and `WhoopStore` packages and the collection logic are adapted from this work.
 - **`b-nnett/goose`** — the WHOOP 5.0 / MG BLE protocol documentation (the `fd4b0001-…`
-  service family, CRC16-Modbus header, and "puffin" packet types) that NOOP's
+  service family, CRC16-Modbus header, and "puffin" packet types) that Kineva's
   WHOOP 5.0 path is ported from.
 - **`groue/GRDB.swift`** — SQLite persistence.
 - **`weichsel/ZIPFoundation`** — export unzipping.
 
-NOOP contains no WHOOP proprietary code, firmware, logos, or assets, and performs
+Kineva contains no WHOOP proprietary code, firmware, logos, or assets, and performs
 no DRM circumvention. Full detail in [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 ---
 
 ## Support (optional)
 
-NOOP is free and always will be, and never gates a feature behind payment. If it's
+Kineva is free and always will be, and never gates a feature behind payment. If it's
 useful to you and you want to help with the development and testing costs, optional
 crypto donation addresses are shown on the in-app **Support** screen and listed in
 [`docs/DONATIONS.md`](docs/DONATIONS.md). Donations are 100% optional and the app
@@ -540,12 +540,12 @@ never asks twice.
 
 ## Disclaimer
 
-NOOP is an independent, unofficial, non-commercial interoperability project. It is
+Kineva is an independent, unofficial, non-commercial interoperability project. It is
 **not affiliated with, endorsed by, or connected to WHOOP, Inc.** All references to
-"WHOOP" are nominative — used only to identify the third-party hardware NOOP
+"WHOOP" are nominative — used only to identify the third-party hardware Kineva
 interoperates with.
 
-**NOOP is not a medical device.** Heart rate, HRV, recovery, strain, sleep stages,
+**Kineva is not a medical device.** Heart rate, HRV, recovery, strain, sleep stages,
 SpO₂, respiratory rate, and skin temperature are **approximations** computed from
 published methods. They are not clinically validated and are not medical advice. Do
 not use them to diagnose, treat, or make health decisions — consult a qualified
@@ -558,14 +558,14 @@ use it at your own risk. Read the full notice in [`DISCLAIMER.md`](DISCLAIMER.md
 
 ## License
 
-NOOP is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE):
+Kineva is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE):
 **free for personal and other non-commercial use** — read it, run it, fork it, and
 contribute. Commercial use is not granted by this license. (PolyForm Noncommercial is
 a proper software license with patent terms; it is deliberately *not* an OSI
 "open-source" licence, because that would permit the commercial use this project's
 non-commercial nature rules out.)
 
-The license covers NOOP's own original code and docs. Protocol facts (frame layouts,
+The license covers Kineva's own original code and docs. Protocol facts (frame layouts,
 command numbers, byte offsets) are uncopyrightable and free to reuse; bundled
 dependencies keep their own licenses (GRDB.swift and ZIPFoundation are MIT — see
 [`NOTICE`](NOTICE)). By opening a pull request you agree your contribution is licensed
@@ -573,7 +573,7 @@ under the same terms — see [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
 
 ### Mirroring & forking
 
-NOOP is public and built to be hard to erase. **Clone it freely** — `git clone https://github.com/NoopApp/noop.git` — and you're welcome to **mirror or fork it** to Codeberg, GitLab or your own server. More copies make the project more resilient, which is the whole point after being deplatformed.
+Kineva is public and built to be hard to erase. **Clone it freely** — `git clone https://github.com/NoopApp/noop.git` — and you're welcome to **mirror or fork it** to Codeberg, GitLab or your own server. More copies make the project more resilient, which is the whole point after being deplatformed.
 
 Two simple asks:
 
@@ -596,7 +596,7 @@ That's it — copy away.
 
 ## Activity
 
-A live snapshot of the last 30 days — issues, pull requests, pushes, and the people moving NOOP
+A live snapshot of the last 30 days — issues, pull requests, pushes, and the people moving Kineva
 forward. Huge thanks to everyone filing reports, sharing strap logs, and reverse-engineering the
 protocol alongside us — this project is built on it.
 
@@ -613,6 +613,6 @@ protocol alongside us — this project is built on it.
 
 ### Star history
 
-If NOOP's useful to you, a ⭐ genuinely helps it reach more WHOOP users — and it's the single best free way to support the project.
+If Kineva's useful to you, a ⭐ genuinely helps it reach more WHOOP users — and it's the single best free way to support the project.
 
 [![Star History Chart](https://api.star-history.com/svg?repos=NoopApp/noop&type=Date)](https://star-history.com/#NoopApp/noop&Date)

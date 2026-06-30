@@ -14,7 +14,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$HERE/../deploy.env" ] && source "$HERE/../deploy.env"
-DOMAIN="${FORGE_DOMAIN:-${NOOP_DOMAIN:-noop.fans}}"
+DOMAIN="${FORGE_DOMAIN:-${KINEVA_DOMAIN:-noop.fans}}"
 ORG="${FORGE_ORG:-NoopApp}"; REPO="${FORGE_REPO:-noop}"
 # operate on the Strand checkout (where the source files live)
 cd "${STRAND_DIR:-$HOME/Documents/Strand}"

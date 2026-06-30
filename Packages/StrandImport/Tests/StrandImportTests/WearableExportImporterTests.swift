@@ -2,7 +2,7 @@ import XCTest
 import Foundation
 @testable import StrandImport
 
-/// Pins the offline file-import of a user's OWN Oura / Fitbit / Garmin data export onto NOOP's daily
+/// Pins the offline file-import of a user's OWN Oura / Fitbit / Garmin data export onto Kineva's daily
 /// metrics + sleep sessions. Tiny inline fixtures per brand (no real account data). HONEST DATA:
 /// only fields the export carries are written; a brand's OWN score is reference-only, never Charge.
 final class WearableExportImporterTests: XCTestCase {
@@ -64,7 +64,7 @@ final class WearableExportImporterTests: XCTestCase {
         XCTAssertEqual(d.steps, 8421)
         XCTAssertEqual(d.activeKcal!, 520, accuracy: 1e-6)
         XCTAssertEqual(d.totalSleepMin!, 420, accuracy: 1e-6)    // sleep folded onto the day
-        // Oura's OWN readiness score is kept as REFERENCE only — never surfaced as a NOOP score.
+        // Oura's OWN readiness score is kept as REFERENCE only — never surfaced as a Kineva score.
         XCTAssertEqual(d.readinessScore, 81)
     }
 

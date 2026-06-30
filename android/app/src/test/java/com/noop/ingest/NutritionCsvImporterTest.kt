@@ -9,7 +9,7 @@ import org.junit.Test
  * Pins NutritionCsvImporter.parse: nutrition CSV → long-format metricSeries rows under the
  * cross-platform contract shared with the Swift lane — source id "nutrition-csv" and keys
  * calories_in / protein_g / carbs_g / fat_g / weight (kg). Covers the three explicit header
- * shapes (NOOP native, MyFitnessPal per-meal, Cronometer daily summary), the tolerant
+ * shapes (Kineva native, MyFitnessPal per-meal, Cronometer daily summary), the tolerant
  * fallback (including lb→kg), and the skip rules.
  */
 class NutritionCsvImporterTest {
@@ -27,7 +27,7 @@ class NutritionCsvImporterTest {
         assertEquals("nutrition-csv", NutritionCsvImporter.SOURCE_ID)
     }
 
-    // MARK: Shape 1 — NOOP native
+    // MARK: Shape 1 — Kineva native
 
     @Test
     fun nativeHeaderShapeMapsAllFiveKeys() {

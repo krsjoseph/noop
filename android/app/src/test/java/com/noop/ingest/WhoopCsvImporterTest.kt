@@ -131,7 +131,7 @@ class WhoopCsvImporterTest {
         assertEquals(52, r.restingHr)
         assertEquals(95.0, r.avgHrv!!, 1e-9)
         assertEquals("2024-03-01", r.day)
-        // Day Strain 12.5 is rescaled onto NOOP's 0–100 Effort axis (×100/21).
+        // Day Strain 12.5 is rescaled onto Kineva's 0–100 Effort axis (×100/21).
         assertEquals(12.5 * (100.0 / 21.0), r.strain!!, 1e-9)
     }
 }

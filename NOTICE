@@ -1,8 +1,8 @@
-NOOP — third-party notices
+Kineva — third-party notices
 ===========================
 
-NOOP's own source code and documentation are licensed under the PolyForm
-Noncommercial License 1.0.0 (see LICENSE). That license covers NOOP's original
+Kineva's own source code and documentation are licensed under the PolyForm
+Noncommercial License 1.0.0 (see LICENSE). That license covers Kineva's original
 work only. The components and prior work below keep their own terms.
 
 Bundled dependencies
@@ -18,14 +18,14 @@ ZIPFoundation — https://github.com/weichsel/ZIPFoundation
 
 The MIT license is permissive: these components may be used, modified, and
 redistributed (including commercially) on their own terms. When they are used as
-part of NOOP's combined work, the combined work as a whole is governed by NOOP's
+part of Kineva's combined work, the combined work as a whole is governed by Kineva's
 PolyForm Noncommercial license.
 
 Prior reverse-engineering research
 ----------------------------------
 
-NOOP builds on two community reverse-engineering efforts. Neither states a
-license; NOOP does not redistribute their code. NOOP uses only the uncopyrightable
+Kineva builds on two community reverse-engineering efforts. Neither states a
+license; Kineva does not redistribute their code. Kineva uses only the uncopyrightable
 factual protocol information they document (BLE service/characteristic identifiers,
 frame layouts, CRC parameters, command/event/packet numbers, byte offsets) and
 re-implements those facts as original code — it does not copy their source.

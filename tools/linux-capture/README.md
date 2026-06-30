@@ -476,8 +476,8 @@ If you want a smaller file, two optional flags narrow it down:
 - `--only-type 47` — just the main once-per-second records.
 - `--since <unix-time>` — only data newer than a given moment.
 
-Then transfer `capture.json` to your phone (any file transfer works), open NOOP, and pick it from
-**Data Sources → Raw capture**. Importing the same file twice is safe — NOOP skips anything it already
+Then transfer `capture.json` to your phone (any file transfer works), open Kineva, and pick it from
+**Data Sources → Raw capture**. Importing the same file twice is safe — Kineva skips anything it already
 has — so you can re-run it without making duplicates. Export one file per strap; a file is normally a
 single strap, but a mixed one still imports fine. The phone treats the file as untrusted input (size +
 frame-count bounded, malformed rows skipped), so a stray or corrupt file is rejected cleanly rather

@@ -5,8 +5,8 @@ final class DatabasePathResolverTests: XCTestCase {
     func testPersonalBundleIsNotADefaultCandidate() {
         let candidates = DatabasePathResolver.candidates(home: "/Users/example")
 
-        XCTAssertTrue(candidates.contains("/Users/example/Library/Containers/com.noopapp.noop/Data/Library/Application Support/OpenWhoop/whoop.sqlite"))
-        XCTAssertFalse(candidates.contains { $0.contains("com.noopapp.noop.personal") })
+        XCTAssertTrue(candidates.contains("/Users/example/Library/Containers/com.aretetechnologies.kineva/Data/Library/Application Support/OpenWhoop/whoop.sqlite"))
+        XCTAssertFalse(candidates.contains { $0.contains("com.aretetechnologies.kineva.personal") })
     }
 
     func testCustomBundleIDIsExplicitOptIn() {
@@ -16,7 +16,7 @@ final class DatabasePathResolverTests: XCTestCase {
             candidates.first,
             "/Users/example/Library/Containers/com.example.noop/Data/Library/Application Support/OpenWhoop/whoop.sqlite"
         )
-        XCTAssertTrue(candidates.contains("/Users/example/Library/Containers/com.noopapp.noop/Data/Library/Application Support/OpenWhoop/whoop.sqlite"))
+        XCTAssertTrue(candidates.contains("/Users/example/Library/Containers/com.aretetechnologies.kineva/Data/Library/Application Support/OpenWhoop/whoop.sqlite"))
     }
 
     func testExplicitPathMustExist() throws {
@@ -30,7 +30,7 @@ final class DatabasePathResolverTests: XCTestCase {
         let config = LocalAccessConfiguration(databasePath: "/definitely/not/noop/whoop.sqlite")
 
         XCTAssertThrowsError(try DatabasePathResolver.resolve(configuration: config)) { error in
-            XCTAssertEqual(error as? LocalAccessError, .databaseUnavailable("NOOP database not found at NOOP_DB_PATH."))
+            XCTAssertEqual(error as? LocalAccessError, .databaseUnavailable("Kineva database not found at KINEVA_DB_PATH."))
         }
     }
 }

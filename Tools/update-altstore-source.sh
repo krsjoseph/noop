@@ -11,12 +11,12 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$HERE/../deploy.env" ] && source "$HERE/../deploy.env"
-DOMAIN="${FORGE_DOMAIN:-${NOOP_DOMAIN:-noop.fans}}"
+DOMAIN="${FORGE_DOMAIN:-${KINEVA_DOMAIN:-noop.fans}}"
 ORG="${FORGE_ORG:-NoopApp}"; REPO="${FORGE_REPO:-noop}"
 
 VERSION="${1:?usage: $0 <version> <ipa> [desc]}"
 IPA="${2:?usage: $0 <version> <ipa> [desc]}"
-DESC="${3:-"NOOP $VERSION. See the release notes for what changed."}"
+DESC="${3:-"Kineva $VERSION. See the release notes for what changed."}"
 
 # altstore-source.json lives at the repo root; default to the Strand checkout
 SRC="${ALTSTORE_SRC:-$HOME/Documents/Strand/altstore-source.json}"
@@ -38,7 +38,7 @@ SIZE="$(stat -f%z "$IPA")"
 DATE="$(date -u +%Y-%m-%d)"
 # GitHub is the canonical download home; the AltStore source must point at the GitHub release asset.
 # (noop.fans stays a mirror — the FORGE_* vars above are still used by the deploy/push mechanic.)
-URL="https://github.com/${ORG}/${REPO}/releases/download/v${VERSION}/NOOP-v${VERSION}-ios.ipa"
+URL="https://github.com/${ORG}/${REPO}/releases/download/v${VERSION}/Kineva-v${VERSION}-ios.ipa"
 
 echo "→ $VERSION (build $BUILD), ${SIZE} bytes, $DATE"
 jq --arg v "$VERSION" --arg b "$BUILD" --arg d "$DATE" --arg desc "$DESC" \

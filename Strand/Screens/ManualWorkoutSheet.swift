@@ -110,7 +110,7 @@ struct ManualWorkoutSheet: View {
     //
     // A searchable PICKER over the shared WorkoutCatalog (the same named-sport list the live tracker
     // uses, incl. Padel) with a free-text FALLBACK: the text field IS the value, so an unusual sport
-    // NOOP doesn't enumerate still saves exactly as typed (#519). Typing filters the catalogue
+    // Kineva doesn't enumerate still saves exactly as typed (#519). Typing filters the catalogue
     // beneath the field; tapping a match fills it; the list collapses on a settled / off-catalogue
     // entry so the short form isn't permanently covered. Mirrors Android WorkoutsScreen.SportPickerField.
 
@@ -326,7 +326,7 @@ struct StartWorkoutSheet: View {
                     Text("Start a workout")
                         .font(StrandFont.title2)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    Text("Pick a sport — NOOP records HR, peak, average and effort from the live feed.")
+                    Text("Pick a sport — Kineva records HR, peak, average and effort from the live feed.")
                         .font(StrandFont.subhead)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -1,6 +1,6 @@
-# NOOP — Feature Guide
+# Kineva — Feature Guide
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It pairs
+Kineva is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It pairs
 directly with the strap over Bluetooth Low Energy — **no WHOOP account, no
 cloud** — stores everything on-device in SQLite, imports your WHOOP and Apple Health exports,
 and computes its own daily scores locally — **Charge** (recovery), **Effort** (strain) and **Rest**
@@ -9,18 +9,18 @@ These are honest approximations from published methods, **not WHOOP's scores**. 
 reference implementation (installable via the Homebrew cask); Android (in `android/`) is a full,
 shipped app (sideload the `.apk`); and iOS ships as an **unsigned `.ipa` you sideload** with
 AltStore/SideStore — signed on your own iPhone with your own free Apple ID, so there's no App
-Store or developer account and NOOP stays anonymous (see [docs/IOS.md](IOS.md); you can still
-build it yourself in Xcode). It shares NOOP's analysis code, so its results match
+Store or developer account and Kineva stays anonymous (see [docs/IOS.md](IOS.md); you can still
+build it yourself in Xcode). It shares Kineva's analysis code, so its results match
 macOS; it is newer and less battle-tested, with live BLE on a physical iPhone not yet fully
 validated.
 
-> **Not affiliated with WHOOP.** NOOP is independent interoperability software for *your own*
-> device and *your own* data. "WHOOP" is used only to identify the hardware NOOP talks to.
-> **NOOP is not a medical device** — every metric (HR, HRV, Charge, Effort, Rest, SpO₂,
+> **Not affiliated with WHOOP.** Kineva is independent interoperability software for *your own*
+> device and *your own* data. "WHOOP" is used only to identify the hardware Kineva talks to.
+> **Kineva is not a medical device** — every metric (HR, HRV, Charge, Effort, Rest, SpO₂,
 > respiration, skin temperature) is an approximation, not a clinical reading, and must not be
 > used to diagnose, treat or make health decisions.
 
-NOOP is built on community interoperability and protocol-documentation work, with thanks to:
+Kineva is built on community interoperability and protocol-documentation work, with thanks to:
 
 | Project | Contribution |
 | --- | --- |
@@ -32,7 +32,7 @@ NOOP is built on community interoperability and protocol-documentation work, wit
 
 ## At a glance
 
-NOOP is a `NavigationSplitView`: a left sidebar of screens, a live connection status pill
+Kineva is a `NavigationSplitView`: a left sidebar of screens, a live connection status pill
 pinned to the sidebar's bottom (bonded / connecting / disconnected, with battery %), and a
 detail pane. A menu-bar item gives a glanceable live heart rate from anywhere. The whole UI is
 dark, and a first-run wizard walks you through pairing.
@@ -43,7 +43,7 @@ Screens are grouped below by whether they need a connected strap:
 | --- | --- |
 | Live, Breathe (for haptics), Intervals (for haptics), Health Monitor (live HR), Automations (to act), Notifications (to buzz) | Control Center, Explore, Compare, Insights, Sleep, Trends, Workouts, Stress, Mind, Apple Health, Data Sources |
 
-Most of NOOP works the moment you import an export. The strap adds the *live* layer — real-time
+Most of Kineva works the moment you import an export. The strap adds the *live* layer — real-time
 heart rate, haptic cues, and physical-input automations.
 
 ---
@@ -57,7 +57,7 @@ Throughout the app the strap reports one of three states:
 - **Bonded** — paired and streaming; haptics and live HR are available (positive / green).
 
 > WHOOP straps do **not** appear in *System Settings → Bluetooth*. They advertise on a custom
-> profile that only apps like NOOP can find — so there's nothing to pair in System Settings.
+> profile that only apps like Kineva can find — so there's nothing to pair in System Settings.
 
 Commands that drive the strap motor (any wrist buzz) and the live realtime stream require a
 **bonded** connection. Where a feature needs this, it is noted below and the button is disabled
@@ -72,7 +72,7 @@ The onboarding wizard (`OnboardingWizard.swift`) appears on first launch and run
 "thread" along the bottom and a Back button always available:
 
 1. **Welcome** — "all your data, none of the cloud".
-2. **What NOOP does** — three value slides: the Charge ring, live heart, offline ownership.
+2. **What Kineva does** — three value slides: the Charge ring, live heart, offline ownership.
 3. **Bluetooth priming** — explains *before* the macOS Bluetooth prompt that nothing leaves
    your Mac; the connection is local BLE with no server in the middle.
 4. **Wear & wake** — put the strap on (snug, sensor on skin), charge it, keep it within ~1 m.
@@ -99,11 +99,11 @@ The home dashboard (`TodayView.swift`, titled "Control Center"). A tight, gaples
   [Illness early-warning](#illness-early-warning)).
 - **Today's Synthesis** — the signature **Charge Ring** (HRV and resting HR underneath) beside
   a plain-English read-out ("Charge is strong and sleep was consistent.") and a state
-  word (Depleted / Low / Steady / Primed / Peak). NOOP frames the day as an energy economy: you
+  word (Depleted / Low / Steady / Primed / Peak). Kineva frames the day as an energy economy: you
   **wake with Charge**, **spend it as Effort**, and **rebuild it with Rest**.
 - **Key Metrics** — a uniform tile grid, each with a 14-day sparkline: Charge, Effort
   (of 100), Rest (hours + efficiency), HRV, Resting HR, Blood Oxygen, Respiratory,
-  Steps (on-device only for WHOOP 5/MG; on a 4.0, NOOP shows your imported Apple Health /
+  Steps (on-device only for WHOOP 5/MG; on a 4.0, Kineva shows your imported Apple Health /
   Health Connect steps, because it can't yet read steps off the 4.0 strap over Bluetooth —
   the 4.0 itself does count steps in the official WHOOP app — and approximate),
   Weight, Calories. WHOOP metrics come from the `my-whoop` source; Steps/Weight/Calories/
@@ -121,7 +121,7 @@ The home dashboard (`TodayView.swift`, titled "Control Center"). A tight, gaples
 
 `LiveView.swift` is the real-time heart-rate screen and the pairing/diagnostics surface:
 
-- A large **smoothed heart rate** (BPM) — NOOP shows a spike-filtered median over a ~10 s
+- A large **smoothed heart rate** (BPM) — Kineva shows a spike-filtered median over a ~10 s
   window, not the raw per-beat value, so it's stable. Recent **R-R intervals** (ms) are listed
   beneath.
 - **Status grid** — battery %, last decoded frame type, last decoded event.
@@ -141,8 +141,8 @@ stops the realtime stream (the lightweight standard HR keeps recording).
 
 **Sidebar: Breathe · works visually without a strap; needs a bonded strap for haptic cues.**
 
-`BreathingView.swift` — an **HRV haptic breathing biofeedback** trainer, and NOOP's flagship
-novel feature. Because the strap both *measures* HRV (from R-R intervals) and *buzzes*, NOOP can
+`BreathingView.swift` — an **HRV haptic breathing biofeedback** trainer, and Kineva's flagship
+novel feature. Because the strap both *measures* HRV (from R-R intervals) and *buzzes*, Kineva can
 pace your breath with a felt cue and watch your HRV respond in real time.
 
 - **Pick a pace**: Relax 4-6 (4 s inhale / 6 s exhale), Coherence 5.5 (equal ~5.5 breaths/min),
@@ -156,7 +156,7 @@ pace your breath with a felt cue and watch your HRV respond in real time.
 - **Coherence estimate** — a normalized bar (RMSSD mapped 0–120 ms) with a band word (Building /
   Settling / Coherent / Deep calm). This is an estimate, not a clinical reading — trends across a
   session matter more than any single number.
-- **Pre/post outcome** — at the end of a session NOOP shows a **before vs after HRV (RMSSD)**
+- **Pre/post outcome** — at the end of a session Kineva shows a **before vs after HRV (RMSSD)**
   read, so you can see how much the breathing actually settled you. An estimate, not a clinical
   reading.
 
@@ -234,7 +234,7 @@ Sparse series auto-widen so they still overlay against dense ones.
    plain-English sentence, the with/without means and group counts, a **SIGNIFICANT / EXPLORATORY**
    pill, and an effect size (**Cohen's d**) with a magnitude word. Tint is sign-aware: a behaviour
    that moves the outcome the "good" way reads positive/green, the "bad" way reads red. Without
-   journal data, NOOP explains how to start logging.
+   journal data, Kineva explains how to start logging.
 2. **Metric Relationships** — a curated set of **Pearson** correlations: Rest ↔
    Charge, HRV ↔ Charge, Resting HR ↔ Charge, and Charge → next-day Charge (1-day lag).
    Each is a one-line insight with r, a significance pill, an r-bar, and a strength/direction reading.
@@ -258,7 +258,7 @@ just the most recent (step through earlier nights to compare):
   at your personal mean, so highs and lows pop.
 - **Asleep duration** — a trailing-30-night hours trend with avg / min / max.
 
-If no sleep sessions are imported, NOOP points you to Data Sources.
+If no sleep sessions are imported, Kineva points you to Data Sources.
 
 ---
 
@@ -301,13 +301,13 @@ Windows are taken relative to your latest recorded day and auto-widen on sparse 
 `HealthView.swift` — live vitals:
 
 - **Live heart rate hero** — a streaming HR sparkline tinted by zone, with a zone pill, "% Max",
-  your Max HR (from Settings) and a streaming/idle state. When the strap reports HR as 0, NOOP
+  your Max HR (from Settings) and a streaming/idle state. When the strap reports HR as 0, Kineva
   derives it from the latest R-R interval and notes "from R-R".
 - **Vital Signs** — a tile grid from your most recent imported day: Respiratory Rate, Blood O₂,
   Resting HR, HRV and Skin Temp, each colored by whether it sits in a healthy range ("In range" /
   "Out of range").
 
-With no live HR and no imported day, NOOP prompts you to connect or import.
+With no live HR and no imported day, Kineva prompts you to connect or import.
 
 ---
 
@@ -318,7 +318,7 @@ With no live HR and no imported day, NOOP prompts you to connect or import.
 `StressView.swift` — a clear, single-number **Stress Monitor** (0–3) with a LOW / MEDIUM / HIGH
 band and one plain-English line on *why*:
 
-- Today's value is your **recorded daily stress score** if one exists; otherwise NOOP **derives**
+- Today's value is your **recorded daily stress score** if one exists; otherwise Kineva **derives**
   it transparently — comparing today's resting HR and HRV to your own 30-day baseline (higher RHR
   and lower HRV both push stress up), combining two z-scores and squashing onto 0–3 with a logistic
   curve (0 calm · 1.5 baseline · 3 high).
@@ -340,7 +340,7 @@ time:
 
 - **Daily mood check-in** — log how you feel each day in a few taps. Stored on-device alongside
   the rest of your history.
-- **Correlations** — once you've logged enough days, NOOP lines your mood up against your own
+- **Correlations** — once you've logged enough days, Kineva lines your mood up against your own
   **Charge, Rest, HRV** and other metrics, so you can see what actually moves it (e.g. "lower
   HRV days tend to read lower mood").
 - **Non-clinical by design** — this is a personal self-reflection log, **not** a mental-health
@@ -375,12 +375,12 @@ a single reading is shown as a "Latest reading" value rather than an empty chart
 ### WHOOP Export (CSV)
 Import your full WHOOP history — recovery, strain, sleep, workouts — from a WHOOP data export
 (`.zip` or unzipped folder). Works for WHOOP 4.0, 5.0 and MG. Get one from
-*app.whoop.com → Data Management*. NOOP reports the records imported and the date span, and shows
+*app.whoop.com → Data Management*. Kineva reports the records imported and the date span, and shows
 how many days and sleeps are stored.
 
 ### Apple Health
 Import an Apple Health export (`export.zip`) from *Health app → profile → Export All Health Data*.
-NOOP **streams and aggregates** it locally — years of HR, HRV, sleep, SpO₂, steps, body
+Kineva **streams and aggregates** it locally — years of HR, HRV, sleep, SpO₂, steps, body
 composition and more. Large exports take a minute or two.
 
 ### Nutrition (CSV)
@@ -406,7 +406,7 @@ on this Mac.
 
 - **Wrist alerts** master switch (opt-in, **off** by default). A test buzz fires immediately
   (bonded only). Strap status mirrors the connection state.
-- **Per-app control** — NOOP discovers installed, notification-capable apps via macOS
+- **Per-app control** — Kineva discovers installed, notification-capable apps via macOS
   (LaunchServices) and groups them: **Email** (Outlook, Mail), **Messaging** (WhatsApp, Messenger,
   Messages, Discord, Slack, Telegram, Signal), **Meetings & Calls** (Teams, Zoom, FaceTime), and
   **Calendar & Reminders**. Each app shows its real icon, an on/off switch, and a **buzz pattern**
@@ -458,8 +458,8 @@ React when the strap comes off or goes on:
 
 ### Smart alarm
 Wake to a wrist buzz. This arms the strap's **own firmware alarm**, so it still fires even if the
-Mac is asleep or NOOP is closed. Set your wake time — the strap buzzes at exactly that time.
-NOOP does not currently do light-sleep early wake.
+Mac is asleep or Kineva is closed. Set your wake time — the strap buzzes at exactly that time.
+Kineva does not currently do light-sleep early wake.
 
 Mac side-effects are sandbox-friendly: screen lock uses macOS's own lock entry point, and
 Shortcuts run via the `shortcuts://` URL scheme — anything you can build in Shortcuts is reachable.
@@ -468,13 +468,13 @@ Shortcuts run via the `shortcuts://` URL scheme — anything you can build in Sh
 
 ## Illness early-warning
 
-NOOP watches for the classic early-illness/strain signature on-device. It compares your last ~2
+Kineva watches for the classic early-illness/strain signature on-device. It compares your last ~2
 days against a ~28-day baseline (ending 3 days ago) for resting HR, HRV, skin-temperature
 deviation and respiration. When **two or more** anomalies appear — e.g. resting HR up ≥5 bpm,
 HRV down ≥20%, skin temp up ≥0.6 °C, respiration up — a banner appears on **Control Center**:
 *"Your body looks strained — … Consider taking it easy."*
 
-On a banner transition from clear to raised, NOOP also posts a **system notification** (at most
+On a banner transition from clear to raised, Kineva also posts a **system notification** (at most
 once per local day) so the warning reaches you when the window is closed. The toggle lives in
 **Automations → Illness early-warning**. The defaults differ by platform on purpose: macOS is
 **opt-in** (off by default — enabling it triggers the notification-permission prompt), while
@@ -495,17 +495,17 @@ of history. On-device and approximate — informational only, **not** a diagnosi
   figures read closer to reality.
 - **Units** — choose your preferred measurement units (metric / imperial) across the app.
 - **Strap** — connection status, battery, and Re-scan / Disconnect controls.
-- **Export for Shortcuts (iOS)** — a **HealthKit-free** path that hands your NOOP metrics to Apple
+- **Export for Shortcuts (iOS)** — a **HealthKit-free** path that hands your Kineva metrics to Apple
   Health via the Shortcuts app, so an anonymous build (with no HealthKit entitlement) can still get
   data into Health on your terms.
 - **About** — version, the "all your data, none of the cloud" note, a **medical disclaimer**, and
-  attribution to the community protocols NOOP is built on.
+  attribution to the community protocols Kineva is built on.
 
 ---
 
 ## Menu-bar item
 
-NOOP lives in the macOS menu bar (`MenuBarContent.swift`). The label is a zone-tinted heart dot
+Kineva lives in the macOS menu bar (`MenuBarContent.swift`). The label is a zone-tinted heart dot
 plus the live HR (or "—" when not streaming). Clicking it opens a compact popover: a Charge
 ring, the live heart rate, battery / resting HR / HRV, and quick actions to start/stop the live
 feed, refresh battery, scan/reconnect, or disconnect.
@@ -514,11 +514,11 @@ feed, refresh battery, scan/reconnect, or disconnect.
 
 ## Support
 
-**Sidebar: Support · always available. NOOP is free and always will be.**
+**Sidebar: Support · always available. Kineva is free and always will be.**
 
 `SupportView.swift`:
 
-- **Built on** — credit to the community interoperability projects NOOP stands on.
+- **Built on** — credit to the community interoperability projects Kineva stands on.
 - **Donate (optional)** — never a paywall; the whole app works without it. Copy-to-clipboard
   crypto addresses (Bitcoin, Cardano, Ethereum, XRP) for anyone who wants to chip in toward
   future work (Windows, deeper iOS hardware validation, new features). The app never asks again.
@@ -529,7 +529,7 @@ feed, refresh battery, scan/reconnect, or disconnect.
 
 ## Privacy & data ownership
 
-- **Offline by design.** NOOP talks to your strap directly over Bluetooth Low Energy — there is
+- **Offline by design.** Kineva talks to your strap directly over Bluetooth Low Energy — there is
   no server in the middle. No account, no sync, no cloud.
 - **On-device storage.** All history (imported and live-captured) is stored locally in SQLite
   via GRDB.

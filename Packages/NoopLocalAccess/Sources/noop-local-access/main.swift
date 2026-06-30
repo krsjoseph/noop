@@ -63,7 +63,7 @@ enum NoopLocalAccessMain {
         if let dbPath, !dbPath.isEmpty {
             lines.append("")
             lines.append("[mcp_servers.noop.env]")
-            lines.append("NOOP_DB_PATH = \"\(toml(dbPath))\"")
+            lines.append("KINEVA_DB_PATH = \"\(toml(dbPath))\"")
         }
         return lines.joined(separator: "\n")
     }
@@ -80,10 +80,11 @@ enum NoopLocalAccessMain {
       noop-local-access codex-config [--db-path /absolute/path/to/whoop.sqlite]
 
     Environment:
-      NOOP_DB_PATH    Explicit NOOP SQLite path. Optional; otherwise the official macOS app container is used.
-      NOOP_BUNDLE_ID  Optional non-default bundle id. Not needed for the official app.
-      NOOP_DEVICE_ID  Optional source id. Defaults to my-whoop.
+      KINEVA_DB_PATH    Explicit Kineva SQLite path. Optional; otherwise the official macOS app container is used.
+      KINEVA_BUNDLE_ID  Optional non-default bundle id. Not needed for the official app.
+      KINEVA_DEVICE_ID  Optional source id. Defaults to my-whoop.
+      Legacy NOOP_* environment variables are still accepted as fallbacks.
 
-    The MCP server is read-only, stdio-based, and exposes bounded local NOOP data tools.
+    The MCP server is read-only, stdio-based, and exposes bounded local Kineva data tools.
     """
 }

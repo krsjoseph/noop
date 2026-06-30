@@ -925,30 +925,30 @@
         }
       }
     },
-    "A standalone companion for your WHOOP. Everything stays on this device , your history, your live stream, your numbers. Nothing is uploaded. NOOP is an independent, experimental project, not the WHOOP app.": {
+    "A standalone companion for your WHOOP. Everything stays on this device , your history, your live stream, your numbers. Nothing is uploaded. Kineva is an independent, experimental project, not the WHOOP app.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A standalone companion for your WHOOP. Everything stays on this device , your history, your live stream, your numbers. Nothing is uploaded. NOOP is an independent, experimental project, not the WHOOP app."
+            "value": "A standalone companion for your WHOOP. Everything stays on this device , your history, your live stream, your numbers. Nothing is uploaded. Kineva is an independent, experimental project, not the WHOOP app."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein eigenständiger Begleiter für dein WHOOP. Alles bleibt auf diesem Gerät , deine Historie, dein Live-Stream, deine Werte. Nichts wird hochgeladen. NOOP ist ein unabhängiges, experimentelles Projekt, nicht die WHOOP-App."
+            "value": "Ein eigenständiger Begleiter für dein WHOOP. Alles bleibt auf diesem Gerät , deine Historie, dein Live-Stream, deine Werte. Nichts wird hochgeladen. Kineva ist ein unabhängiges, experimentelles Projekt, nicht die WHOOP-App."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это отдельное приложение-компаньон для вашего браслета Whoop. Все данные , история, поток измерений в реальном времени, показатели , хранятся только на этом устройстве, ничего не отправляется в облако. NOOP , независимый экспериментальный проект, и это не официальное приложение Whoop."
+            "value": "Это отдельное приложение-компаньон для вашего браслета Whoop. Все данные , история, поток измерений в реальном времени, показатели , хранятся только на этом устройстве, ничего не отправляется в облако. Kineva , независимый экспериментальный проект, и это не официальное приложение Whoop."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un compagnon autonome pour votre WHOOP. Tout reste sur cet appareil , votre historique, votre flux en direct, vos chiffres. Rien n'est téléchargé. NOOP est un projet indépendant et expérimental, pas l'application WHOOP."
+            "value": "Un compagnon autonome pour votre WHOOP. Tout reste sur cet appareil , votre historique, votre flux en direct, vos chiffres. Rien n'est téléchargé. Kineva est un projet indépendant et expérimental, pas l'application WHOOP."
           }
         }
       }
@@ -4177,30 +4177,30 @@
         }
       }
     },
-    "Every beat, every night, every day , woven into one quiet picture of you. Welcome to NOOP.": {
+    "Every beat, every night, every day , woven into one quiet picture of you. Welcome to Kineva.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every beat, every night, every day , woven into one quiet picture of you. Welcome to NOOP."
+            "value": "Every beat, every night, every day , woven into one quiet picture of you. Welcome to Kineva."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder Schlag, jede Nacht, jeder Tag , verwoben zu einem ruhigen Bild von dir. Willkommen bei NOOP."
+            "value": "Jeder Schlag, jede Nacht, jeder Tag , verwoben zu einem ruhigen Bild von dir. Willkommen bei Kineva."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Каждый удар сердца, каждая ночь, каждый день , всё складывается в цельную картину вашего состояния. Добро пожаловать в NOOP!"
+            "value": "Каждый удар сердца, каждая ночь, каждый день , всё складывается в цельную картину вашего состояния. Добро пожаловать в Kineva!"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque battement, chaque nuit, chaque jour , tissé en un portrait silencieux de vous. Bienvenue dans NOOP."
+            "value": "Chaque battement, chaque nuit, chaque jour , tissé en un portrait silencieux de vous. Bienvenue dans Kineva."
           }
         }
       }
@@ -5433,30 +5433,30 @@
         }
       }
     },
-    "Importing overwrites everything currently on this Mac. Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect.": {
+    "Importing overwrites everything currently on this Mac. Your old data is kept in a side file just in case. Kineva needs a relaunch for an import to take effect.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Importing overwrites everything currently on this Mac. Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect."
+            "value": "Importing overwrites everything currently on this Mac. Your old data is kept in a side file just in case. Kineva needs a relaunch for an import to take effect."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Import überschreibt alles, was sich derzeit auf diesem Mac befindet. Deine alten Daten werden sicherheitshalber in einer separaten Datei aufbewahrt. NOOP muss neu gestartet werden, damit ein Import wirksam wird."
+            "value": "Der Import überschreibt alles, was sich derzeit auf diesem Mac befindet. Deine alten Daten werden sicherheitshalber in einer separaten Datei aufbewahrt. Kineva muss neu gestartet werden, damit ein Import wirksam wird."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "При импорте все текущие данные на этом Mac будут перезаписаны. Старые данные на всякий случай сохранятся в отдельном файле. Чтобы импорт вступил в силу, перезапустите NOOP."
+            "value": "При импорте все текущие данные на этом Mac будут перезаписаны. Старые данные на всякий случай сохранятся в отдельном файле. Чтобы импорт вступил в силу, перезапустите Kineva."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L'importation écrase tout ce qui se trouve actuellement sur ce Mac. Vos anciennes données sont conservées dans un fichier annexe au cas où. NOOP doit être relancé pour qu'une importation prenne effet."
+            "value": "L'importation écrase tout ce qui se trouve actuellement sur ce Mac. Vos anciennes données sont conservées dans un fichier annexe au cas où. Kineva doit être relancé pour qu'une importation prenne effet."
           }
         }
       }
@@ -6801,30 +6801,30 @@
         }
       }
     },
-    "Move all your NOOP data to another machine. Export saves everything , history, sleeps, workouts, settings , to a single file you can copy across; import replaces this Mac's data with a backup.": {
+    "Move all your Kineva data to another machine. Export saves everything , history, sleeps, workouts, settings , to a single file you can copy across; import replaces this Mac's data with a backup.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Move all your NOOP data to another machine. Export saves everything , history, sleeps, workouts, settings , to a single file you can copy across; import replaces this Mac's data with a backup."
+            "value": "Move all your Kineva data to another machine. Export saves everything , history, sleeps, workouts, settings , to a single file you can copy across; import replaces this Mac's data with a backup."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Übertrage alle deine NOOP-Daten auf einen anderen Rechner. Der Export speichert alles , Historie, Schlafphasen, Workouts, Einstellungen , in einer einzelnen Datei, die du kopieren kannst; der Import ersetzt die Daten dieses Macs durch eine Sicherung."
+            "value": "Übertrage alle deine Kineva-Daten auf einen anderen Rechner. Der Export speichert alles , Historie, Schlafphasen, Workouts, Einstellungen , in einer einzelnen Datei, die du kopieren kannst; der Import ersetzt die Daten dieses Macs durch eine Sicherung."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Перенесите все данные NOOP на другой компьютер. Экспорт сохраняет всё , историю, данные о сне, тренировки и настройки , в один файл, который можно скопировать на другое устройство. При импорте данные на этом Mac заменяются данными из резервной копии."
+            "value": "Перенесите все данные Kineva на другой компьютер. Экспорт сохраняет всё , историю, данные о сне, тренировки и настройки , в один файл, который можно скопировать на другое устройство. При импорте данные на этом Mac заменяются данными из резервной копии."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transférez toutes vos données NOOP vers une autre machine. L'export sauvegarde tout , historique, nuits, entraînements, paramètres , dans un seul fichier à copier ; l'import remplace les données de ce Mac par une sauvegarde."
+            "value": "Transférez toutes vos données Kineva vers une autre machine. L'export sauvegarde tout , historique, nuits, entraînements, paramètres , dans un seul fichier à copier ; l'import remplace les données de ce Mac par une sauvegarde."
           }
         }
       }
@@ -7193,226 +7193,226 @@
         }
       }
     },
-    "NOOP": {
+    "Kineva": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP"
+            "value": "Kineva"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP"
+            "value": "Kineva"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP"
+            "value": "Kineva"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP"
+            "value": "Kineva"
           }
         }
       }
     },
-    "NOOP , all your data, none of the cloud.": {
+    "Kineva , all your data, none of the cloud.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP , all your data, none of the cloud."
+            "value": "Kineva , all your data, none of the cloud."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP , all deine Daten, nichts in der Cloud."
+            "value": "Kineva , all deine Daten, nichts in der Cloud."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP , все ваши данные, без облачных сервисов."
+            "value": "Kineva , все ваши данные, без облачных сервисов."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP , toutes vos données, sans le cloud."
+            "value": "Kineva , toutes vos données, sans le cloud."
           }
         }
       }
     },
-    "NOOP %@": {
+    "Kineva %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP %@"
+            "value": "Kineva %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP %@"
+            "value": "Kineva %@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP %@"
+            "value": "Kineva %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP %@"
+            "value": "Kineva %@"
           }
         }
       }
     },
-    "NOOP is free and always will be, nothing is locked. It cost real money and a lot of unpaid hours to build, and there's a Windows app, an Android app and an iOS app I want to ship next. If it's useful to you and you want to help with the development and testing costs, even a few quid in crypto genuinely keeps it moving, and honestly it keeps me motivated to keep building.": {
+    "Kineva is free and always will be, nothing is locked. It cost real money and a lot of unpaid hours to build, and there's a Windows app, an Android app and an iOS app I want to ship next. If it's useful to you and you want to help with the development and testing costs, even a few quid in crypto genuinely keeps it moving, and honestly it keeps me motivated to keep building.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP is free and always will be, nothing is locked. It cost real money and a lot of unpaid hours to build, and there's a Windows app, an Android app and an iOS app I want to ship next. If it's useful to you and you want to help with the development and testing costs, even a few quid in crypto genuinely keeps it moving, and honestly it keeps me motivated to keep building."
+            "value": "Kineva is free and always will be, nothing is locked. It cost real money and a lot of unpaid hours to build, and there's a Windows app, an Android app and an iOS app I want to ship next. If it's useful to you and you want to help with the development and testing costs, even a few quid in crypto genuinely keeps it moving, and honestly it keeps me motivated to keep building."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP ist kostenlos und bleibt es, nichts ist gesperrt. Es hat echtes Geld und viele unbezahlte Stunden gekostet, und es gibt eine Windows-App, eine Android-App und eine iOS-App, die ich als Nächstes veröffentlichen möchte. Wenn es dir nützt und du bei den Entwicklungs- und Testkosten helfen möchtest, hält es schon mit ein paar Euro in Krypto wirklich am Laufen , und ehrlich gesagt motiviert es mich, weiterzubauen."
+            "value": "Kineva ist kostenlos und bleibt es, nichts ist gesperrt. Es hat echtes Geld und viele unbezahlte Stunden gekostet, und es gibt eine Windows-App, eine Android-App und eine iOS-App, die ich als Nächstes veröffentlichen möchte. Wenn es dir nützt und du bei den Entwicklungs- und Testkosten helfen möchtest, hält es schon mit ein paar Euro in Krypto wirklich am Laufen , und ehrlich gesagt motiviert es mich, weiterzubauen."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP бесплатен и всегда таким останется, все функции открыты. На его создание ушли реальные деньги и много неоплаченных часов, а впереди , приложения для Windows, Android и iOS, которые я хочу выпустить. Если NOOP вам полезен и вы хотите помочь с расходами на разработку и тестирование, даже небольшая сумма в криптовалюте действительно помогает проекту двигаться дальше и мотивирует меня продолжать."
+            "value": "Kineva бесплатен и всегда таким останется, все функции открыты. На его создание ушли реальные деньги и много неоплаченных часов, а впереди , приложения для Windows, Android и iOS, которые я хочу выпустить. Если Kineva вам полезен и вы хотите помочь с расходами на разработку и тестирование, даже небольшая сумма в криптовалюте действительно помогает проекту двигаться дальше и мотивирует меня продолжать."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP est et sera toujours gratuit, rien n'est verrouillé. Il m'a coûté de l'argent et beaucoup d'heures non rémunérées à construire, et il y a une app Windows, une app Android et une app iOS que je veux livrer ensuite. Si cela vous est utile et que vous voulez aider avec les coûts de développement et de test, même quelques euros en crypto maintient vraiment le projet en vie, et honnêtement ça me motive à continuer."
+            "value": "Kineva est et sera toujours gratuit, rien n'est verrouillé. Il m'a coûté de l'argent et beaucoup d'heures non rémunérées à construire, et il y a une app Windows, une app Android et une app iOS que je veux livrer ensuite. Si cela vous est utile et que vous voulez aider avec les coûts de développement et de test, même quelques euros en crypto maintient vraiment le projet en vie, et honnêtement ça me motive à continuer."
           }
         }
       }
     },
-    "NOOP is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.": {
+    "Kineva is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice."
+            "value": "Kineva is not a medical device. It is for informational and personal-insight purposes only and is not intended to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP ist kein medizinisches Gerät. Es dient nur zu Informations- und persönlichen Erkenntniszwecken und ist nicht dazu bestimmt, Erkrankungen zu diagnostizieren, zu behandeln, zu heilen oder zu verhindern. Wende dich für medizinischen Rat an eine Fachperson."
+            "value": "Kineva ist kein medizinisches Gerät. Es dient nur zu Informations- und persönlichen Erkenntniszwecken und ist nicht dazu bestimmt, Erkrankungen zu diagnostizieren, zu behandeln, zu heilen oder zu verhindern. Wende dich für medizinischen Rat an eine Fachperson."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP не является медицинским устройством. Он предназначен только для информации и личного анализа и не предназначен для диагностики, лечения или профилактики каких-либо состояний. За медицинской консультацией обращайтесь к врачу."
+            "value": "Kineva не является медицинским устройством. Он предназначен только для информации и личного анализа и не предназначен для диагностики, лечения или профилактики каких-либо состояний. За медицинской консультацией обращайтесь к врачу."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP n'est pas un dispositif médical. Il est destiné uniquement à des fins d'information et d'introspection personnelle et n'est pas conçu pour diagnostiquer, traiter, guérir ou prévenir une condition. Consultez un clinicien pour des conseils médicaux."
+            "value": "Kineva n'est pas un dispositif médical. Il est destiné uniquement à des fins d'information et d'introspection personnelle et n'est pas conçu pour diagnostiquer, traiter, guérir ou prévenir une condition. Consultez un clinicien pour des conseils médicaux."
           }
         }
       }
     },
-    "NOOP pairs directly with your WHOOP over Bluetooth , no WHOOP app, no cloud.": {
+    "Kineva pairs directly with your WHOOP over Bluetooth , no WHOOP app, no cloud.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP pairs directly with your WHOOP over Bluetooth , no WHOOP app, no cloud."
+            "value": "Kineva pairs directly with your WHOOP over Bluetooth , no WHOOP app, no cloud."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP koppelt sich direkt über Bluetooth mit deinem WHOOP , keine WHOOP-App, keine Cloud."
+            "value": "Kineva koppelt sich direkt über Bluetooth mit deinem WHOOP , keine WHOOP-App, keine Cloud."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP подключается к вашему WHOOP напрямую по Bluetooth , без приложения WHOOP и без облака."
+            "value": "Kineva подключается к вашему WHOOP напрямую по Bluetooth , без приложения WHOOP и без облака."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP se connecte directement à votre WHOOP via Bluetooth , sans app WHOOP, sans cloud."
+            "value": "Kineva se connecte directement à votre WHOOP via Bluetooth , sans app WHOOP, sans cloud."
           }
         }
       }
     },
-    "NOOP scores your recovery, strain and sleep itself , on-device, no cloud.": {
+    "Kineva scores your recovery, strain and sleep itself , on-device, no cloud.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP scores your recovery, strain and sleep itself , on-device, no cloud."
+            "value": "Kineva scores your recovery, strain and sleep itself , on-device, no cloud."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP berechnet deine Erholung, Belastung und deinen Schlaf selbst , auf dem Gerät, ohne Cloud."
+            "value": "Kineva berechnet deine Erholung, Belastung und deinen Schlaf selbst , auf dem Gerät, ohne Cloud."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP сам рассчитывает восстановление, нагрузку и показатели сна , прямо на устройстве, без облака."
+            "value": "Kineva сам рассчитывает восстановление, нагрузку и показатели сна , прямо на устройстве, без облака."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP calcule lui-même votre récupération, effort et sommeil , sur l'appareil, sans cloud."
+            "value": "Kineva calcule lui-même votre récupération, effort et sommeil , sur l'appareil, sans cloud."
           }
         }
       }
     },
-    "NOOP-computed": {
+    "Kineva-computed": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP-computed"
+            "value": "Kineva-computed"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Von NOOP berechnet"
+            "value": "Von Kineva berechnet"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Рассчитано NOOP"
+            "value": "Рассчитано Kineva"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Calculé par NOOP"
+            "value": "Calculé par Kineva"
           }
         }
       }
@@ -7490,7 +7490,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP не связан с WHOOP, не одобрен WHOOP и не аффилирован с ним. Это ПО для совместимости с вашим устройством и вашими собственными данными. Используйте его только с устройством, которым владеете, и без нарушения применимых к вам соглашений. Не является медицинским устройством."
+            "value": "Kineva не связан с WHOOP, не одобрен WHOOP и не аффилирован с ним. Это ПО для совместимости с вашим устройством и вашими собственными данными. Используйте его только с устройством, которым владеете, и без нарушения применимых к вам соглашений. Не является медицинским устройством."
           }
         },
         "fr": {
@@ -7921,30 +7921,30 @@
         }
       }
     },
-    "On a 5/MG connection NOOP will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0.": {
+    "On a 5/MG connection Kineva will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On a 5/MG connection NOOP will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0."
+            "value": "On a 5/MG connection Kineva will send a puffin realtime-stream request after the handshake, and log what comes back. If you have a 5/MG strap, turning this on and sharing your strap log helps map the protocol. No effect on WHOOP 4.0."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bei einer 5/MG-Verbindung sendet NOOP nach dem Handshake eine Puffin-Echtzeitstream-Anfrage und protokolliert die Antwort. Wenn du einen 5/MG-Strap hast, hilft das Aktivieren und Teilen deines Strap-Protokolls, das Protokoll zu kartieren. Keine Auswirkung auf WHOOP 4.0."
+            "value": "Bei einer 5/MG-Verbindung sendet Kineva nach dem Handshake eine Puffin-Echtzeitstream-Anfrage und protokolliert die Antwort. Wenn du einen 5/MG-Strap hast, hilft das Aktivieren und Teilen deines Strap-Protokolls, das Protokoll zu kartieren. Keine Auswirkung auf WHOOP 4.0."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "При подключении к 5/MG NOOP после установления соединения отправит запрос на поток данных puffin в реальном времени и запишет полученный ответ. Если у вас браслет 5/MG, включение этой функции и отправка журнала браслета помогут разобраться в протоколе. На WHOOP 4.0 это не влияет."
+            "value": "При подключении к 5/MG Kineva после установления соединения отправит запрос на поток данных puffin в реальном времени и запишет полученный ответ. Если у вас браслет 5/MG, включение этой функции и отправка журнала браслета помогут разобраться в протоколе. На WHOOP 4.0 это не влияет."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur une connexion 5/MG, NOOP enverra une requête de flux temps réel puffin après la poignée de main et journalisera ce qui revient. Si vous avez un bracelet 5/MG, activer ceci et partager votre journal de bracelet aide à cartographier le protocole. Aucun effet sur le WHOOP 4.0."
+            "value": "Sur une connexion 5/MG, Kineva enverra une requête de flux temps réel puffin après la poignée de main et journalisera ce qui revient. Si vous avez un bracelet 5/MG, activer ceci et partager votre journal de bracelet aide à cartographier le protocole. Aucun effet sur le WHOOP 4.0."
           }
         }
       }
@@ -7977,30 +7977,30 @@
         }
       }
     },
-    "Opens the GitHub releases page in your browser. NOOP itself makes no network connections , the macOS sandbox has no network entitlement.": {
+    "Opens the GitHub releases page in your browser. Kineva itself makes no network connections , the macOS sandbox has no network entitlement.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens the GitHub releases page in your browser. NOOP itself makes no network connections , the macOS sandbox has no network entitlement."
+            "value": "Opens the GitHub releases page in your browser. Kineva itself makes no network connections , the macOS sandbox has no network entitlement."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffnet die GitHub-Releases-Seite in deinem Browser. NOOP selbst stellt keine Netzwerkverbindungen her , die macOS-Sandbox hat keine Netzwerk-Berechtigung."
+            "value": "Öffnet die GitHub-Releases-Seite in deinem Browser. Kineva selbst stellt keine Netzwerkverbindungen her , die macOS-Sandbox hat keine Netzwerk-Berechtigung."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Откроет страницу релизов GitHub в браузере. Сам NOOP не устанавливает сетевые соединения , у песочницы macOS нет разрешения на доступ к сети."
+            "value": "Откроет страницу релизов GitHub в браузере. Сам Kineva не устанавливает сетевые соединения , у песочницы macOS нет разрешения на доступ к сети."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre la page des versions GitHub dans votre navigateur. NOOP lui-même n'effectue aucune connexion réseau , le bac à sable macOS n'a pas de droit réseau."
+            "value": "Ouvre la page des versions GitHub dans votre navigateur. Kineva lui-même n'effectue aucune connexion réseau , le bac à sable macOS n'a pas de droit réseau."
           }
         }
       }
@@ -8991,30 +8991,30 @@
         }
       }
     },
-    "Recovery weighs your HRV against your personal baseline (~60%), resting heart rate (~20%), sleep performance (~15%) and respiration (~5%). Day strain is a 0–21 cardiovascular load from time in heart-rate zones. Sleep is staged from movement and heart rate. Everything is computed here from the strap's raw data , it works for any day NOOP collected raw streams.": {
+    "Recovery weighs your HRV against your personal baseline (~60%), resting heart rate (~20%), sleep performance (~15%) and respiration (~5%). Day strain is a 0–21 cardiovascular load from time in heart-rate zones. Sleep is staged from movement and heart rate. Everything is computed here from the strap's raw data , it works for any day Kineva collected raw streams.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recovery weighs your HRV against your personal baseline (~60%), resting heart rate (~20%), sleep performance (~15%) and respiration (~5%). Day strain is a 0–21 cardiovascular load from time in heart-rate zones. Sleep is staged from movement and heart rate. Everything is computed here from the strap's raw data , it works for any day NOOP collected raw streams."
+            "value": "Recovery weighs your HRV against your personal baseline (~60%), resting heart rate (~20%), sleep performance (~15%) and respiration (~5%). Day strain is a 0–21 cardiovascular load from time in heart-rate zones. Sleep is staged from movement and heart rate. Everything is computed here from the strap's raw data , it works for any day Kineva collected raw streams."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Erholung gewichtet deine HRV gegenüber deiner persönlichen Basislinie (~60 %), die Ruheherzfrequenz (~20 %), die Schlafleistung (~15 %) und die Atmung (~5 %). Die Tagesbelastung ist eine kardiovaskuläre Last von 0–21 aus der Zeit in Herzfrequenzzonen. Der Schlaf wird aus Bewegung und Herzfrequenz in Phasen eingeteilt. Alles wird hier aus den Rohdaten des Straps berechnet , es funktioniert für jeden Tag, an dem NOOP Rohdaten erfasst hat."
+            "value": "Die Erholung gewichtet deine HRV gegenüber deiner persönlichen Basislinie (~60 %), die Ruheherzfrequenz (~20 %), die Schlafleistung (~15 %) und die Atmung (~5 %). Die Tagesbelastung ist eine kardiovaskuläre Last von 0–21 aus der Zeit in Herzfrequenzzonen. Der Schlaf wird aus Bewegung und Herzfrequenz in Phasen eingeteilt. Alles wird hier aus den Rohdaten des Straps berechnet , es funktioniert für jeden Tag, an dem Kineva Rohdaten erfasst hat."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Восстановление рассчитывается на основе вашей ВСР относительно личной нормы (~60%), пульса в покое (~20%), качества сна (~15%) и частоты дыхания (~5%). Дневная нагрузка , это сердечно-сосудистая нагрузка от 0 до 21, рассчитанная по времени в пульсовых зонах. Стадии сна определяются по движению и пульсу. Всё рассчитывается здесь, на основе исходных данных браслета, и работает для любого дня, когда NOOP собирал исходные потоки данных."
+            "value": "Восстановление рассчитывается на основе вашей ВСР относительно личной нормы (~60%), пульса в покое (~20%), качества сна (~15%) и частоты дыхания (~5%). Дневная нагрузка , это сердечно-сосудистая нагрузка от 0 до 21, рассчитанная по времени в пульсовых зонах. Стадии сна определяются по движению и пульсу. Всё рассчитывается здесь, на основе исходных данных браслета, и работает для любого дня, когда Kineva собирал исходные потоки данных."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La récupération pondère votre VFC par rapport à votre référence personnelle (~60%), fréquence cardiaque au repos (~20%), performance du sommeil (~15%) et respiration (~5%). L'effort du jour est une charge cardiovasculaire de 0 à 21 basée sur le temps dans les zones de fréquence cardiaque. Le sommeil est stagé à partir du mouvement et de la fréquence cardiaque. Tout est calculé ici à partir des données brutes du bracelet , cela fonctionne pour chaque jour où NOOP a collecté des flux bruts."
+            "value": "La récupération pondère votre VFC par rapport à votre référence personnelle (~60%), fréquence cardiaque au repos (~20%), performance du sommeil (~15%) et respiration (~5%). L'effort du jour est une charge cardiovasculaire de 0 à 21 basée sur le temps dans les zones de fréquence cardiaque. Le sommeil est stagé à partir du mouvement et de la fréquence cardiaque. Tout est calculé ici à partir des données brutes du bracelet , cela fonctionne pour chaque jour où Kineva a collecté des flux bruts."
           }
         }
       }
@@ -10922,30 +10922,30 @@
         }
       }
     },
-    "Support NOOP , donate or get in touch": {
+    "Support Kineva , donate or get in touch": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Support NOOP , donate or get in touch"
+            "value": "Support Kineva , donate or get in touch"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP unterstützen , spenden oder Kontakt aufnehmen"
+            "value": "Kineva unterstützen , spenden oder Kontakt aufnehmen"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поддержите NOOP , сделайте пожертвование или свяжитесь с нами"
+            "value": "Поддержите Kineva , сделайте пожертвование или свяжитесь с нами"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soutenir NOOP , faire un don ou nous contacter"
+            "value": "Soutenir Kineva , faire un don ou nous contacter"
           }
         }
       }
@@ -12054,30 +12054,30 @@
         }
       }
     },
-    "When the system prompt appears, choose Allow so NOOP can find your strap.": {
+    "When the system prompt appears, choose Allow so Kineva can find your strap.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When the system prompt appears, choose Allow so NOOP can find your strap."
+            "value": "When the system prompt appears, choose Allow so Kineva can find your strap."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn die Systemabfrage erscheint, wähle „Erlauben“, damit NOOP deinen Strap finden kann."
+            "value": "Wenn die Systemabfrage erscheint, wähle „Erlauben“, damit Kineva deinen Strap finden kann."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Когда появится системный запрос, выберите «Разрешить», чтобы NOOP мог найти ваш браслет."
+            "value": "Когда появится системный запрос, выберите «Разрешить», чтобы Kineva мог найти ваш браслет."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quand la demande système apparaît, choisissez Autoriser pour que NOOP puisse trouver votre bracelet."
+            "value": "Quand la demande système apparaît, choisissez Autoriser pour que Kineva puisse trouver votre bracelet."
           }
         }
       }
@@ -12166,30 +12166,30 @@
         }
       }
     },
-    "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like NOOP can find , so there's nothing to pair there, and you shouldn't try.": {
+    "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like Kineva can find , so there's nothing to pair there, and you shouldn't try.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like NOOP can find , so there's nothing to pair there, and you shouldn't try."
+            "value": "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like Kineva can find , so there's nothing to pair there, and you shouldn't try."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "WHOOP-Straps erscheinen nicht in den macOS-Systemeinstellungen → Bluetooth. Sie senden über ein eigenes Profil, das nur Apps wie NOOP finden können , dort gibt es also nichts zu koppeln, und du solltest es nicht versuchen."
+            "value": "WHOOP-Straps erscheinen nicht in den macOS-Systemeinstellungen → Bluetooth. Sie senden über ein eigenes Profil, das nur Apps wie Kineva finden können , dort gibt es also nichts zu koppeln, und du solltest es nicht versuchen."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Браслеты WHOOP не отображаются в «Системных настройках» macOS → Bluetooth. Они работают через особый профиль, который видят только приложения вроде NOOP, поэтому там нечего подключать , и пытаться не нужно."
+            "value": "Браслеты WHOOP не отображаются в «Системных настройках» macOS → Bluetooth. Они работают через особый профиль, который видят только приложения вроде Kineva, поэтому там нечего подключать , и пытаться не нужно."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like NOOP can find , so there's nothing to pair there, and you shouldn't try."
+            "value": "WHOOP straps don't appear in macOS System Settings → Bluetooth. They advertise on a custom profile that only apps like Kineva can find , so there's nothing to pair there, and you shouldn't try."
           }
         }
       }
@@ -12446,30 +12446,30 @@
         }
       }
     },
-    "Your numbers, your strap, and how NOOP works. All on this Mac.": {
+    "Your numbers, your strap, and how Kineva works. All on this Mac.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your numbers, your strap, and how NOOP works. All on this Mac."
+            "value": "Your numbers, your strap, and how Kineva works. All on this Mac."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Werte, dein Strap und wie NOOP funktioniert. Alles auf diesem Mac."
+            "value": "Deine Werte, dein Strap und wie Kineva funktioniert. Alles auf diesem Mac."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ваши показатели, ваш браслет и принципы работы NOOP. Всё на этом Mac."
+            "value": "Ваши показатели, ваш браслет и принципы работы Kineva. Всё на этом Mac."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos chiffres, votre bracelet et comment NOOP fonctionne. Tout sur ce Mac."
+            "value": "Vos chiffres, votre bracelet et comment Kineva fonctionne. Tout sur ce Mac."
           }
         }
       }

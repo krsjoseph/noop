@@ -1,4 +1,4 @@
-# NOOP — R8 / ProGuard rules.
+# Kineva — R8 / ProGuard rules.
 #
 # The app is offline and reflection-light. Room generates its own keep rules, and
 # Compose ships consumer rules, so this file is mostly empty by design. Add keeps

@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the offline file-import of a user's OWN Oura / Fitbit / Garmin data export onto NOOP's daily
+ * Pins the offline file-import of a user's OWN Oura / Fitbit / Garmin data export onto Kineva's daily
  * metrics + sleep sessions. Kotlin twin of the macOS WearableExportImporterTests — same arithmetic,
  * same brand detection, same honesty rules (a brand's own score is reference-only, never Charge).
  *
@@ -55,7 +55,7 @@ class WearableExportImporterTest {
         assertEquals(8421, d.steps)
         assertEquals(520.0, d.activeKcal!!, 1e-6)
         assertEquals(420.0, d.totalSleepMin!!, 1e-6)
-        // Oura's OWN readiness score is kept as REFERENCE only — never a NOOP score.
+        // Oura's OWN readiness score is kept as REFERENCE only — never a Kineva score.
         assertEquals(81, d.readinessScore)
     }
 

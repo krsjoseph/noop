@@ -34,7 +34,7 @@ struct NotificationSettingsView: View {
 
     private var masterCard: some View {
         AlertSection(icon: "bell.badge.fill", title: "Wrist alerts",
-                     blurb: "When on, NOOP taps your wrist for the apps you pick below — so you can leave the \(Platform.deviceNoun) and still feel what matters.") {
+                     blurb: "When on, Kineva taps your wrist for the apps you pick below — so you can leave the \(Platform.deviceNoun) and still feel what matters.") {
             VStack(alignment: .leading, spacing: NoopMetrics.space4) {
                 Toggle(isOn: $store.masterEnabled) {
                     Text("Enable wrist alerts")
@@ -116,7 +116,7 @@ struct NotificationSettingsView: View {
     private var emptyAppsCard: some View {
         AlertSection(icon: "bell.slash",
                      title: "No supported apps found",
-                     blurb: "NOOP looks for known notification apps on \(Platform.deviceNounPhrase) — Mail, Outlook, WhatsApp, Teams, Messages, Slack and similar. Install one and it'll appear here automatically.") {
+                     blurb: "Kineva looks for known notification apps on \(Platform.deviceNounPhrase) — Mail, Outlook, WhatsApp, Teams, Messages, Slack and similar. Install one and it'll appear here automatically.") {
             EmptyView()
         }
     }

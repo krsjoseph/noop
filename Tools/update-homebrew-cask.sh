@@ -15,11 +15,11 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$HERE/../deploy.env" ] && source "$HERE/../deploy.env"
-DOMAIN="${FORGE_DOMAIN:-${NOOP_DOMAIN:-noop.fans}}"
+DOMAIN="${FORGE_DOMAIN:-${KINEVA_DOMAIN:-noop.fans}}"
 ORG="${FORGE_ORG:-NoopApp}"; REPO="${FORGE_REPO:-noop}"
 
 VER="${1:?usage: $0 <version e.g. 4.7.0> [zip path]}"
-ZIP="${2:-$HOME/Downloads/NOOP-v${VER}-macos.zip}"
+ZIP="${2:-$HOME/Downloads/Kineva-v${VER}-macos.zip}"
 GH_TOKEN_FILE="$HOME/.config/noop/gh_token"        # canonical tap host (github.com)
 FORGE_TOKEN_FILE="$HOME/.config/noop/forge_token"  # mirror tap host (forge)
 [ -f "$ZIP" ]             || { echo "missing release zip: $ZIP" >&2; exit 1; }
@@ -44,14 +44,14 @@ cask "noop" do
   version "${VER}"
   sha256 "${SHA}"
 
-  url "https://github.com/${ORG}/${REPO}/releases/download/v#{version}/NOOP-v#{version}-macos.zip"
-  name "NOOP"
+  url "https://github.com/${ORG}/${REPO}/releases/download/v#{version}/Kineva-v#{version}-macos.zip"
+  name "Kineva"
   desc "Standalone, fully offline companion app for WHOOP straps"
   homepage "https://github.com/${ORG}/${REPO}"
 
-  app "NOOP.app"
+  app "Kineva.app"
 
-  caveats "NOOP ships anonymously and is unsigned (no Apple Developer ID), so on first launch macOS Gatekeeper will block it. On macOS 15 Sequoia and later: try to open NOOP once, then go to System Settings > Privacy & Security, scroll down, and click 'Open Anyway' next to NOOP. (On macOS 14 and earlier you can right-click NOOP in /Applications and choose Open.) Update later with: brew upgrade --cask noop."
+  caveats "Kineva ships anonymously and is unsigned (no Apple Developer ID), so on first launch macOS Gatekeeper will block it. On macOS 15 Sequoia and later: try to open Kineva once, then go to System Settings > Privacy & Security, scroll down, and click 'Open Anyway' next to Kineva. (On macOS 14 and earlier you can right-click Kineva in /Applications and choose Open.) Update later with: brew upgrade --cask noop."
 end
 EOF
 

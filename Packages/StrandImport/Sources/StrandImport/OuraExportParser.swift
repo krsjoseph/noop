@@ -3,14 +3,14 @@ import Foundation
 // MARK: - Oura account-export JSON parser
 //
 // Oura's Account → Export Data download is a single JSON document keyed by category. The categories
-// this lane reads (documented Oura account-export / API-V2 shapes; NOOP's own clean parser):
+// this lane reads (documented Oura account-export / API-V2 shapes; Kineva's own clean parser):
 //
 //   "sleep"            — sleep PERIODS (one per nap/main sleep): bedtime_start / bedtime_end (ISO8601),
 //                        day, total_sleep_duration / deep/light/rem_sleep_duration / awake_time (SECONDS),
 //                        efficiency (%), average_heart_rate, lowest_heart_rate, average_hrv (rMSSD ms),
 //                        average_breath. Oura gives stage DURATIONS, not a per-segment hypnogram, so the
 //                        session carries the breakdown without a stage timeline (we never fake one).
-//   "daily_readiness"  — day, score (Oura's OWN readiness — REFERENCE only, never NOOP Charge),
+//   "daily_readiness"  — day, score (Oura's OWN readiness — REFERENCE only, never Kineva Charge),
 //                        temperature_deviation (°C), contributors.resting_heart_rate.
 //   "daily_activity"   — day, steps, active_calories, total_calories.
 //   "daily_sleep"      — day, score (sleep score — reference only).

@@ -93,7 +93,7 @@ struct InsightsHubView: View {
                 NoopCard {
                     Text("Not enough overlap between your journal answers and "
                         + "\(outcome.outcomeName.lowercased()) yet. Keep logging — each behaviour "
-                        + "needs days both with and without it before NOOP can read its effect.")
+                        + "needs days both with and without it before Kineva can read its effect.")
                         .font(StrandFont.subhead)
                         .foregroundStyle(StrandPalette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -194,7 +194,7 @@ struct InsightsHubView: View {
             SectionHeader("Dose-response", overline: "Personal curve · prior-shrunk")
             if model.doseCards.isEmpty {
                 NoopCard {
-                    Text("Log alcohol or late caffeine with an amount and NOOP fits a personal "
+                    Text("Log alcohol or late caffeine with an amount and Kineva fits a personal "
                         + "dose curve — how much each extra unit tends to move your numbers. "
                         + "Until then it shows typical patterns, clearly labelled as not yet yours.")
                         .font(StrandFont.subhead)

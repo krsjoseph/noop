@@ -6,7 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
- * Pins the pure 0x2A37 Heart Rate Measurement *encoder* used by [HrBroadcaster] when NOOP re-broadcasts
+ * Pins the pure 0x2A37 Heart Rate Measurement *encoder* used by [HrBroadcaster] when Kineva re-broadcasts
  * its live strap HR back out as a standard Bluetooth HR peripheral (so a treadmill / Zwift / Peloton can
  * read it). The encoder is the inverse of [StandardHeartRate.parse], so each case is round-tripped back
  * through the parser to prove the two agree byte-for-byte. No android.bluetooth is touched — [measurement]
@@ -75,7 +75,7 @@ class HrBroadcasterEncodeTest {
             val parsed = StandardHeartRate.parse(encoded)
             assertNotNull("encoded $bpm must re-parse", parsed)
             assertEquals("encode→parse round trip must preserve $bpm", bpm, parsed!!.hr)
-            assertEquals("NOOP broadcasts a plain HR with no R-R", 0, parsed.rr.size)
+            assertEquals("Kineva broadcasts a plain HR with no R-R", 0, parsed.rr.size)
         }
     }
 }

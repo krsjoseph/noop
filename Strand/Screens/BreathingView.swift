@@ -573,7 +573,7 @@ private struct BreathingContent: View {
                     StatePill("\(coherenceLabel)", tone: coherenceTone, showsDot: true)
                 }
 
-                // Coherence as the NOOP signature segmented bar — matches the Resonance sweep card so the
+                // Coherence as the Kineva signature segmented bar — matches the Resonance sweep card so the
                 // whole Rest world reads in one pip language.
                 PipBar(value: Double(coherenceFraction), range: 0...1, segments: 28,
                        tint: StrandPalette.restColor, height: 10)
@@ -965,7 +965,7 @@ private struct ResonanceModeView: View {
                     StatePill("Live", tone: .accent, showsDot: true, pulsing: true)
                 }
 
-                // Sweep progress as the NOOP signature segmented bar — cascades up in the Rest world.
+                // Sweep progress as the Kineva signature segmented bar — cascades up in the Rest world.
                 PipBar(value: controller.sweepProgress, range: 0...1, segments: 28,
                        tint: StrandPalette.restColor, height: 10)
                     .accessibilityLabel("Sweep progress")

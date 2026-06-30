@@ -354,7 +354,7 @@ struct WorkoutDetailView: View {
             NoopCard(tint: StrandPalette.effortColor) {
                 HStack(alignment: .center, spacing: 18) {
                     VStack(alignment: .leading, spacing: 2) {
-                        // The session's Effort contribution ticks up to its value — the NOOP signature.
+                        // The session's Effort contribution ticks up to its value — the Kineva signature.
                         CountUpText(value: UnitFormatter.effortValue(strain, scale: effortScale),
                                     format: { String(format: "%.1f", $0) },
                                     font: StrandFont.number(34),
@@ -452,7 +452,7 @@ struct WorkoutDetailView: View {
 // analogue of Android's `RouteCanvas`, but on real map tiles. Built as a platform-bridged representable
 // around `MKMapView` so it runs on BOTH iOS 17 and macOS 13 (SwiftUI's newer `Map { MapPolyline }` needs
 // iOS 17 / macOS 14, and the macOS deployment target is 13). The map is offline-capable: MapKit caches
-// tiles locally and the route itself is on-device — NOOP never sends the route anywhere.
+// tiles locally and the route itself is on-device — Kineva never sends the route anywhere.
 
 #if canImport(MapKit) && canImport(UIKit)
 import UIKit

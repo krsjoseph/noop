@@ -282,7 +282,7 @@ struct TestCentreView: View {
             await model.repo.refresh()
         }
         infoTitle = "Charge baseline recalibrating"
-        infoMessage = "NOOP will re-learn your baseline from tonight's data onward. Your history is kept, and it takes a few nights to settle."
+        infoMessage = "Kineva will re-learn your baseline from tonight's data onward. Your history is kept, and it takes a few nights to settle."
         showInfo = true
     }
 
@@ -309,7 +309,7 @@ struct TestCentreView: View {
         if let url {
             infoTitle = "Strap log exported"
             #if os(iOS)
-            infoMessage = "Saved \(url.lastPathComponent) to NOOP's folder in the Files app."
+            infoMessage = "Saved \(url.lastPathComponent) to Kineva's folder in the Files app."
             #else
             infoMessage = "Saved \(url.lastPathComponent) to your Documents folder."
             #endif

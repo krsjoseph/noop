@@ -214,7 +214,7 @@ struct SleepView: View {
             .sheet(item: $addNap) { seed in
                 SleepTimeEditor(bedTs: seed.bedTs, wakeTs: seed.wakeTs,
                                 title: "Add a nap",
-                                blurb: "Pick when the nap started and ended. NOOP stages it from your data as its own session, separate from the night's sleep.",
+                                blurb: "Pick when the nap started and ended. Kineva stages it from your data as its own session, separate from the night's sleep.",
                                 bedLabel: "Nap started", wakeLabel: "Nap ended") { startTs, endTs in
                     await repo.addManualNap(startTs: startTs, endTs: endTs)
                     // Re-score so the day's aggregates pick up the new session, exactly like an edit.
@@ -241,7 +241,7 @@ struct SleepView: View {
     /// The Rest world's opening: a scenic indigo backdrop with — when the night carries a 0–100
     /// sleep-performance score — a layered `BevelGauge` in the Rest gradient; otherwise a big
     /// SF-Rounded hours-slept headline over the same backdrop. A `SourceBadge` states whether the
-    /// score is WHOOP's own imported figure or NOOP's on-device estimate. Presentation-only — the
+    /// score is WHOOP's own imported figure or Kineva's on-device estimate. Presentation-only — the
     /// number comes straight from the existing `model.performance.latest` / hours computation. (Bevel)
     @ViewBuilder
     private func restHero(_ model: SleepModel) -> some View {
@@ -304,7 +304,7 @@ struct SleepView: View {
         }
     }
 
-    /// Whether the night's sleep-performance score is WHOOP's own imported figure or NOOP's
+    /// Whether the night's sleep-performance score is WHOOP's own imported figure or Kineva's
     /// on-device approximation — so the hero is honest about provenance, like Today's badges.
     private func sleepScoreSource(_ model: SleepModel) -> LocalizedStringKey {
         if let lastDay = repo.days.last?.day, repo.importedSleep[lastDay]?.performancePct != nil {
@@ -318,7 +318,7 @@ struct SleepView: View {
     /// The REAL per-day merge winner for the DISPLAYED night's sleep numbers, as the same brand wording the
     /// By-Day badge / Today / Intelligence use ("On-device" / "Whoop"). A WHOOP export covering the night's
     /// wake-day wins the dashboard merge (imports win field-by-field, Repository.mergeDaily), so the badge
-    /// says "Whoop"; otherwise the night was scored on-device by NOOP. Keyed by the night's LOCAL wake-day
+    /// says "Whoop"; otherwise the night was scored on-device by Kineva. Keyed by the night's LOCAL wake-day
     /// (the `mergeSleep` / importer convention, sleep is filed under the day you woke), so a navigated past
     /// night reads its OWN provenance, not last night's. Honest: never a blanket "on-device". Apple Health
     /// carries no sleep into `importedSleep`, so the sleep merge winner is only ever Whoop vs on-device. (C4)
@@ -863,7 +863,7 @@ struct SleepView: View {
                 .font(StrandFont.captionNumber)
                 .foregroundStyle(color)
                 .frame(width: 38, alignment: .leading)
-            // The NOOP signature: a segmented PipBar that counts up to the share-of-night fraction,
+            // The Kineva signature: a segmented PipBar that counts up to the share-of-night fraction,
             // tinted in the stage colour over the canonical inset track. Flat, crisp, no glow.
             PipBar(value: fraction * 100, segments: 20, tint: color, height: 8)
             Text(durationText(minutes))

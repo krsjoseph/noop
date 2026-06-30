@@ -57,7 +57,7 @@ struct SettingsView: View {
     @AppStorage(UnitPrefs.systemKey) private var unitSystemRaw = UnitSystem.metric.rawValue
     @AppStorage(UnitPrefs.temperatureKey) private var temperatureRaw = ""
     // Effort display scale (#268). Display-only — Effort stays stored 0–100, this only chooses whether
-    // it's shown on NOOP's 0–100 axis or WHOOP's 0–21 Day Strain axis.
+    // it's shown on Kineva's 0–100 axis or WHOOP's 0–21 Day Strain axis.
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     // Live-HR Live Activity (Lock Screen + Dynamic Island), iOS only (#336). Default on.
     @AppStorage(UnitPrefs.liveActivityKey) private var liveActivityEnabled = true
@@ -139,7 +139,7 @@ struct SettingsView: View {
     /// "How your scores work" explainer sheet, reachable any time from About.
     @State private var showScoringGuide = false
 
-    /// "How NOOP works" primer sheet (the four-section explainability primer), reachable any
+    /// "How Kineva works" primer sheet (the four-section explainability primer), reachable any
     /// time from About — covers how sleep is sorted, how scores + calibration work, what
     /// recording means, and where the provenance badges come from.
     @State private var showHowNoopWorks = false
@@ -164,7 +164,7 @@ struct SettingsView: View {
 
     var body: some View {
         ScreenScaffold(title: "Settings",
-                       subtitle: "Your numbers, your strap, and how NOOP works. All on \(Platform.deviceNounPhrase).",
+                       subtitle: "Your numbers, your strap, and how Kineva works. All on \(Platform.deviceNounPhrase).",
                        // Shared day-cycle scene behind the header (flattened to one GPU layer), as on Today.
                        topBackground: showDayCycleBackground
                            ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
@@ -222,7 +222,7 @@ struct SettingsView: View {
     // MARK: - Profile (photo + the fields that power zones / calories / recovery)
 
     /// One grouped-list section: an optional on-device photo, then the body fields. PhotosUI's
-    /// `PhotosPicker` works on iOS 16+ and macOS 13+ (NOOP's floor), so the same control serves both.
+    /// `PhotosPicker` works on iOS 16+ and macOS 13+ (Kineva's floor), so the same control serves both.
     private var profileGroup: some View {
         SettingsGroup(
             header: "Profile",
@@ -321,7 +321,7 @@ struct SettingsView: View {
                 }
             }
             // Tap-through to the WHOOP 4.0 steps-ESTIMATE calibration (separate from the 5/MG divisor):
-            // a 4.0 sends no step count, so NOOP estimates steps from motion and calibrates to the phone.
+            // a 4.0 sends no step count, so Kineva estimates steps from motion and calibrates to the phone.
             SettingsRow(icon: "shoeprints.fill", title: "Steps estimate",
                         subtitle: "WHOOP 4.0 — calibrate the motion-based step estimate to your phone.",
                         value: stepsCalibrationSummary,
@@ -492,7 +492,7 @@ struct SettingsView: View {
     // MARK: - Units
 
     /// Imperial/Metric display toggle + a separate temperature override. Display-only — nothing stored
-    /// changes, NOOP keeps everything in SI and converts at the point of display.
+    /// changes, Kineva keeps everything in SI and converts at the point of display.
     private var unitsGroup: some View {
         SettingsGroup(
             header: "Units",
@@ -516,7 +516,7 @@ struct SettingsView: View {
                 .labelsHidden().pickerStyle(.segmented).fixedSize()
                 .accessibilityLabel("Temperature unit")
             }
-            // Effort scale (#268) — NOOP's native 0–100 or WHOOP's 0–21 Day Strain axis. Display-only.
+            // Effort scale (#268) — Kineva's native 0–100 or WHOOP's 0–21 Day Strain axis. Display-only.
             SettingsRow(icon: "bolt.fill", title: "Effort scale") {
                 Picker("Effort scale", selection: $effortScaleRaw) {
                     Text("0–100").tag(EffortScale.hundred.rawValue)
@@ -547,7 +547,7 @@ struct SettingsView: View {
                 .labelsHidden().pickerStyle(.segmented).fixedSize()
                 .accessibilityLabel("Theme")
             }
-            // Default = NOOP's clean metric ramps; Classic = the throwback red→amber→green scale.
+            // Default = Kineva's clean metric ramps; Classic = the throwback red→amber→green scale.
             SettingsRow(icon: "paintpalette", title: "Chart colours") {
                 Picker("Chart colours", selection: $chartStyleRaw) {
                     ForEach(ChartStyle.allCases) { style in
@@ -605,7 +605,7 @@ struct SettingsView: View {
     private var strapGroup: some View {
         SettingsGroup(
             header: "Strap",
-            footer: "NOOP pairs directly with your WHOOP over Bluetooth — no WHOOP app, no cloud."
+            footer: "Kineva pairs directly with your WHOOP over Bluetooth — no WHOOP app, no cloud."
         ) {
             // Connection status + battery + the two primary actions — a rich block, inset to the grid.
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
@@ -766,7 +766,7 @@ struct SettingsView: View {
             await model.repo.refresh()
         }
         backupAlertTitle = "Charge baseline recalibrating"
-        backupAlertMessage = "NOOP will re-learn your baseline from tonight's data onward. Your history is kept, and it takes a few nights to settle."
+        backupAlertMessage = "Kineva will re-learn your baseline from tonight's data onward. Your history is kept, and it takes a few nights to settle."
         showBackupAlert = true
     }
 
@@ -874,7 +874,7 @@ struct SettingsView: View {
         return "Deep data (R22) needs an iPhone or Android — a Mac can't form the encrypted bond a 5/MG requires."
         #else
         if !live.encryptedBond {
-            return "Needs the full encrypted bond — close the official WHOOP app and pair the strap to NOOP first (a live-HR-only link can't carry the unlock)."
+            return "Needs the full encrypted bond — close the official WHOOP app and pair the strap to Kineva first (a live-HR-only link can't carry the unlock)."
         }
         return live.worn
             ? "Wear the strap, tap once, then let it sync and share your strap log."
@@ -996,15 +996,15 @@ struct SettingsView: View {
 
     // MARK: - Diagnostics (every model)
 
-    /// Raw-sensor CSV export — a read-only diagnostic over the decoded streams NOOP already stores
+    /// Raw-sensor CSV export — a read-only diagnostic over the decoded streams Kineva already stores
     /// (HR, R-R, motion, steps, PPG-HR, SpO₂, skin temp, resp, events). Split out of the 5/MG card so it
     /// stays visible on EVERY model (#22): a WHOOP 4.0 owner still needs this to share decoded data.
     private var rawSensorDiagnosticsGroup: some View {
         SettingsGroup(
             header: "Diagnostics",
-            footer: "Read-only exports of the decoded streams NOOP already stores. Works on any strap — nothing is written to your device, nothing uploaded."
+            footer: "Read-only exports of the decoded streams Kineva already stores. Works on any strap — nothing is written to your device, nothing uploaded."
         ) {
-            // Export raw sensor data (CSV) — a read-only diagnostic over the decoded streams NOOP
+            // Export raw sensor data (CSV) — a read-only diagnostic over the decoded streams Kineva
             // stores (HR, R-R, motion, steps, PPG-HR, SpO₂, skin temp, resp, events).
             VStack(alignment: .leading, spacing: NoopMetrics.space2) {
                 Button {
@@ -1046,7 +1046,7 @@ struct SettingsView: View {
     /// Daily auto-export of the strap log (#510 — parity with Android's DebugExportScheduler). Opt-in,
     /// default OFF: a toggle + a time-of-day picker + a "Run now". Honest about iOS background timing —
     /// the macOS drop is reliable (the app is usually running), the iOS one fires when iOS next wakes
-    /// NOOP near the chosen time, never guaranteed to the minute.
+    /// Kineva near the chosen time, never guaranteed to the minute.
     @ViewBuilder private var scheduledExportControls: some View {
         SettingsRow(icon: "clock.arrow.circlepath", title: "Daily auto-export",
                     subtitle: LocalizedStringKey(debugExportCaption)) {
@@ -1078,9 +1078,9 @@ struct SettingsView: View {
     /// Honest caption — the drop location plus the platform-specific timing reality.
     private var debugExportCaption: String {
         #if os(iOS)
-        return "Writes a timestamped copy of your strap log to NOOP's folder in the Files app, once a day — handy for a bug report without remembering to grab it. On iPhone it fires when iOS next wakes NOOP near your chosen time, not guaranteed to the minute (keep NOOP open overnight for the best chance). Everything stays on \(Platform.deviceNounPhrase); nothing is uploaded."
+        return "Writes a timestamped copy of your strap log to Kineva's folder in the Files app, once a day — handy for a bug report without remembering to grab it. On iPhone it fires when iOS next wakes Kineva near your chosen time, not guaranteed to the minute (keep Kineva open overnight for the best chance). Everything stays on \(Platform.deviceNounPhrase); nothing is uploaded."
         #else
-        return "Writes a timestamped copy of your strap log to your Documents folder, once a day — handy for a bug report without remembering to grab it. On Mac it runs while NOOP is open (and catches up on launch if the time passed while it was closed). Everything stays on \(Platform.deviceNounPhrase); nothing is uploaded."
+        return "Writes a timestamped copy of your strap log to your Documents folder, once a day — handy for a bug report without remembering to grab it. On Mac it runs while Kineva is open (and catches up on launch if the time passed while it was closed). Everything stays on \(Platform.deviceNounPhrase); nothing is uploaded."
         #endif
     }
 
@@ -1111,7 +1111,7 @@ struct SettingsView: View {
         if let url {
             backupAlertTitle = "Strap log exported"
             #if os(iOS)
-            backupAlertMessage = "Saved \(url.lastPathComponent) to NOOP's folder in the Files app."
+            backupAlertMessage = "Saved \(url.lastPathComponent) to Kineva's folder in the Files app."
             #else
             backupAlertMessage = "Saved \(url.lastPathComponent) to your Documents folder."
             #endif
@@ -1280,7 +1280,7 @@ struct SettingsView: View {
                         .foregroundStyle(StrandPalette.textTertiary)
                         .font(.system(size: 13))
                         .accessibilityHidden(true)
-                    Text("Importing overwrites everything currently on \(Platform.deviceNounPhrase). Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect. Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into NOOP on Mac, iPhone, or Android — on-device computed rows are marked APPROXIMATE in its Source column; the full backup stays the lossless restore path.")
+                    Text("Importing overwrites everything currently on \(Platform.deviceNounPhrase). Your old data is kept in a side file just in case. Kineva needs a relaunch for an import to take effect. Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into Kineva on Mac, iPhone, or Android — on-device computed rows are marked APPROXIMATE in its Source column; the full backup stays the lossless restore path.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1331,7 +1331,7 @@ struct SettingsView: View {
                 return
             case .exported(let url):
                 backupAlertTitle = "CSV exported"
-                backupAlertMessage = "Saved to \(url.lastPathComponent). The zip re-imports into NOOP (Data Sources → WHOOP Export) on any Mac, iPhone, or Android device."
+                backupAlertMessage = "Saved to \(url.lastPathComponent). The zip re-imports into Kineva (Data Sources → WHOOP Export) on any Mac, iPhone, or Android device."
                 showBackupAlert = true
             case .failure(let message):
                 backupAlertTitle = "Export problem"
@@ -1353,7 +1353,7 @@ struct SettingsView: View {
             showBackupAlert = true
         case .imported:
             backupAlertTitle = "Backup imported"
-            backupAlertMessage = "Your data has been restored. Quit and reopen NOOP for it to take effect."
+            backupAlertMessage = "Your data has been restored. Quit and reopen Kineva for it to take effect."
             showBackupAlert = true
         case .failure(let message):
             backupAlertTitle = "Backup problem"
@@ -1379,7 +1379,7 @@ struct SettingsView: View {
         ) {
             // Version header + What's new.
             HStack(spacing: NoopMetrics.space3) {
-                Text("NOOP")
+                Text("Kineva")
                     .font(StrandFont.title2)
                     .foregroundStyle(StrandPalette.textPrimary)
                 StatePill("v\(bundleVersionString)", tone: .neutral, showsDot: false)
@@ -1391,13 +1391,13 @@ struct SettingsView: View {
             }
             .settingsRowInsets()
 
-            // How NOOP works — the four-section explainability primer.
+            // How Kineva works — the four-section explainability primer.
             Button { showHowNoopWorks = true } label: {
-                aboutRowLabel(icon: "questionmark.circle", title: "How NOOP works",
+                aboutRowLabel(icon: "questionmark.circle", title: "How Kineva works",
                               subtitle: "Sleep sorting, scores, recording, and where your numbers come from.")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("How NOOP works")
+            .accessibilityLabel("How Kineva works")
 
             // How your scores work — Charge / Effort / Rest + the confidence labels.
             Button { showScoringGuide = true } label: {
@@ -1407,12 +1407,12 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("How your scores work")
 
-            // About Apple Watch data: what is supported when NOOP runs from Apple Watch data alone.
+            // About Apple Watch data: what is supported when Kineva runs from Apple Watch data alone.
             NavigationLink {
                 AppleWatchAboutView(onStartSetup: { showAppleWatchSetup = true })
             } label: {
                 aboutRowLabel(icon: "applewatch", title: "About Apple Watch data",
-                              subtitle: "Use NOOP with just an Apple Watch. What it's great at, and where it's lighter than a strap.")
+                              subtitle: "Use Kineva with just an Apple Watch. What it's great at, and where it's lighter than a strap.")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("About Apple Watch data")
@@ -1422,7 +1422,7 @@ struct SettingsView: View {
                 StorageView()
             } label: {
                 aboutRowLabel(icon: "internaldrive", title: "Storage",
-                              subtitle: "Where NOOP's on-device space is going — and a one-tap clean-up.")
+                              subtitle: "Where Kineva's on-device space is going — and a one-tap clean-up.")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Storage")
@@ -1436,7 +1436,7 @@ struct SettingsView: View {
             // Check for updates — a single, user-initiated read of GitHub's public releases API.
             updateCheckBlock.settingsRowInsets()
 
-            // Project home — NOOP's code, releases, issues and wiki live on GitHub.
+            // Project home — Kineva's code, releases, issues and wiki live on GitHub.
             Link(destination: URL(string: "https://github.com/NoopApp/noop")!) {
                 aboutRowLabel(icon: "chevron.left.forwardslash.chevron.right", title: "Project home & source",
                               subtitle: "GitHub — code, releases, issues and the wiki.", trailing: "arrow.up.right")
@@ -1457,7 +1457,7 @@ struct SettingsView: View {
                         .foregroundStyle(StrandPalette.statusWarning)
                         .font(.system(size: 13))
                         .accessibilityHidden(true)
-                    Text("NOOP is not a medical device — for informational and personal-insight use only, not to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.")
+                    Text("Kineva is not a medical device — for informational and personal-insight use only, not to diagnose, treat, cure or prevent any condition. Talk to a clinician for medical advice.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1601,7 +1601,7 @@ struct SettingsView: View {
         .accessibilityLabel("Diagnostics")
     }
 
-    /// Calm, honest "what to expect running NOOP on iPhone" callout — sideloading reality, re-sign
+    /// Calm, honest "what to expect running Kineva on iPhone" callout — sideloading reality, re-sign
     /// cadence, the unlock-after-reboot (#222) note, background-BLE limits, and beta-iOS caveat. Surfaces
     /// the live sideload-cert expiry when we can read it, with a gentle warning under ~3 days.
     private var iphoneExpectations: some View {
@@ -1612,14 +1612,14 @@ struct SettingsView: View {
                 Image(systemName: "iphone.gen3")
                     .foregroundStyle(StrandPalette.accent)
                     .accessibilityHidden(true)
-                Text("Using NOOP on iPhone")
+                Text("Using Kineva on iPhone")
                     .font(StrandFont.subhead.weight(.semibold))
                     .foregroundStyle(StrandPalette.textPrimary)
             }
 
             iphoneExpectationLine("This is a sideloaded build — installed outside the App Store. It needs re-signing periodically: roughly every 7 days on a free Apple ID, about a year on a paid developer account.")
-            iphoneExpectationLine("After your iPhone reboots, unlock it once. Until you do, iOS keeps NOOP's files locked (Data Protection), so new history can't be written or synced.")
-            iphoneExpectationLine("Background Bluetooth has OS limits — iOS may pause NOOP when it's not in the foreground, so keep it open while syncing a fresh strap.")
+            iphoneExpectationLine("After your iPhone reboots, unlock it once. Until you do, iOS keeps Kineva's files locked (Data Protection), so new history can't be written or synced.")
+            iphoneExpectationLine("Background Bluetooth has OS limits — iOS may pause Kineva when it's not in the foreground, so keep it open while syncing a fresh strap.")
             iphoneExpectationLine("On a beta version of iOS, things can break that work on the release build.")
 
             if let days = expiry {
@@ -1876,11 +1876,11 @@ struct StepsCalibrationSheet: View {
                 Label("How this works", systemImage: "figure.walk.motion")
                     .font(StrandFont.headline)
                     .foregroundStyle(StrandPalette.textPrimary)
-                Text("NOOP estimates your steps from your WHOOP's motion, calibrated to your phone's step count. It's an estimate, not a step counter — a WHOOP 4.0 doesn't transmit steps.")
+                Text("Kineva estimates your steps from your WHOOP's motion, calibrated to your phone's step count. It's an estimate, not a step counter — a WHOOP 4.0 doesn't transmit steps.")
                     .font(StrandFont.subhead)
                     .foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("On the days your phone also counted steps, NOOP learns how much your motion maps to steps, then applies that to the strap-only days. The more matching days it has, the more it trusts the estimate.")
+                Text("On the days your phone also counted steps, Kineva learns how much your motion maps to steps, then applies that to the strap-only days. The more matching days it has, the more it trusts the estimate.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1897,11 +1897,11 @@ struct StepsCalibrationSheet: View {
                 Label("No motion synced yet", systemImage: "antenna.radiowaves.left.and.right.slash")
                     .font(StrandFont.headline)
                     .foregroundStyle(StrandPalette.textPrimary)
-                Text("We're not seeing any motion from your strap yet. Steps are estimated from your WHOOP's banked motion history — so your strap needs to sync that history before NOOP has anything to count.")
+                Text("We're not seeing any motion from your strap yet. Steps are estimated from your WHOOP's banked motion history — so your strap needs to sync that history before Kineva has anything to count.")
                     .font(StrandFont.subhead)
                     .foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Open NOOP near your strap and let it catch up (a full history sync can take a while on first run). Once a day or two of motion lands, your step estimate and the calibration below will start to fill in.")
+                Text("Open Kineva near your strap and let it catch up (a full history sync can take a while on first run). Once a day or two of motion lands, your step estimate and the calibration below will start to fill in.")
                     .font(StrandFont.footnote)
                     .foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1949,7 +1949,7 @@ struct StepsCalibrationSheet: View {
                         .headline)
                         .font(StrandFont.bodyNumber)
                         .foregroundStyle(StrandPalette.accent)
-                    Text("These are the days where your phone also counted steps, so NOOP can learn how your motion maps to steps. Or set the coefficient manually below.")
+                    Text("These are the days where your phone also counted steps, so Kineva can learn how your motion maps to steps. Or set the coefficient manually below.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1965,7 +1965,7 @@ struct StepsCalibrationSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Estimated vs your phone").strandOverline()
                 if comparison.isEmpty {
-                    Text("No days yet where both NOOP and your phone counted steps. Once your phone logs a few days alongside the strap, they'll appear here so you can see how close the estimate is.")
+                    Text("No days yet where both Kineva and your phone counted steps. Once your phone logs a few days alongside the strap, they'll appear here so you can see how close the estimate is.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

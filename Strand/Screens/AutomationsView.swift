@@ -87,7 +87,7 @@ struct AutomationsView: View {
     private var wristAlertsCard: some View {
         SettingsGroup(
             header: "Wrist alerts",
-            footer: "Let NOOP tap your wrist for the things you turn on below, so you can leave your phone and still feel what matters."
+            footer: "Let Kineva tap your wrist for the things you turn on below, so you can leave your phone and still feel what matters."
         ) {
             SettingsRow(icon: "bell.badge.fill", title: "Enable wrist alerts",
                         subtitle: "The master switch for every wrist buzz (inactivity, stress, alerts). Off keeps the strap quiet no matter what else is on.",
@@ -212,7 +212,7 @@ struct AutomationsView: View {
             // v5 L3 closed-loop check-in (master + sub toggles). Default OFF, manual-first. The keys
             // mirror BiofeedbackPrefs, which the central detector (AppModel.evaluateStress) reads.
             SettingsRow(icon: "lungs.fill", title: "Stress check-ins (haptic)",
-                        subtitle: "When a fresh, non-exercise HRV dip is detected while you're still, NOOP offers a one-minute guided breath — a single confirming buzz and a dismissible card. Never an alarm, never a diagnosis.",
+                        subtitle: "When a fresh, non-exercise HRV dip is detected while you're still, Kineva offers a one-minute guided breath — a single confirming buzz and a dismissible card. Never an alarm, never a diagnosis.",
                         value: behavior.stressCheckIn ? "On" : nil) {
                 Toggle("", isOn: $behavior.stressCheckIn)
                     .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)

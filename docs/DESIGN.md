@@ -1,6 +1,6 @@
-# NOOP — Design Identity
+# Kineva — Design Identity
 
-The design fundamentals for NOOP (Strand). This is the source of truth for *how the app looks
+The design fundamentals for Kineva (Strand). This is the source of truth for *how the app looks
 and why*. It documents the locked component system in `Packages/StrandDesign`, the principles
 that govern composition, and the rules every screen follows. When a screen and this doc disagree,
 fix the screen.

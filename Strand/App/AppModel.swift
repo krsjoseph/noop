@@ -22,7 +22,7 @@ enum DataSourceImportKind {
 final class AppModel: ObservableObject {
     /// The live instance, so an AppIntent (Shortcuts) can reach the bonded strap rather than spinning
     /// up a dead second AppModel (which would start a duplicate BLE engine and never buzz). Set in
-    /// init(); `weak` so an intent fired while NOOP is closed sees nil and asks the user to open it. (#42)
+    /// init(); `weak` so an intent fired while Kineva is closed sees nil and asks the user to open it. (#42)
     static weak var shared: AppModel?
 
     /// Timestamp formatter for the generic-HR strap-log lines routed through `straplog` into the shared
@@ -872,7 +872,7 @@ final class AppModel: ObservableObject {
     #endif
 
     /// Arm (or clear) the strap's firmware alarm from the smart-alarm settings. The firmware alarm
-    /// fires even if the Mac is asleep / NOOP is closed. No-op until bonded (send is gated on bond).
+    /// fires even if the Mac is asleep / Kineva is closed. No-op until bonded (send is gated on bond).
     func applySmartAlarm() {
         guard behavior.smartAlarmEnabled else { ble.disableStrapAlarm(); return }
         guard let next = Self.nextSmartAlarmDate(minutes: behavior.smartAlarmMinutes,
@@ -1524,16 +1524,16 @@ final class AppModel: ObservableObject {
         #endif
     }
 
-    /// True for any scratch file/dir NOOP itself writes into the temp directory — import copies, the
+    /// True for any scratch file/dir Kineva itself writes into the temp directory — import copies, the
     /// decompressed export.xml, exports, backups, raw captures: every one is prefixed `noop-`. #590: the
     /// import decompresses `export.xml` to a `noop-health-*` temp file (up to 8 GB), but a previous build
     /// only matched `noop-import-*`, so an interrupted import stranded multi-GB extractions the Storage
     /// screen never saw OR reclaimed. Matching the shared `noop-` prefix counts + sweeps them all and is
-    /// future-proof. Safe: the temp dir is NOOP's private sandbox and the 60 s in-flight guard in
+    /// future-proof. Safe: the temp dir is Kineva's private sandbox and the 60 s in-flight guard in
     /// `purgeImportTemp` protects a live import.
     nonisolated static func isNoopTempScratch(_ name: String) -> Bool { name.hasPrefix("noop-") }
 
-    /// Total bytes of NOOP's own `noop-*` temp scratch (a crash mid-import can strand a multi-GB one).
+    /// Total bytes of Kineva's own `noop-*` temp scratch (a crash mid-import can strand a multi-GB one).
     /// Recurses into directories (the Xiaomi importer stages a `noop-xiaomi-*` folder).
     nonisolated static func importTempSizeBytes() -> Int64 {
         let tmp = FileManager.default.temporaryDirectory
@@ -1572,7 +1572,7 @@ final class AppModel: ObservableObject {
         return await storageReport()
     }
 
-    /// Remove NOOP's stranded `noop-*` temp scratch (import copies, the multi-GB `noop-health-*`
+    /// Remove Kineva's stranded `noop-*` temp scratch (import copies, the multi-GB `noop-health-*`
     /// export.xml an interrupted import leaves behind — #590, exports, backups, raw captures). Mirrors
     /// `purgeImportInbox`'s 60 s in-flight guard so a concurrent import/export isn't disturbed.
     nonisolated static func purgeImportTemp() {

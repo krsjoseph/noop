@@ -12,7 +12,7 @@ import java.util.zip.ZipOutputStream
 /**
  * Whole-store EXPORT / IMPORT for device migration.
  *
- * NOOP keeps everything on-device in a single Room/SQLite file ([WhoopDatabase.DB_NAME]).
+ * Kineva keeps everything on-device in a single Room/SQLite file ([WhoopDatabase.DB_NAME]).
  * Moving to a new phone therefore means moving exactly that one file. There is no cloud,
  * no account, nothing leaves the device except through these two explicit, user-driven
  * file operations (a SAF document the user picks).
@@ -48,7 +48,7 @@ object DataBackup {
 
     /** Outcome of an [importFrom] call. On success the app must be restarted. */
     sealed interface ImportResult {
-        /** The new database is in place; tell the user to relaunch NOOP. */
+        /** The new database is in place; tell the user to relaunch Kineva. */
         data object NeedsRestart : ImportResult
 
         /** Import failed and the original database is untouched. */
@@ -107,7 +107,7 @@ object DataBackup {
         try {
             val read = resolver.openInputStream(uri)?.use { readFully(it, header) }
                 ?: return ImportResult.Failed("Could not open the chosen file.")
-            if (read < 4) return ImportResult.Failed("That file is not a NOOP backup.")
+            if (read < 4) return ImportResult.Failed("That file is not a Kineva backup.")
         } catch (e: IOException) {
             return ImportResult.Failed("Could not read the chosen file: ${e.message}")
         }
@@ -144,7 +144,7 @@ object DataBackup {
                     } ?: return ImportResult.Failed("Could not open the chosen file.")
                 }
                 else -> return ImportResult.Failed(
-                    "That file is not a NOOP backup — it doesn't look like a .noopbak archive or a SQLite database."
+                    "That file is not a Kineva backup — it doesn't look like a .noopbak archive or a SQLite database."
                 )
             }
         } catch (e: IOException) {
@@ -158,7 +158,7 @@ object DataBackup {
             val read = tempSqlite.inputStream().use { readFully(it, extractedHeader) }
             if (read < SQLITE_MAGIC.size || !extractedHeader.contentEquals(SQLITE_MAGIC)) {
                 tempSqlite.delete()
-                return ImportResult.Failed("The backup archive doesn't contain a valid NOOP database.")
+                return ImportResult.Failed("The backup archive doesn't contain a valid Kineva database.")
             }
         } catch (e: IOException) {
             tempSqlite.delete()

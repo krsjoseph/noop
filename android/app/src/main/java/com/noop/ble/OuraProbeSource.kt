@@ -172,7 +172,7 @@ class OuraProbeSource(
     private fun announceDeadEnd() {
         if (_deadEndMessage.value != null) return
         val msg = "Oura live data isn't available. The ring is proprietary and only syncs to the Oura app, " +
-            "so there's no open Bluetooth stream NOOP can read. Export from Oura and use file import instead."
+            "so there's no open Bluetooth stream Kineva can read. Export from Oura and use file import instead."
         _deadEndMessage.value = msg
         log("Oura: $msg")
     }

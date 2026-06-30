@@ -3,8 +3,8 @@ import SwiftUI
 import AppIntents
 import StrandDesign
 
-/// Surfaces NOOP's already-registered App Intents (see StrandiOS/System/NOOPAppIntents.swift) in the
-/// UI so users discover them. `NOOPShortcuts` auto-registers "Buzz Strap" and "Mark a Moment" with
+/// Surfaces Kineva's already-registered App Intents (see StrandiOS/System/KinevaAppIntents.swift) in the
+/// UI so users discover them. `KinevaShortcuts` auto-registers "Buzz Strap" and "Mark a Moment" with
 /// Siri/Spotlight/Shortcuts, but nothing in-app advertised them — this is the iOS analogue of the
 /// Mac's strap-double-tap-runs-a-Shortcut feature. Apple's `SiriTipView`/`ShortcutsLink` (iOS 16+)
 /// do exactly that: tip the user on the spoken phrase and deep-link into the Shortcuts app, scoped to
@@ -31,7 +31,7 @@ struct SiriShortcutsSettingsView: View {
 
     var body: some View {
         ScreenScaffold(title: "Siri & Shortcuts",
-                       subtitle: "Run NOOP actions hands-free.",
+                       subtitle: "Run Kineva actions hands-free.",
                        topBackground: showDayCycleBackground
                            ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
@@ -53,9 +53,9 @@ struct SiriShortcutsSettingsView: View {
         SettingsGroup(header: "Ready-made actions",
                       footer: "Tap to run now, or trigger from Siri, Spotlight, the Shortcuts app, or a Back-Tap / automation — no setup needed.") {
             actionRow(id: "buzz", icon: "waveform.path", title: "Buzz Strap",
-                      phrase: "Buzz my NOOP strap", done: "Buzz sent") { model.buzz(loops: 1) }
+                      phrase: "Buzz my Kineva strap", done: "Buzz sent") { model.buzz(loops: 1) }
             actionRow(id: "mark", icon: "mappin.and.ellipse", title: "Mark a Moment",
-                      phrase: "Mark a moment in NOOP", done: "Moment marked") { model.markMoment(at: Date()) }
+                      phrase: "Mark a moment in Kineva", done: "Moment marked") { model.markMoment(at: Date()) }
         }
     }
 
@@ -88,7 +88,7 @@ struct SiriShortcutsSettingsView: View {
     /// Deep-link into the Shortcuts app to wire these actions into automations.
     private var buildYourOwnGroup: some View {
         SettingsGroup(header: "Build your own",
-                      footer: "Wire NOOP's actions into a Back-Tap, a focus automation, or a longer Shortcut — for example, double-tap the back of your iPhone to buzz the strap.") {
+                      footer: "Wire Kineva's actions into a Back-Tap, a focus automation, or a longer Shortcut — for example, double-tap the back of your iPhone to buzz the strap.") {
             ShortcutsLink()
                 .settingsRowInsets()
         }

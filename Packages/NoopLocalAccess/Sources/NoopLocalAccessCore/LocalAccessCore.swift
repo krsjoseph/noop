@@ -17,11 +17,11 @@ public enum LocalAccessError: Error, CustomStringConvertible, Equatable {
         case .methodNotFound(let method):
             return "Unsupported MCP method: \(method)"
         case .toolNotFound(let tool):
-            return "Unknown NOOP tool: \(tool)"
+            return "Unknown Kineva tool: \(tool)"
         case .resourceNotFound(let uri):
-            return "Unknown NOOP resource: \(uri)"
+            return "Unknown Kineva resource: \(uri)"
         case .promptNotFound(let name):
-            return "Unknown NOOP prompt: \(name)"
+            return "Unknown Kineva prompt: \(name)"
         }
     }
 
@@ -50,9 +50,9 @@ public struct LocalAccessConfiguration: Equatable, Sendable {
 
     public static func environment(_ env: [String: String] = ProcessInfo.processInfo.environment) -> LocalAccessConfiguration {
         LocalAccessConfiguration(
-            databasePath: nonEmpty(env["NOOP_DB_PATH"]),
-            bundleID: nonEmpty(env["NOOP_BUNDLE_ID"]),
-            deviceID: nonEmpty(env["NOOP_DEVICE_ID"]) ?? "my-whoop"
+            databasePath: nonEmpty(env["KINEVA_DB_PATH"]) ?? nonEmpty(env["NOOP_DB_PATH"]),
+            bundleID: nonEmpty(env["KINEVA_BUNDLE_ID"]) ?? nonEmpty(env["NOOP_BUNDLE_ID"]),
+            deviceID: nonEmpty(env["KINEVA_DEVICE_ID"]) ?? nonEmpty(env["NOOP_DEVICE_ID"]) ?? "my-whoop"
         )
     }
 
@@ -63,14 +63,14 @@ public struct LocalAccessConfiguration: Equatable, Sendable {
 }
 
 public enum DatabasePathResolver {
-    public static let productionBundleID = "com.noopapp.noop"
+    public static let productionBundleID = "com.aretetechnologies.kineva"
 
     public static func resolve(configuration: LocalAccessConfiguration) throws -> String {
         let fm = FileManager.default
         if let explicit = configuration.databasePath {
             let expanded = expandHome(explicit)
             guard fm.fileExists(atPath: expanded) else {
-                throw LocalAccessError.databaseUnavailable("NOOP database not found at NOOP_DB_PATH.")
+                throw LocalAccessError.databaseUnavailable("Kineva database not found at KINEVA_DB_PATH.")
             }
             return expanded
         }
@@ -80,7 +80,7 @@ public enum DatabasePathResolver {
         }
 
         throw LocalAccessError.databaseUnavailable(
-            "No official NOOP database was found. Start NOOP once, or set NOOP_DB_PATH explicitly."
+            "No official Kineva database was found. Start Kineva once, or set KINEVA_DB_PATH explicitly."
         )
     }
 
@@ -353,7 +353,7 @@ public final class ReadonlyNoopStore {
         if !tableNames.contains("grdb_migrations"),
            tableNames.contains("device") || tableNames.contains("hrSample") {
             throw LocalAccessError.databaseUnavailable(
-                "This looks like a NOOP-like SQLite file without GRDB migration metadata. Open NOOP to repair it before using local access."
+                "This looks like a Kineva-like SQLite file without GRDB migration metadata. Open Kineva to repair it before using local access."
             )
         }
     }

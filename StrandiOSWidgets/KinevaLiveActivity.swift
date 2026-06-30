@@ -4,9 +4,9 @@ import ActivityKit
 import StrandDesign
 
 /// Live Activity for an active live-HR session — shown on the Lock Screen and in the Dynamic Island.
-struct NOOPLiveActivity: Widget {
+struct KinevaLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: NOOPActivityAttributes.self) { context in
+        ActivityConfiguration(for: KinevaActivityAttributes.self) { context in
             // Lock Screen / banner presentation.
             HStack(spacing: 14) {
                 Image(systemName: "waveform.path.ecg")
@@ -65,7 +65,7 @@ struct NOOPLiveActivity: Widget {
 }
 
 /// Lock-Screen banner stat column (label over value, right-aligned). File-scope because the
-/// `ActivityConfiguration` content closure isn't a method of `NOOPLiveActivity`.
+/// `ActivityConfiguration` content closure isn't a method of `KinevaLiveActivity`.
 @ViewBuilder
 private func bannerStat(label: String, value: String) -> some View {
     VStack(alignment: .trailing, spacing: 2) {

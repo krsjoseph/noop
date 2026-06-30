@@ -95,7 +95,7 @@ public final class OuraProbeSource: NSObject, ObservableObject {
     private func announceDeadEnd() {
         guard deadEndMessage == nil else { return }
         let msg = "Oura live data isn't available. The ring is proprietary and only syncs to the Oura app, " +
-                  "so there's no open Bluetooth stream NOOP can read. Export from Oura and use file import " +
+                  "so there's no open Bluetooth stream Kineva can read. Export from Oura and use file import " +
                   "instead."
         deadEndMessage = msg
         log("Oura: \(msg)")

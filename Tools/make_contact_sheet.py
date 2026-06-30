@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose a single contact-sheet preview of the NOOP brand pack."""
+"""Compose a single contact-sheet preview of the Kineva brand pack."""
 import os
 from PIL import Image, ImageDraw, ImageFont
 from make_icon import hx, NAVY_TOP, NAVY_BOT, GLOW
@@ -32,7 +32,7 @@ def heading(x, y, s):
 
 PAD = 80
 # title
-label(PAD, 54, 'NOOP', 64, TEXT, bold=True)
+label(PAD, 54, 'Kineva', 64, TEXT, bold=True)
 label(PAD + 200, 78, 'Brand Pack', 34, SUB)
 label(PAD, 132, 'Titanium & Gold  ·  gold on navy  ·  v3.6', 24, MUT)
 D.line([(PAD, 186), (W - PAD, 186)], fill=HAIR + (255,), width=2)

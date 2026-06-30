@@ -179,7 +179,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.StressContent(
     item { StressMethodologyCard(model, modifier = Modifier.staggeredAppear(4)) }
 }
 
-// MARK: - 1 · Hero — the NOOP count-up PipBar (the needle/speedometer is gone)
+// MARK: - 1 · Hero — the Kineva count-up PipBar (the needle/speedometer is gone)
 //
 // Aaron's call mirrored from iOS: "remove the needle, it's not needed" + "straight
 // horizontal bars that almost count up separated by pips". So the hero reads as one clean
@@ -231,7 +231,7 @@ private fun StressHeroCard(model: StressModel, modifier: Modifier = Modifier) {
                 )
             }
 
-            // The NOOP signature: a count-up PipBar on the 0…3 scale, band-tinted.
+            // The Kineva signature: a count-up PipBar on the 0…3 scale, band-tinted.
             PipBar(
                 value = model.score.toFloat(),
                 range = 0f..3f,

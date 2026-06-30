@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# release.sh — cut a NOOP release on BOTH forges.
+# release.sh — cut a Kineva release on BOTH forges.
 # Run from your Mac at release time, after the anonymized binaries are built.
 #
 #   Tools/release.sh <version> <asset> [<asset> ...] [-- "release notes"]
 #   e.g. Tools/release.sh 4.7.0 \
-#          dist/NOOP-v4.7.0-macos.zip dist/NOOP-v4.7.0.ipa dist/NOOP-v4.7.0.apk \
+#          dist/Kineva-v4.7.0-macos.zip dist/Kineva-v4.7.0.ipa dist/Kineva-v4.7.0.apk \
 #          -- "Bug fixes and the new Lab Book."
 #
 # GitHub is CANONICAL — the release is created there FIRST (NoopApp/noop, marked
@@ -30,7 +30,7 @@ GH_REPO="${GH_REPO:-NoopApp/noop}"
 
 VER="${1:?usage: release.sh <version> <asset...> [-- notes]}"; shift
 TAG="v$VER"
-NOTES="NOOP $TAG — see CHANGELOG.md."
+NOTES="Kineva $TAG — see CHANGELOG.md."
 ASSETS=()
 # split args into assets + optional "-- notes".
 while [ $# -gt 0 ]; do
@@ -39,16 +39,16 @@ while [ $# -gt 0 ]; do
 done
 
 # ── iOS asset: ONE canonical name ────────────────────────────────────────────
-# The iOS .ipa ships under a SINGLE name: NOOP-v<V>-ios.ipa, which every doc
+# The iOS .ipa ships under a SINGLE name: Kineva-v<V>-ios.ipa, which every doc
 # (README, docs/IOS.md, the wiki) and the AltStore source point at. We used to
-# upload BOTH NOOP-v<V>.ipa and a -ios alias for backward-compat with a v5.2.5
+# upload BOTH Kineva-v<V>.ipa and a -ios alias for backward-compat with a v5.2.5
 # cached-source 404, but that transition is long done, and two byte-identical iOS
 # files only confused users about which to install. So: rename any plain
-# NOOP-v*.ipa to its -ios name and ship exactly one iOS file.
+# Kineva-v*.ipa to its -ios name and ship exactly one iOS file.
 NEW_ASSETS=()
 for f in ${ASSETS[@]+"${ASSETS[@]}"}; do
   case "$f" in
-    *NOOP-v*.ipa)
+    *Kineva-v*.ipa)
       if [ -f "$f" ] && [ "${f%-ios.ipa}" = "$f" ]; then   # a plain .ipa -> ship ONLY as -ios
         ios_f="${f%.ipa}-ios.ipa"
         cp -f "$f" "$ios_f" 2>/dev/null && NEW_ASSETS+=("$ios_f") \
@@ -121,7 +121,7 @@ if GH_TOKEN="$(cat "$GH_TOKEN_FILE")" \
   echo "  release exists — refreshing notes + clobbering assets"
   GH_TOKEN="$(cat "$GH_TOKEN_FILE")" \
     gh release edit "$TAG" --repo "$GH_REPO" \
-      --title "NOOP $TAG" --notes "$NOTES" --latest >/dev/null \
+      --title "Kineva $TAG" --notes "$NOTES" --latest >/dev/null \
     || { echo "  ⚠ gh release edit failed" >&2; GH_OK=0; }
   if [ "${#GH_ASSETS[@]}" -gt 0 ]; then
     GH_TOKEN="$(cat "$GH_TOKEN_FILE")" \
@@ -131,7 +131,7 @@ if GH_TOKEN="$(cat "$GH_TOKEN_FILE")" \
 else
   GH_TOKEN="$(cat "$GH_TOKEN_FILE")" \
     gh release create "$TAG" ${GH_ASSETS[@]+"${GH_ASSETS[@]}"} --repo "$GH_REPO" \
-      --title "NOOP $TAG" --notes "$NOTES" --latest \
+      --title "Kineva $TAG" --notes "$NOTES" --latest \
     || { echo "  ⚠ gh release create failed" >&2; GH_OK=0; }
 fi
 [ "$GH_OK" = 1 ] \
@@ -162,8 +162,8 @@ if [ "$GH_OK" = 1 ]; then
   IPA_ASSET=""; ZIP_ASSET=""
   for f in ${ASSETS[@]+"${ASSETS[@]}"}; do
     case "$f" in
-      *NOOP-v*-ios.ipa|*NOOP-v*.ipa) [ -z "$IPA_ASSET" ] && [ -f "$f" ] && IPA_ASSET="$f" ;;
-      *NOOP-v*-macos.zip|*NOOP-v*macos*.zip) [ -f "$f" ] && ZIP_ASSET="$f" ;;
+      *Kineva-v*-ios.ipa|*Kineva-v*.ipa) [ -z "$IPA_ASSET" ] && [ -f "$f" ] && IPA_ASSET="$f" ;;
+      *Kineva-v*-macos.zip|*Kineva-v*macos*.zip) [ -f "$f" ] && ZIP_ASSET="$f" ;;
     esac
   done
   if [ -n "$IPA_ASSET" ] && [ -x "$HERE/update-altstore-source.sh" ]; then

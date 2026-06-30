@@ -15,7 +15,7 @@ import java.util.zip.ZipInputStream
  * The round-trip contract, Android side: serialize with WhoopCsvExporter, re-parse the bytes with
  * the REAL CsvTable parser (the same one WhoopCsvImporter feeds), and assert the normalized columns
  * the importer reads carry the original values back. This proves the exported zip is re-importable
- * by NOOP itself; the macOS suite mirrors it through the full WhoopExportImporter parse functions.
+ * by Kineva itself; the macOS suite mirrors it through the full WhoopExportImporter parse functions.
  *
  * Stage/zone fidelity is checked through the exporter's own tolerant decoders, which the importer's
  * persisted JSON shapes also feed — so a decode here is the same decode the dashboards rely on.

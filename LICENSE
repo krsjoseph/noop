@@ -1,10 +1,10 @@
-NOOP is licensed under the PolyForm Noncommercial License 1.0.0, reproduced below.
+Kineva is licensed under the PolyForm Noncommercial License 1.0.0, reproduced below.
 
 Copyright 2026 NoopApp
 
 Scope and notices:
 
-- This license applies ONLY to NOOP's own original source code and documentation.
+- This license applies ONLY to Kineva's own original source code and documentation.
 - The protocol facts documented in this repository (BLE service/characteristic
   identifiers, frame layouts, CRC parameters, command/event/packet numbers, byte
   offsets) are uncopyrightable factual information about how bytes appear on a wire.
@@ -14,7 +14,7 @@ Scope and notices:
   file. See NOTICE for the full list (GRDB.swift and ZIPFoundation are MIT).
 - Required Notice: Copyright 2026 NoopApp
 
-In short: NOOP is source-available and free for personal and other non-commercial
+In short: Kineva is source-available and free for personal and other non-commercial
 use — read it, run it, fork it, and contribute. Commercial use is not granted by
 this license. The full terms follow.
 

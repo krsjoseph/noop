@@ -2,7 +2,7 @@ import SwiftUI
 import StrandDesign
 import StrandAnalytics
 
-/// Intelligence — NOOP's own recovery/strain/sleep scores, computed on-device from raw strap data
+/// Intelligence — Kineva's own recovery/strain/sleep scores, computed on-device from raw strap data
 /// using the WHOOP model shape. Makes the app independent of WHOOP's cloud for live-collected days.
 struct IntelligenceView: View {
     @EnvironmentObject var intelligence: IntelligenceEngine
@@ -35,7 +35,7 @@ struct IntelligenceView: View {
         // imported history, an eager VStack built every card up-front on the main thread and froze
         // the app when ALL was tapped (#345); LazyVStack only materialises what's on screen.
         ScreenScaffold(title: "Intelligence",
-                       subtitle: "NOOP scores your charge, effort and rest itself — on-device, no cloud.",
+                       subtitle: "Kineva scores your charge, effort and rest itself — on-device, no cloud.",
                        // Pull-to-refresh mirrors the toolbar Recompute (the button stays for discoverability).
                        onRefresh: { await intelligence.analyzeRecent() },
                        lazy: true,
@@ -232,7 +232,7 @@ struct IntelligenceView: View {
                         .accessibilityHidden(true)
                     Text("How this works").font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
                 }
-                Text("Charge weighs your HRV against your personal baseline (~55%), resting heart rate (~20%), rest quality (~15%), respiration (~5%) and skin-temperature deviation (~5%). Effort is a 0–\(UnitFormatter.effortScaleMax(effortScale)) cardiovascular load from time in heart-rate zones. Rest is staged from movement and heart rate. Everything is computed here from the strap's raw data — it works for any day NOOP collected raw streams.")
+                Text("Charge weighs your HRV against your personal baseline (~55%), resting heart rate (~20%), rest quality (~15%), respiration (~5%) and skin-temperature deviation (~5%). Effort is a 0–\(UnitFormatter.effortScaleMax(effortScale)) cardiovascular load from time in heart-rate zones. Rest is staged from movement and heart rate. Everything is computed here from the strap's raw data — it works for any day Kineva collected raw streams.")
                     .font(StrandFont.subhead).foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 // The Charge model made concrete — the five weighted inputs, each its own metric accent.
@@ -265,7 +265,7 @@ struct IntelligenceView: View {
                 Spacer()
                 Text(percent).font(StrandFont.captionNumber).foregroundStyle(color)
             }
-            // The NOOP signature segmented bar — counts up on appear, tinted to the input's accent.
+            // The Kineva signature segmented bar — counts up on appear, tinted to the input's accent.
             // The Charge weights span 0…0.55, so the bar reads each input's share of the model.
             PipBar(value: fraction, range: 0...0.55, segments: 18, tint: color, height: 8)
         }
@@ -279,8 +279,8 @@ struct IntelligenceView: View {
                 HStack {
                     Text(d.day).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
                     Spacer()
-                    // The REAL source of the day's dashboard headline, not a hard-coded "NOOP-computed".
-                    // The By-Day numbers are always NOOP's on-device scores, but when an import covers the
+                    // The REAL source of the day's dashboard headline, not a hard-coded "Kineva-computed".
+                    // The By-Day numbers are always Kineva's on-device scores, but when an import covers the
                     // day it WINS the dashboard merge, so the badge says so ("Whoop" / "Apple Health") and
                     // a strap-scored night reads "On-device". Dynamic String → wrap in "\()" so it's shown
                     // verbatim, not looked up as a LocalizedStringKey (the String≠LocalizedStringKey
@@ -301,7 +301,7 @@ struct IntelligenceView: View {
                     stat("HRV", d.hrv.map { "\(Int($0.rounded()))" } ?? "—", StrandPalette.metricPurple)
                     stat("RHR", d.rhr.map { "\($0)" } ?? "—", StrandPalette.metricRose)
                 }
-                // Effort load meter (0–100) as the NOOP segmented bar — counts up on appear, tinted
+                // Effort load meter (0–100) as the Kineva segmented bar — counts up on appear, tinted
                 // along the strain ramp so it reads as at-a-glance cardio load.
                 if let s = d.strain {
                     PipBar(value: s, range: 0...100, segments: 20,

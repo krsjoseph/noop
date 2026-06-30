@@ -706,7 +706,7 @@ class WhoopRepository(private val dao: WhoopDao) {
     //
     // Product surfaces (Compare/Insights/Stress/Explore/Today) historically read rows under the EXACT
     // requested source, hiding freshly-computed and Apple-compatible data sat under another device id.
-    // [resolvedSeries] resolves a metric over an explicit precedence — imported WHOOP wins, NOOP-computed
+    // [resolvedSeries] resolves a metric over an explicit precedence — imported WHOOP wins, Kineva-computed
     // fills the days it doesn't cover, and Apple Health only fills declared-compatible vitals on days
     // neither strap source has. Port of macOS Repository.resolvedSeries / sourceCandidates.
 
@@ -742,7 +742,7 @@ class WhoopRepository(private val dao: WhoopDao) {
     /**
      * Product-facing daily series for [key] across every COMPATIBLE source, freshest-wins. Use this
      * on surfaces where the user expects the best available signal; use [metricSeries] where one source
-     * must be honoured verbatim. Precedence per [sourceCandidates]: imported WHOOP > NOOP-computed >
+     * must be honoured verbatim. Precedence per [sourceCandidates]: imported WHOOP > Kineva-computed >
      * declared-compatible Apple Health. [from]/[to] are YYYY-MM-DD bounds.
      */
     suspend fun resolvedSeries(
@@ -954,7 +954,7 @@ class WhoopRepository(private val dao: WhoopDao) {
             else -> null
         }
 
-        /** Whether the NOOP-computed strap source may fill an Apple-preferred metric. Only the two
+        /** Whether the Kineva-computed strap source may fill an Apple-preferred metric. Only the two
          *  daily totals the strap genuinely estimates (steps, calories) — never a derived score. */
         private fun noopComputedCanFillAppleMetric(key: String): Boolean = when (key) {
             "steps", "active_kcal" -> true

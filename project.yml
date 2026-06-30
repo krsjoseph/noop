@@ -27,7 +27,7 @@ settings:
     # extension. Referenced as $(APP_GROUP_ID) by both targets' entitlements and Info.plist, and read
     # at runtime via the AppGroupIdentifier Info.plist key (WidgetSnapshot.suiteName) so the value is
     # never hard-coded in Swift. Change it in this one place when building under your own Apple ID.
-    APP_GROUP_ID: group.com.aretetechnologies.noop
+    APP_GROUP_ID: group.com.aretetechnologies.kineva
     # Build for both Apple Silicon and Intel so the release runs on every Mac.
     ARCHS: "$(ARCHS_STANDARD)"
   configs:
@@ -72,14 +72,14 @@ targets:
     info:
       path: Strand/Resources/Info.plist
       properties:
-        CFBundleName: NOOP
-        CFBundleDisplayName: NOOP
+        CFBundleName: Kineva
+        CFBundleDisplayName: Kineva
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "188"
         LSMinimumSystemVersion: "13.0"
         LSApplicationCategoryType: public.app-category.healthcare-fitness
-        NSBluetoothAlwaysUsageDescription: "NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your Mac. Nothing leaves your device."
-        NSLocationWhenInUseUsageDescription: "NOOP records your route during an outdoor workout to show distance, pace, and a map. The route stays on your device. Nothing leaves it."
+        NSBluetoothAlwaysUsageDescription: "Kineva connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your Mac. Nothing leaves your device."
+        NSLocationWhenInUseUsageDescription: "Kineva records your route during an outdoor workout to show distance, pace, and a map. The route stays on your device. Nothing leaves it."
         # The AI Coach's "Custom (OpenAI-compatible)" provider talks to a LOCAL LLM server over plain
         # HTTP on loopback (Ollama / LM Studio / llama.cpp at http://localhost:…). ATS blocks cleartext
         # by default; NSAllowsLocalNetworking exempts loopback/.local/unqualified hosts ONLY — public
@@ -99,10 +99,10 @@ targets:
         com.apple.security.network.client: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.noop
-        PRODUCT_NAME: NOOP
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva
+        PRODUCT_NAME: Kineva
         # Pin the Swift module name so `@testable import Strand` resolves even though PRODUCT_NAME is
-        # NOOP — the test target and shared sources refer to the app module as `Strand`.
+        # Kineva — the test target and shared sources refer to the app module as `Strand`.
         PRODUCT_MODULE_NAME: Strand
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
@@ -131,18 +131,18 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.strandtests
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva.strandtests
         # Host the unit tests in the app so `@testable import Strand` links against the real app module.
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/NOOP.app/Contents/MacOS/NOOP"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Kineva.app/Contents/MacOS/Kineva"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
   # ---------------------------------------------------------------------------
   # iOS app target (community build-from-source; never distributed via the App
-  # Store — NOOP stays anonymous). Reuses the five shared packages + most of the
+  # Store — Kineva stays anonymous). Reuses the five shared packages + most of the
   # macOS app's Strand/ sources; the macOS-only scene/menu-bar/notification files
   # are excluded, and the iOS app shell + HealthKit + widgets/intents live under
   # StrandiOS/. See docs/IOS.md.
-  NOOPiOS:
+  KinevaiOS:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
@@ -163,22 +163,22 @@ targets:
           - "MenuBar"
           - "Data/NotificationSettingsStore.swift"
           - "Screens/NotificationSettingsView.swift"
-          # macOS-only AppIntents (BuzzStrap/MarkMoment) — iOS uses StrandiOS/System/NOOPAppIntents.swift.
-          # Without this exclude both compile into the iOS target and collide on NOOPAppIntents.stringsdata.
-          - "System/NOOPAppIntents.swift"
+          # macOS-only AppIntents (BuzzStrap/MarkMoment) — iOS uses StrandiOS/System/KinevaAppIntents.swift.
+          # Without this exclude both compile into the iOS target and collide on KinevaAppIntents.stringsdata.
+          - "System/KinevaAppIntents.swift"
       - path: StrandiOS
         excludes:
           - "Resources/Info.plist"
-          - "Resources/NOOP.entitlements"
+          - "Resources/Kineva.entitlements"
       - path: StrandiOSShared
     info:
       path: StrandiOS/Resources/Info.plist
       properties:
-        CFBundleName: NOOP
-        CFBundleDisplayName: NOOP
+        CFBundleName: Kineva
+        CFBundleDisplayName: Kineva
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        # Export-compliance: NOOP only uses standard/exempt encryption (HTTPS, Apple BLE/HealthKit) —
+        # Export-compliance: Kineva only uses standard/exempt encryption (HTTPS, Apple BLE/HealthKit) —
         # no proprietary crypto — so it's exempt under the US EAR. Declaring NO here stops every
         # TestFlight build stalling on "Missing Compliance" before it can be tested. Flip to YES (and
         # file the annual self-classification) only if non-exempt encryption is ever added.
@@ -222,11 +222,11 @@ targets:
         # ScheduledDebugExport.bgTaskIdentifier EXACTLY and be registered at launch (StrandiOSApp.init);
         # otherwise iOS refuses to schedule or deliver the background drop.
         BGTaskSchedulerPermittedIdentifiers:
-          - com.noopapp.noop.debugexport
-        NSBluetoothAlwaysUsageDescription: "NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your iPhone. Nothing leaves your device."
-        NSLocationWhenInUseUsageDescription: "NOOP records your route during an outdoor workout to show distance, pace, and a map, and keeps recording while the screen is off. The route stays on your device. Nothing leaves it."
-        NSHealthShareUsageDescription: "NOOP reads your own Apple Health data on-device to compute recovery, strain, and sleep. Nothing leaves your device."
-        NSHealthUpdateUsageDescription: "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
+          - com.aretetechnologies.kineva.debugexport
+        NSBluetoothAlwaysUsageDescription: "Kineva connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your iPhone. Nothing leaves your device."
+        NSLocationWhenInUseUsageDescription: "Kineva records your route during an outdoor workout to show distance, pace, and a map, and keeps recording while the screen is off. The route stays on your device. Nothing leaves it."
+        NSHealthShareUsageDescription: "Kineva reads your own Apple Health data on-device to compute recovery, strain, and sleep. Nothing leaves your device."
+        NSHealthUpdateUsageDescription: "Kineva writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         # #187: the opt-in AI Coach's "Custom (OpenAI-compatible)" provider can point at a LOCAL LLM on
         # the LAN (Ollama / LM Studio at http://192.168.x.x:11434). ATS blocks cleartext by default;
         # NSAllowsLocalNetworking exempts loopback/.local/private-LAN hosts ONLY — public HTTPS endpoints
@@ -239,7 +239,7 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
     entitlements:
-      path: StrandiOS/Resources/NOOP.entitlements
+      path: StrandiOS/Resources/Kineva.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
@@ -247,8 +247,8 @@ targets:
           - $(APP_GROUP_ID)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.noop
-        PRODUCT_NAME: NOOP
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva
+        PRODUCT_NAME: Kineva
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Ship every *.appiconset (not just the primary AppIcon) so the alternate "AppIcon-Navy"
         # set is compiled into the bundle and is available to UIApplication.setAlternateIconName.
@@ -264,16 +264,16 @@ targets:
       - package: StrandDesign
       - package: MarkdownUI
       - package: ZIPFoundation
-      - target: NOOPiOSWidgets
-      # Embed the watchOS app so the iPhone app carries it (NOOP.app/Watch/NOOPWatch.app). A watch app
+      - target: KinevaiOSWidgets
+      # Embed the watchOS app so the iPhone app carries it (Kineva.app/Watch/KinevaWatch.app). A watch app
       # installs by riding inside its iOS companion; without this it would never reach a paired watch.
       # Build-from-source delivers it for certain; sideload install of the embedded watch app under a free
       # Apple ID is unproven (an Apple limitation), so the docs steer watch users to a source build for now.
-      - target: NOOPWatch
+      - target: KinevaWatch
 
   # WidgetKit + Live Activity extension — the iOS analogue of the macOS menu-bar
   # extra. Reads a tiny snapshot the app publishes into the shared App Group.
-  NOOPiOSWidgets:
+  KinevaiOSWidgets:
     type: app-extension
     platform: iOS
     deploymentTarget: "17.0"
@@ -281,12 +281,12 @@ targets:
       - path: StrandiOSWidgets
         excludes:
           - "Info.plist"
-          - "NOOPWidgets.entitlements"
+          - "KinevaWidgets.entitlements"
       - path: StrandiOSShared
     info:
       path: StrandiOSWidgets/Info.plist
       properties:
-        CFBundleDisplayName: NOOP
+        CFBundleDisplayName: Kineva
         # Version keys MUST live here in the generated-Info.plist properties — NOT hand-edited into the
         # file — because xcodegen regenerates StrandiOSWidgets/Info.plist on every `xcodegen generate`
         # (which every release runs for the version bump) and would otherwise rewrite them to its
@@ -300,14 +300,14 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: StrandiOSWidgets/NOOPWidgets.entitlements
+      path: StrandiOSWidgets/KinevaWidgets.entitlements
       properties:
         com.apple.security.application-groups:
           - $(APP_GROUP_ID)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.noop.widgets
-        PRODUCT_NAME: NOOPWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva.widgets
+        PRODUCT_NAME: KinevaWidgets
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
     dependencies:
@@ -321,20 +321,20 @@ targets:
   # A calibrating score renders as "needs more data" (a dash + cal marker), never
   # a fabricated number. Live HR comes from the watch's OWN HealthKit sensor.
   # Modern single-target watchOS app (WKApplication, watchOS 9+ SwiftUI lifecycle).
-  NOOPWatch:
+  KinevaWatch:
     type: application
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
-      - path: NOOPWatch
+      - path: KinevaWatch
         excludes:
           - "Info.plist"
-          - "NOOPWatch.entitlements"
+          - "KinevaWatch.entitlements"
     info:
-      path: NOOPWatch/Info.plist
+      path: KinevaWatch/Info.plist
       properties:
-        CFBundleName: NOOP
-        CFBundleDisplayName: NOOP
+        CFBundleName: Kineva
+        CFBundleDisplayName: Kineva
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Surfaces APP_GROUP_ID to runtime (WatchScoreStore.suiteName) so the App Group id isn't
@@ -342,12 +342,12 @@ targets:
         AppGroupIdentifier: "$(APP_GROUP_ID)"
         # Modern single-target watchOS app — no separate WatchKit extension.
         WKApplication: true
-        # Pairs this watch app to the iPhone companion (must match NOOPiOS PRODUCT_BUNDLE_IDENTIFIER).
-        WKCompanionAppBundleIdentifier: com.aretetechnologies.noop
-        NSHealthShareUsageDescription: "NOOP reads your heart rate from the Watch sensor to show a live readout on your wrist. It stays on your device."
-        NSHealthUpdateUsageDescription: "NOOP records a basic workout session on your Watch for a higher-fidelity heart rate. The session stays on your device."
+        # Pairs this watch app to the iPhone companion (must match KinevaiOS PRODUCT_BUNDLE_IDENTIFIER).
+        WKCompanionAppBundleIdentifier: com.aretetechnologies.kineva
+        NSHealthShareUsageDescription: "Kineva reads your heart rate from the Watch sensor to show a live readout on your wrist. It stays on your device."
+        NSHealthUpdateUsageDescription: "Kineva records a basic workout session on your Watch for a higher-fidelity heart rate. The session stays on your device."
     entitlements:
-      path: NOOPWatch/NOOPWatch.entitlements
+      path: KinevaWatch/KinevaWatch.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
@@ -355,13 +355,13 @@ targets:
           - $(APP_GROUP_ID)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.noop.watch
-        # The bundle FILE is NOOPWatch.app so it doesn't collide with the iPhone app's NOOP.app when it is
-        # embedded at NOOP.app/Watch/NOOPWatch.app. The user still sees "NOOP" on the wrist via the
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva.watch
+        # The bundle FILE is KinevaWatch.app so it doesn't collide with the iPhone app's Kineva.app when it is
+        # embedded at Kineva.app/Watch/KinevaWatch.app. The user still sees "Kineva" on the wrist via the
         # CFBundleName / CFBundleDisplayName above.
-        PRODUCT_NAME: NOOPWatch
+        PRODUCT_NAME: KinevaWatch
         GENERATE_INFOPLIST_FILE: NO
-        # The watch app icon (NOOPWatch/Assets.xcassets/AppIcon.appiconset — the NOOP mark, watchOS single-size).
+        # The watch app icon (KinevaWatch/Assets.xcassets/AppIcon.appiconset — the Kineva mark, watchOS single-size).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # watchOS family.
         TARGETED_DEVICE_FAMILY: "4"
@@ -369,27 +369,27 @@ targets:
     dependencies:
       - package: StrandDesign
       # The complication WidgetKit extension is embedded inside the watch app.
-      - target: NOOPWatchComplications
+      - target: KinevaWatchComplications
 
   # WidgetKit complication extension for the watch face. Reads the same shared-App-Group
   # snapshot the watch app displays, so the complication + glance can never disagree.
   # Charge ring is the headline; accessoryRectangular shows all three scores. Honours
   # confidence (a calibrating score shows a dash + cal marker, not a fabricated number).
-  NOOPWatchComplications:
+  KinevaWatchComplications:
     type: app-extension
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
-      - path: NOOPWatchComplications
+      - path: KinevaWatchComplications
         excludes:
           - "Info.plist"
-          - "NOOPWatchComplications.entitlements"
+          - "KinevaWatchComplications.entitlements"
     info:
-      path: NOOPWatchComplications/Info.plist
+      path: KinevaWatchComplications/Info.plist
       properties:
-        CFBundleDisplayName: NOOP
+        CFBundleDisplayName: Kineva
         # Version keys live here as generated-plist properties so xcodegen keeps them lockstep with the
-        # parent watch app on every regenerate (mirrors the NOOPiOSWidgets rationale, #416).
+        # parent watch app on every regenerate (mirrors the KinevaiOSWidgets rationale, #416).
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Mirrors the watch app: exposes APP_GROUP_ID to the extension at runtime (WatchScoreStore.suiteName).
@@ -397,21 +397,21 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: NOOPWatchComplications/NOOPWatchComplications.entitlements
+      path: KinevaWatchComplications/KinevaWatchComplications.entitlements
       properties:
         com.apple.security.application-groups:
           - $(APP_GROUP_ID)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.noop.watch.complications
-        PRODUCT_NAME: NOOPWatchComplications
+        PRODUCT_BUNDLE_IDENTIFIER: com.aretetechnologies.kineva.watch.complications
+        PRODUCT_NAME: KinevaWatchComplications
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "4"
     dependencies:
       - package: StrandDesign
 
 # Explicit schemes so `xcodebuild -scheme Strand …` builds + tests the macOS app (with StrandTests
-# wired in) and `-scheme NOOPiOS …` builds the iOS app. Names match the app-build CI matrix.
+# wired in) and `-scheme KinevaiOS …` builds the iOS app. Names match the app-build CI matrix.
 schemes:
   Strand:
     build:
@@ -423,17 +423,17 @@ schemes:
       config: Debug
       targets:
         - StrandTests
-  NOOPiOS:
+  KinevaiOS:
     build:
       targets:
-        NOOPiOS: all
+        KinevaiOS: all
     run:
       config: Debug
-  # `xcodebuild -scheme NOOPWatch …` compile-verifies the watchOS app + its embedded complication
+  # `xcodebuild -scheme KinevaWatch …` compile-verifies the watchOS app + its embedded complication
   # extension (M3). Name matches the app-build CI matrix entry the verify script adds.
-  NOOPWatch:
+  KinevaWatch:
     build:
       targets:
-        NOOPWatch: all
+        KinevaWatch: all
     run:
       config: Debug

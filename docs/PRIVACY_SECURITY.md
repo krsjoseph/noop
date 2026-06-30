@@ -1,16 +1,16 @@
 # Privacy & Security
 
-This document describes NOOP's privacy posture, security model, and the hardening
+This document describes Kineva's privacy posture, security model, and the hardening
 applied to the parts of the codebase that touch untrusted input. It is written
 against the actual source tree; file paths and identifiers below are real and can
 be checked.
 
-> **Not affiliated with WHOOP. Not a medical device.** NOOP is an independent,
+> **Not affiliated with WHOOP. Not a medical device.** Kineva is an independent,
 > unofficial, local-first companion app. It interoperates with a WHOOP strap that
 > **you own**, reading **your own** biometric data from **your own** device. It is
 > not affiliated with, endorsed by, or connected to WHOOP, Inc. All computed
 > outputs (Charge, Effort, Rest, HRV, SpO₂, skin temperature, respiratory rate — Charge/Effort/Rest
-> being NOOP's own recovery/strain/sleep scores, not WHOOP's)
+> being Kineva's own recovery/strain/sleep scores, not WHOOP's)
 > are approximations and are not clinically validated. Self-tracking features such
 > as the Mind / mood check-in and nutrition import are **informational only** and are
 > **not** a diagnosis, treatment, or dietary/medical advice. Use at your own risk;
@@ -21,9 +21,9 @@ be checked.
 
 ## 1. Design principle: offline by default
 
-NOOP is **offline by default**. The biometric pipeline — strap → on-device decode →
+Kineva is **offline by default**. The biometric pipeline — strap → on-device decode →
 local SQLite — has no network layer at all: no phone-home, no analytics, no accounts,
-no login, no cloud sync, and no telemetry. Everything NOOP computes about you lives in a
+no login, no cloud sync, and no telemetry. Everything Kineva computes about you lives in a
 single SQLite file on your own device.
 
 There is exactly **one** opt-in exception: the **AI Coach** (§1.1a). It is off until you
@@ -31,14 +31,14 @@ turn it on with your own API key; when you ask it a question it sends a short te
 summary of your recent metrics to the provider you choose. Nothing else in the app ever
 touches the network, and your raw data never does.
 
-Data enters NOOP two ways, and leaves it (other than the optional AI Coach) only when **you**
+Data enters Kineva two ways, and leaves it (other than the optional AI Coach) only when **you**
 deliberately export it to another store on the **same device**:
 
 | Path | Transport | Direction |
 |------|-----------|-----------|
 | Live collection | Bluetooth LE, strap → device | Read-only from the strap |
 | File import (Apple Health, WHOOP CSV, nutrition CSV) | User-selected files on disk | Read-only from disk |
-| Apple Health export, incl. iOS "Export for Shortcuts" | On-device, user-initiated | NOOP → your Apple Health, on your device only (§1.3) |
+| Apple Health export, incl. iOS "Export for Shortcuts" | On-device, user-initiated | Kineva → your Apple Health, on your device only (§1.3) |
 
 The only **network** path is the opt-in AI Coach; the biometric pipeline produces no network
 traffic of any kind. The Apple Health export above is an **on-device** hand-off, not a network
@@ -74,7 +74,7 @@ feature that uses the network, and only on your terms:
 - **Off until you enable it.** You enter your own API key for the provider you choose
   (Anthropic, OpenAI, or a local / self-hosted OpenAI-compatible LLM such as Ollama or
   LM Studio). No key, no network calls, ever.
-- **What is sent.** When you ask a question, NOOP builds a compact **text** summary of
+- **What is sent.** When you ask a question, Kineva builds a compact **text** summary of
   your recent metrics (Charge, Effort, Rest, HRV, resting HR over ~14 days, plus
   30-day averages and recent workouts) and sends it, with your question, directly to
   your chosen endpoint (e.g. `api.anthropic.com` / `api.openai.com` for the hosted
@@ -83,10 +83,10 @@ feature that uses the network, and only on your terms:
 - **What is NOT sent.** No raw biometric streams, no Bluetooth data, no account or
   device identifiers — only the summary text and your question.
 - **Your key, your relationship.** The request goes from your device straight to the
-  provider you picked, under your own account. NOOP runs no server in between and keeps
+  provider you picked, under your own account. Kineva runs no server in between and keeps
   no copy.
 
-If you never enable the AI Coach, NOOP makes zero network connections.
+If you never enable the AI Coach, Kineva makes zero network connections.
 
 ### 1.2 The macOS sandbox (and what it means for the AI Coach)
 
@@ -104,7 +104,7 @@ That is the entire entitlement file. Three keys:
 - **`app-sandbox`** — the process runs inside the macOS App Sandbox container.
 - **`device.bluetooth`** — permits BLE access to talk to the strap. The matching
   `NSBluetoothAlwaysUsageDescription` string (declared in `project.yml`) states
-  plainly: *"NOOP connects directly to your WHOOP strap over Bluetooth to read heart
+  plainly: *"Kineva connects directly to your WHOOP strap over Bluetooth to read heart
   rate, R-R intervals, battery, and sensor data locally on your Mac. Nothing leaves
   your device."*
 - **`files.user-selected.read-write`** — lets the app read import files the user
@@ -136,19 +136,19 @@ property is enforced by the OS, not merely by convention.
 
 ### 1.3 iOS Apple Health export ("Export for Shortcuts") — on-device, user-initiated, one-way
 
-On iOS NOOP can hand your metrics to **Apple Health**. This is the one path where data leaves
-NOOP's own store — but it never leaves your **device**, and never touches the network.
+On iOS Kineva can hand your metrics to **Apple Health**. This is the one path where data leaves
+Kineva's own store — but it never leaves your **device**, and never touches the network.
 
-- **You initiate it; NOOP writes only what you enable.** Nothing is exported automatically. You
-  choose which metrics to push, and NOOP writes only those, only when you trigger the export. There
+- **You initiate it; Kineva writes only what you enable.** Nothing is exported automatically. You
+  choose which metrics to push, and Kineva writes only those, only when you trigger the export. There
   is no background sync.
 - **On-device, not a network upload.** The export is a local hand-off to Apple Health on the same
-  phone. No NOOP server, no cloud, no telemetry is involved — consistent with §1.
+  phone. No Kineva server, no cloud, no telemetry is involved — consistent with §1.
 - **HealthKit-free option.** The **"Export for Shortcuts"** path produces data for the Apple
   Shortcuts app rather than writing through HealthKit directly, so you can route it with a Shortcut
   you control. Where it does write to Apple Health, it does so through Apple's permission-gated APIs:
   you grant access per data type, and you can revoke it in iOS Settings at any time.
-- **Once it's in Apple Health, it's yours and Apple's, not NOOP's.** NOOP cannot read back, manage,
+- **Once it's in Apple Health, it's yours and Apple's, not Kineva's.** Kineva cannot read back, manage,
   or delete what you exported; that store, its backups (e.g. iCloud Health if *you* enabled it), and
   its sharing settings are governed by Apple and by your choices. **You are responsible for the data
   you push into Apple Health and for anything you or your Shortcuts then do with it.** See
@@ -196,7 +196,7 @@ database — they live in the same container.
 
 ### 2.2 Encryption
 
-The SQLite file is **not encrypted at rest by NOOP itself.** Confidentiality of the
+The SQLite file is **not encrypted at rest by Kineva itself.** Confidentiality of the
 data on disk relies on the platform:
 
 - **FileVault** (full-disk encryption, on by default on modern Macs) protects the
@@ -211,7 +211,7 @@ session, or a backup/Time Machine copy of the container made while FileVault is
 unlocked. The data is plaintext SQLite once the volume is mounted.
 
 > **Option: SQLCipher.** GRDB supports SQLCipher (an encrypted SQLite build) as a
-> drop-in. Wiring NOOP's `DatabaseQueue` to a SQLCipher build with a
+> drop-in. Wiring Kineva's `DatabaseQueue` to a SQLCipher build with a
 > Keychain-derived key would give at-rest encryption independent of FileVault. This
 > is not enabled in the current build, but the persistence layer is small and
 > centralized (one `WhoopStore.init(path:)`), so it is a contained change.
@@ -228,14 +228,14 @@ DELETE FROM rawBatch WHERE syncedAt IS NOT NULL AND syncedAt < ?
 ```
 
 So raw captures do not accumulate forever. (The `syncedAt`/upload-related columns are
-schema scaffolding inherited from the upstream collection library; in NOOP's offline
+schema scaffolding inherited from the upstream collection library; in Kineva's offline
 configuration nothing uploads, and the raw buffer is purely a local replay/recovery
 aid.)
 
 ### 2.4 Diagnostics: the strap connection log
 
 When a strap won't connect or behaves oddly, the single most useful thing a user can
-send is the connection log. NOOP keeps one so it can be shared **without** needing
+send is the connection log. Kineva keeps one so it can be shared **without** needing
 `adb` or a developer setup (this is what made issues #17/#18 reportable), and the same
 log doubles as the primary tool for **debugging and protocol development** (see
 `ANDROID.md` → "Debugging the strap connection").
@@ -247,7 +247,7 @@ ring buffer** — the last
 advertised name + RSSI), the bond/handshake state machine, command names with their
 outbound payload **hex**, and offload progress (trim cursors, chunk acks). It is held
 in RAM only; the "Share strap log" button writes it to a private app-cache file at
-share time and hands that file to the OS share sheet. Nothing is uploaded by NOOP.
+share time and hands that file to the OS share sheet. Nothing is uploaded by Kineva.
 
 **What it does *not* contain.** No account credentials (there is no account), no
 decoded biometric *values* (heart-rate numbers, R-R intervals, SpO₂, skin-temp are not
@@ -272,13 +272,13 @@ Android wrist alerts (buzz the strap when chosen apps notify you) need a
 `NotificationListenerService` — that's the only way to register in the OS's
 **Notification Access** list and be told a notification was posted. Notification
 access is a powerful permission, so for a privacy-first app it's worth being precise
-about what NOOP does and does not do with it:
+about what Kineva does and does not do with it:
 
 - **Off by default, double opt-in.** The service does nothing until you both grant
-  Notification Access in system settings *and* turn on **Wrist alerts** in NOOP, then
+  Notification Access in system settings *and* turn on **Wrist alerts** in Kineva, then
   enable specific apps (each app is off by default).
 - **It reads only the posting package name — never content.** On a posted
-  notification NOOP looks at *which app* posted (and skips ongoing / foreground-service /
+  notification Kineva looks at *which app* posted (and skips ongoing / foreground-service /
   group-summary noise), checks your settings (master toggle, that app's opt-in, quiet
   hours, only-when-worn), and if all pass, sends a haptic-pattern command to the strap.
   The notification's title, text, sender, and extras are never read, stored, logged, or
@@ -290,15 +290,15 @@ about what NOOP does and does not do with it:
 
 ## 3. Threat model
 
-NOOP parses two classes of **untrusted input**: bytes arriving over Bluetooth, and
+Kineva parses two classes of **untrusted input**: bytes arriving over Bluetooth, and
 files chosen for import. Both are treated as hostile and validated before anything
 reaches the database. Apple Health and WHOOP files in particular can be very large
 (multi-hundred-MB to multi-GB), so resource exhaustion is part of the model.
 
-What is explicitly **out of scope**: NOOP cannot defend the data against an attacker
+What is explicitly **out of scope**: Kineva cannot defend the data against an attacker
 who already controls your unlocked user session (see §2.2), and it makes no claim of
 cryptographic authentication of the strap — BLE pairing/bonding security is provided
-by the OS Bluetooth stack and the device, not by NOOP.
+by the OS Bluetooth stack and the device, not by Kineva.
 
 ### 3.1 Threat A: a malicious or malfunctioning BLE peer
 
@@ -437,15 +437,15 @@ dedicated source id `nutrition-csv`, alongside your other metrics and entirely o
 
 ---
 
-## 4. What NOOP does *not* collect or transmit
+## 4. What Kineva does *not* collect or transmit
 
 - **No accounts, no login.** Nothing to sign into; no credentials
   stored.
 - **No telemetry / analytics / crash reporting.** No third-party SDKs of that kind.
 - **No cloud, no sync, no remote backup.** Your data never leaves the machine via
-  NOOP.
+  Kineva.
 - **No advertising identifiers, no tracking.**
-- **No WHOOP account or API credentials.** NOOP talks only to the strap over local
+- **No WHOOP account or API credentials.** Kineva talks only to the strap over local
   BLE; it does not authenticate against, or pull from, any WHOOP server.
 
 ---
@@ -471,7 +471,7 @@ dedicated source id `nutrition-csv`, alongside your other metrics and entirely o
 
 ## 6. Reporting a security issue
 
-NOOP is a hobbyist, non-commercial interoperability and research project provided
+Kineva is a hobbyist, non-commercial interoperability and research project provided
 **as-is, with no warranty**, for personal and educational use only (see
 `DISCLAIMER.md`). If you find a security or privacy issue, please open a GitHub issue
 describing the problem and a reproduction; sensitive reports can be coordinated
@@ -482,7 +482,7 @@ good faith.
 
 ## 7. Credits
 
-The protocol and persistence work NOOP builds on is community reverse-engineering of
+The protocol and persistence work Kineva builds on is community reverse-engineering of
 hardware the user owns, used for interoperability:
 
 - **`johnmiddleton12/my-whoop`** — the WHOOP 4.0 BLE framing/command/decode work and
@@ -495,5 +495,5 @@ hardware the user owns, used for interoperability:
 - **`weichsel/ZIPFoundation`** — the archive reader used by the importers.
 
 See `ATTRIBUTION.md` and `DISCLAIMER.md` for the full attribution and good-faith
-notice. NOOP contains no WHOOP proprietary code, firmware, binaries, logos, or
+notice. Kineva contains no WHOOP proprietary code, firmware, binaries, logos, or
 assets, and performs no DRM circumvention.
