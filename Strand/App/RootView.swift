@@ -22,6 +22,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
     case appleHealth = "Apple Health"
     case xiaomi = "Mi Band"
     case dataSources = "Data Sources"
+    case backupSync = "Backup & Sync"
     case fusedRecord = "Your Data, Fused"
     case devices = "Devices"
     case notifications = "Notifications"
@@ -29,6 +30,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
     case smartAlarm = "Smart Alarm"
     case settings = "Settings"
     case support = "Support"
+    case testCentre = "Test Centre"
 
     var id: String { rawValue }
 
@@ -56,6 +58,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .appleHealth: return "Apple Health"
         case .xiaomi: return "Mi Band"
         case .dataSources: return "Data Sources"
+        case .backupSync: return "Backup & Sync"
         case .fusedRecord: return "Your Data, Fused"
         case .devices: return "Devices"
         case .notifications: return "Notifications"
@@ -66,6 +69,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .smartAlarm: return "Alarms"
         case .settings: return "Settings"
         case .support: return "Support"
+        case .testCentre: return "Test Centre"
         }
     }
 
@@ -91,6 +95,7 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .appleHealth: return "heart.fill"
         case .xiaomi: return "figure.walk.motion"
         case .dataSources: return "square.and.arrow.down.fill"
+        case .backupSync: return "externaldrive.fill.badge.icloud"
         case .fusedRecord: return "square.stack.3d.up.fill"
         case .devices: return "badge.plus.radiowaves.right"
         case .notifications: return "bell.badge.fill"
@@ -98,7 +103,47 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .smartAlarm: return "alarm.fill"
         case .settings: return "gearshape.fill"
         case .support: return "heart.fill"
+        case .testCentre: return "stethoscope"
         }
+    }
+}
+
+/// One collapsible sidebar section (S1, #805): the 28 flat `NavItem` cases are grouped into ~5
+/// labelled sections so the macOS sidebar stops being a 28-item flat wall. The enum cases are NOT
+/// touched (M5 gate): only the layout that consumes them changes. `NavGroup.all` is the single source
+/// of truth for what each section holds, so the M5 routability test can assert every `NavItem` case is
+/// still present across the groups (nothing vanished the way the iPhone Smart-Alarm row did).
+struct NavGroup: Identifiable {
+    let title: LocalizedStringKey
+    /// Stable identity for the group's expand/collapse state. (LocalizedStringKey isn't Hashable.)
+    let id: String
+    let items: [NavItem]
+
+    /// The 5 sidebar sections, in order, mirroring the iOS More-tab grouping idiom (Insights / Body /
+    /// Data & App) plus Today + Sleep as their own top sections. Devices/pairing sits at the TOP of the
+    /// Data & App group so the first thing a new user reaches for stays near the surface. Every one of the
+    /// 28 `NavItem` cases appears exactly once across these groups (asserted by the M5 routability test).
+    static let all: [NavGroup] = [
+        NavGroup(title: "Today", id: "today", items: [.today]),
+        NavGroup(title: "Sleep", id: "sleep", items: [.sleep]),
+        NavGroup(title: "Body", id: "body", items: [
+            .workouts, .live, .health, .stress, .intervals, .breathe,
+        ]),
+        // S6: the overlapping insight surfaces (Intelligence / What Moves You / Insights / Insights Hub)
+        // all collapse under this single Insights group rather than scattering across the flat list.
+        NavGroup(title: "Insights", id: "insights", items: [
+            .intelligence, .insightsHub, .coach, .explore, .compare, .insights,
+            .labBook, .rhythm, .trends,
+        ]),
+        NavGroup(title: "Data & App", id: "data_app", items: [
+            .devices, .dataSources, .appleHealth, .xiaomi, .backupSync, .fusedRecord,
+            .notifications, .automation, .smartAlarm, .settings, .support, .testCentre,
+        ]),
+    ]
+
+    /// The group that owns a given destination (used to auto-expand the active group on launch / route).
+    static func group(containing item: NavItem) -> NavGroup? {
+        all.first { $0.items.contains(item) }
     }
 }
 
@@ -111,6 +156,19 @@ struct RootView: View {
     /// switch the sidebar selection without owning it — see `NavRouter`.
     @EnvironmentObject var router: NavRouter
     @State private var selection: NavItem? = .today
+    /// Which sidebar groups are expanded (S1, #805). Default = the group owning the launch selection
+    /// (`.today`). The single-item Today/Sleep sections always read expanded so their one row shows; the
+    /// multi-item groups (Body / Insights / Data & App) collapse to just their header until tapped.
+    @State private var expandedGroups: Set<String> = Self.initialExpandedGroups(for: .today)
+
+    /// The groups expanded at rest: every single-item group (so its lone row is visible) plus the group
+    /// owning the current selection. Keeps the sidebar to "headers + the active group" as the spec asks.
+    /// `internal` (not `private`) so the M5 routability test can pin the contract via `@testable`.
+    static func initialExpandedGroups(for item: NavItem?) -> Set<String> {
+        var open = Set(NavGroup.all.filter { $0.items.count == 1 }.map(\.id))
+        if let item, let g = NavGroup.group(containing: item) { open.insert(g.id) }
+        return open
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -119,10 +177,25 @@ struct RootView: View {
                 // `List(.sidebar)` doesn't inset its scroll content for a top safe-area inset, so the
                 // (transparent) lockup floated over the scrolling rows and overlapped "Intelligence".
                 brand
-                List(NavItem.allCases, selection: $selection) { item in
-                    Label(item.titleKey, systemImage: item.icon)
-                        .font(StrandFont.rounded(13, weight: .medium))
-                        .tag(item)
+                // S1 (#805): collapsible sections instead of 28 flat rows. Each multi-item group is a
+                // DisclosureGroup bound to `expandedGroups`; single-item groups (Today / Sleep) render
+                // their one row directly so there's nothing to expand into. The `NavItem` enum is
+                // unchanged (M5 gate): only this layout that consumes it changed.
+                List(selection: $selection) {
+                    ForEach(NavGroup.all) { group in
+                        if group.items.count == 1, let only = group.items.first {
+                            sidebarRow(only)
+                        } else {
+                            DisclosureGroup(isExpanded: groupExpansion(group.id)) {
+                                ForEach(group.items) { sidebarRow($0) }
+                            } label: {
+                                Text(group.title)
+                                    .font(StrandFont.rounded(11, weight: .semibold))
+                                    .foregroundStyle(StrandPalette.textTertiary)
+                                    .textCase(.uppercase)
+                            }
+                        }
+                    }
                 }
                 .listStyle(.sidebar)
                 // Hide the macOS system sidebar VIBRANCY material so the list rows sit on the same
@@ -148,7 +221,18 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(StrandPalette.surfaceBase.ignoresSafeArea())
         }
-        .task { await repo.refresh() }
+        .task {
+            await repo.refresh()
+            // Backup & Sync: on-launch catch-up. Gated on the auto toggle being ON (default OFF). A
+            // whole-DB ZIP can be 100MB+, so it must never block startup: fire it in a DETACHED,
+            // utility-priority task AFTER the launch-critical refresh, fully off the main actor (the
+            // `FolderBackup` enum is nonisolated; only the picker hops to the main actor, and it isn't
+            // reached here). The screen also offers an explicit "Back up now". (Must-fix #4.)
+            let backupRepo = repo
+            Task.detached(priority: .utility) {
+                await FolderBackup.catchUpIfDue(checkpoint: { await backupRepo.checkpointForBackup() })
+            }
+        }
         // Honour a cross-screen request to open a top-level destination (e.g. Live's "Manage devices"),
         // then clear it so the same tap can fire again later. Devices maps to the `.devices` sidebar item.
         .onChangeCompat(of: router.requestedDestination) { dest in
@@ -163,6 +247,31 @@ struct RootView: View {
             }
             if dest != nil { router.requestedDestination = nil }
         }
+        // Whenever the selection moves (a cross-screen route, or restoring a deep destination), make sure
+        // the group that owns it is expanded so the selected row is actually visible, not hidden inside a
+        // collapsed section (S1). User-driven collapses of OTHER groups are preserved.
+        .onChangeCompat(of: selection) { sel in
+            if let sel, let g = NavGroup.group(containing: sel) {
+                expandedGroups.insert(g.id)
+            }
+        }
+    }
+
+    /// One selectable destination row (same Label styling the flat list used), tagged for selection.
+    private func sidebarRow(_ item: NavItem) -> some View {
+        Label(item.titleKey, systemImage: item.icon)
+            .font(StrandFont.rounded(13, weight: .medium))
+            .tag(item)
+    }
+
+    /// A binding into `expandedGroups` for one group's id, so each DisclosureGroup drives the shared set.
+    private func groupExpansion(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { expandedGroups.contains(id) },
+            set: { isOpen in
+                if isOpen { expandedGroups.insert(id) } else { expandedGroups.remove(id) }
+            }
+        )
     }
 
     private var brand: some View {
@@ -204,6 +313,7 @@ struct RootView: View {
         case .appleHealth: AppleHealthView()
         case .xiaomi: XiaomiBandView()
         case .dataSources: DataSourcesView()
+        case .backupSync: BackupSyncView()
         case .fusedRecord: FusedRecordHost()
         case .devices: DevicesView()
         case .notifications: NotificationSettingsView()
@@ -211,6 +321,7 @@ struct RootView: View {
         case .smartAlarm: SmartAlarmView()
         case .settings: settingsDetail
         case .support: SupportView()
+        case .testCentre: TestCentreView()
         }
     }
 

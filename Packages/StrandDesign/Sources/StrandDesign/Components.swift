@@ -222,7 +222,12 @@ public struct StatTile<Accessory: View>: View {
                 }
             }
         }
-        .frame(height: NoopMetrics.tileHeight)
+        // A FLOOR, not a fixed height: a sparkline tile's content exceeds the 96pt base and must be
+        // allowed to grow instead of overflowing downward into the inter-card gap (which read as an
+        // uneven margin beside its shorter row-mate). maxHeight: .infinity lets a grid cell stretch the
+        // tile to match the tallest tile in its row, so every row's two cards are equal height and the
+        // gaps stay uniform. In an unbounded parent it resolves to the content's own height, unchanged.
+        .frame(minHeight: NoopMetrics.tileHeight, maxHeight: .infinity)
         // One VoiceOver stop per tile (label, value, caption, delta) instead of up
         // to four fragmented stops; the decorative sparkline is hidden above.
         .accessibilityElement(children: .combine)
@@ -562,7 +567,7 @@ public extension ButtonStyle where Self == NoopGhostButtonStyle {
 // untouched. This is the score-lifecycle chip the new design calls for: SOLID = gold
 // fill, BUILDING = blue, CALIBRATING = slate, LIVE = gold dot with a pulsing halo.
 
-public enum ScoreState: Sendable {
+public enum ScoreState: Sendable, Equatable {
     case solid        // a settled, trustworthy score
     case building     // accruing nights, not yet settled
     case calibrating  // baseline still forming

@@ -50,7 +50,12 @@ object TestReportFlow {
             if (!shouldProceed(gate)) return@runCatching
             val name = Plan.bundleName(profile, platform, version)
             LogExport.exportBundle(context, entries, name)              // existing ACTION_SEND chooser
-            TestReportLink.openReport(context, profile, title, version, platform, osVersion)
+            // CAPTURE-A (#812): prefill the issue `log` body from the already-redacted report.txt so a
+            // submission without the .zip attached still carries the diagnostic trace (incl. the universal
+            // dayOwner line). The bundle is already v2-redacted; this reuses that text verbatim.
+            val reportText = entries.firstOrNull { it.first == "report.txt" }?.second?.let { String(it) }
+            TestReportLink.openReport(context, profile, title, version, platform, osVersion,
+                reportText = reportText)
             Toast.makeText(context, Plan.attachToast(name), Toast.LENGTH_LONG).show()
             if (Plan.offersCopyFallback(platform)) {
                 val report = entries.firstOrNull { it.first == "report.txt" }?.second

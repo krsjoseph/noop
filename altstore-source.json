@@ -18,6 +18,42 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "7.5.0",
+          "buildVersion": "161",
+          "date": "2026-06-29",
+          "localizedDescription": "Kineva 7.5.0. See the release notes for what changed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.5.0/Kineva-v7.5.0-ios.ipa",
+          "size": 12635634,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "7.4.1",
+          "buildVersion": "160",
+          "date": "2026-06-29",
+          "localizedDescription": "Kineva 7.4.1. See the release notes for what changed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.4.1/Kineva-v7.4.1-ios.ipa",
+          "size": 12442600,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "7.4.0",
+          "buildVersion": "159",
+          "date": "2026-06-29",
+          "localizedDescription": "Kineva 7.4.0. See the release notes for what changed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.4.0/Kineva-v7.4.0-ios.ipa",
+          "size": 12444628,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "7.3.2",
+          "buildVersion": "158",
+          "date": "2026-06-28",
+          "localizedDescription": "Kineva 7.3.2. See the release notes for what changed.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.3.2/Kineva-v7.3.2-ios.ipa",
+          "size": 12294341,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "7.3.1",
           "buildVersion": "157",
           "date": "2026-06-27",
@@ -1027,12 +1063,12 @@
           "NSHealthUpdateUsageDescription": "Kineva writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "7.3.1",
-      "buildVersion": "157",
-      "versionDate": "2026-06-27",
-      "versionDescription": "Kineva 7.3.1. See the release notes for what changed.",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.3.1/Kineva-v7.3.1-ios.ipa",
-      "size": 12058542,
+      "version": "7.5.0",
+      "buildVersion": "161",
+      "versionDate": "2026-06-29",
+      "versionDescription": "Kineva 7.5.0. See the release notes for what changed.",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v7.5.0/Kineva-v7.5.0-ios.ipa",
+      "size": 12635634,
       "minOSVersion": "17.0"
     }
   ],

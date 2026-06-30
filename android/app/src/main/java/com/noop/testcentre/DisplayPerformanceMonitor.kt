@@ -34,6 +34,15 @@ object DisplayPerformanceMonitor {
     private var running = false
     private var sink: ((String) -> Unit)? = null
 
+    /**
+     * CAPTURE-D (#797): a provider of the on-device DATA VOLUME, wired by the Test Centre screen to
+     * [com.noop.data.WhoopRepository.dataVolumeSnapshot]. When set, [emitDataVolume] emits ONE upfront
+     * `dataVolume` line so an import-driven-lag report shows the read-set the screens render over, not only
+     * frame stats. null leaves the line unemitted (e.g. a test with no store). Mirrors the Swift
+     * DisplayPerformanceMonitor.dataVolumeProvider.
+     */
+    var dataVolumeProvider: (suspend () -> com.noop.analytics.DataVolume?)? = null
+
     private var lastFrameNanos: Long = 0
     private val windowDurationsMs = ArrayList<Double>()
     private var windowHitches = 0
@@ -70,6 +79,20 @@ object DisplayPerformanceMonitor {
         sampleMemory()
         emit(DisplayTrace.deviceMetricsLine(readMetrics(context)))
         Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    /**
+     * CAPTURE-D (#797): read the on-device DATA VOLUME (via [dataVolumeProvider]) and emit ONE upfront
+     * `dataVolume` line. Suspend because the read hits the store; the Test Centre screen calls it once from
+     * a coroutine right after [start] (the monitor object itself owns no scope, mirroring how the Swift
+     * monitor emits it in a Task wired by TestCentreView). A no-op when the monitor is off, the sink is
+     * gone, or no provider is set. A null snapshot emits nothing (never a fabricated zero line).
+     */
+    suspend fun emitDataVolume() {
+        if (!running) return
+        val provider = dataVolumeProvider ?: return
+        val volume = runCatching { provider() }.getOrNull() ?: return
+        sink?.invoke(DisplayTrace.dataVolumeLine(volume))
     }
 
     /**

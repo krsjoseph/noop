@@ -22,9 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,7 @@ import com.noop.testcentre.TestMode
 import com.noop.testcentre.TestModeRegistry
 import com.noop.testcentre.TestReportFlow
 import com.noop.testcentre.TestReportLink
+import kotlinx.coroutines.launch
 
 /**
  * Settings -> Test Centre (spec section 7), the Android twin of TestCentreView. Four sections: domain
@@ -57,6 +60,9 @@ import com.noop.testcentre.TestReportLink
 fun TestCentreScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val testCentre = remember { TestCentre.from(context) }
+    // CAPTURE-D: a UI scope to emit the data-volume line off the toggle-on path (a store read, so it can't
+    // run inline in the non-suspend onToggle).
+    val scope = rememberCoroutineScope()
 
     // The strap model the Settings #22 gate reads, mirrored here so the 5/MG block shows for a 5/MG only.
     val live by vm.live.collectAsStateWithLifecycle()
@@ -78,11 +84,19 @@ fun TestCentreScreen(vm: AppViewModel) {
     // exists only while the Test Centre is on screen with the Display mode on.
     DisposableEffect(Unit) {
         if (testCentre.active(TestDomain.DISPLAY)) {
+            // CAPTURE-D (#797): wire the data-volume provider so the monitor can emit ONE `dataVolume` line
+            // read STRAIGHT from the store (not the reactive caches), against the registry's active strap id.
+            DisplayPerformanceMonitor.dataVolumeProvider = { vm.repo.dataVolumeSnapshot(vm.activeStrapId) }
             DisplayPerformanceMonitor.start(context) { line ->
                 vm.ble.externalLog(line, TestDomain.DISPLAY)
             }
         }
         onDispose { DisplayPerformanceMonitor.stop() }
+    }
+    // CAPTURE-D: emit the data-volume line once when the Display mode is active on entry. Kept off the
+    // (non-suspend) DisposableEffect: the read hits the store, so it runs from a coroutine.
+    LaunchedEffect(Unit) {
+        if (testCentre.active(TestDomain.DISPLAY)) DisplayPerformanceMonitor.emitDataVolume()
     }
 
     ScreenScaffold(
@@ -109,9 +123,14 @@ fun TestCentreScreen(vm: AppViewModel) {
                             // Zero-cost when off.
                             if (mode.domain == TestDomain.DISPLAY) {
                                 if (on) {
+                                    // CAPTURE-D (#797): wire the data-volume provider (store-read, active id),
+                                    // start the monitor, then emit the upfront dataVolume line off a scope.
+                                    DisplayPerformanceMonitor.dataVolumeProvider =
+                                        { vm.repo.dataVolumeSnapshot(vm.activeStrapId) }
                                     DisplayPerformanceMonitor.start(context) { line ->
                                         vm.ble.externalLog(line, TestDomain.DISPLAY)
                                     }
+                                    scope.launch { DisplayPerformanceMonitor.emitDataVolume() }
                                 } else {
                                     DisplayPerformanceMonitor.stop()
                                 }

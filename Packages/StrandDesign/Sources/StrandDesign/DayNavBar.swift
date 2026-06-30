@@ -115,6 +115,9 @@ public struct DayNavBar: View {
             .datePickerStyle(.graphical)
             .labelsHidden()
             .padding(12)
+            // #840 — iPad popover needs an explicit size or the graphical picker clips. Safe on macOS 13
+            // and iPhone (the popover/sheet sizes to this); avoids the macOS 13.3-only compact-adaptation API.
+            .frame(minWidth: 320, minHeight: 360)
     }
 
     private var blockShape: RoundedRectangle { RoundedRectangle(cornerRadius: 14, style: .continuous) }

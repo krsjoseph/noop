@@ -279,6 +279,12 @@ struct IntelligenceView: View {
                 HStack {
                     Text(d.day).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
                     Spacer()
+                    // A3: the existing per-day Charge confidence as a small dot + tier tag pill
+                    // (CALIBRATING / EST. / REL.) next to the source badge. Pure presentation of
+                    // `d.confidence` , only shown once there's a Charge to qualify.
+                    if d.recovery != nil {
+                        ConfidenceTierChip(confidence: d.confidence)
+                    }
                     // The REAL source of the day's dashboard headline, not a hard-coded "Kineva-computed".
                     // The By-Day numbers are always Kineva's on-device scores, but when an import covers the
                     // day it WINS the dashboard merge, so the badge says so ("Whoop" / "Apple Health") and
@@ -307,6 +313,16 @@ struct IntelligenceView: View {
                     PipBar(value: s, range: 0...100, segments: 20,
                            tint: StrandPalette.strainColor(s), height: 8)
                         .accessibilityHidden(true)
+                }
+                // A1: "What shaped it" , one row per engine-supplied Charge driver. Gated on a non-empty
+                // list so a cold-start / calibrating night (no real contributions to attribute) shows
+                // nothing here rather than a fake breakdown. A5's relative skin-temp marker rides at the
+                // foot when the night carries one.
+                if !d.drivers.isEmpty {
+                    ChargeBreakdownSection(drivers: d.drivers,
+                                           confidence: d.confidence,
+                                           skinTempRel: d.skinTempRel)
+                        .padding(.top, NoopMetrics.space1)
                 }
             }
         }

@@ -83,6 +83,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val repo: WhoopRepository get() = repository
 
+    /** The registry's active strap id (the same id the read path resolves to). Public so the Test Centre
+     *  can read the right source for the CAPTURE-D data-volume snapshot. */
+    val activeStrapId: String get() = deviceId
+
     // MARK: - Devices screen (multi-source Phase 1B)
     //
     // The Devices screen is a thin UI over the process-wide [DeviceRegistry]. Every mutation goes
@@ -191,22 +195,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
 
     /**
-     * A DISCOVERY-ONLY EXPERIMENTAL [com.noop.ble.OuraProbeSource] for the Add-Oura wizard. Detects the
-     * ring and reports the honest dead-end (no open live stream → use file import). Never streams or
-     * persists. Mirrors the macOS AddDeviceWizard's throwaway OuraProbeSource.
+     * A DISCOVERY-ONLY EXPERIMENTAL [com.noop.ble.OuraLiveSource] for the Add-Oura wizard. Runs its OWN
+     * scan (it owns its OWN scanner + GATT, never the WHOOP client) and never persists or feeds live state
+     * here - the [SourceCoordinator] owns connection once the ring becomes active. The live sink / persist
+     * are no-ops and the auth key is null (discovery has no need to authenticate), so the scanner only ever
+     * surfaces nearby rings via its `discovered` / `scanning` StateFlows. Mirrors the macOS
+     * AddDeviceWizard's discovery-only OuraLiveSource (deviceId "scan-preview", no-op persist).
+     *
+     * A concrete [com.noop.oura.OuraRingGen] is required by the constructor; gen3 (the verified-corpus
+     * default) is fine for discovery since the wizard's pick step confirms the real generation from the
+     * model the user selects. The MTU clamp / command set never run during a scan-only session.
      */
-    fun makeOuraScanner(): com.noop.ble.OuraProbeSource =
-        // Route the probe's diagnostics (incl. the honest "no open live stream" dead-end) into the SAME
-        // exported strap log the active path uses (issue #421 parity), so a tester's Oura wizard scan is
-        // captured. The source self-prefixes "Oura: "; [externalLog] redacts addresses. Statuses / service
-        // UUIDs / counts only, never a device address.
-        com.noop.ble.OuraProbeSource(context = appContext, log = { ble.externalLog(it) })
+    fun makeOuraScanner(): com.noop.ble.OuraLiveSource =
+        com.noop.ble.OuraLiveSource(
+            context = appContext,
+            deviceId = "scan-preview",
+            ringGen = com.noop.oura.OuraRingGen.GEN3,
+            liveSink = { _, _ -> },
+            authKey = { null },
+            persist = { _, _ -> },
+            // Route the scanner's diagnostics into the SAME exported strap log the active path uses
+            // (issue #421 parity), so a tester's Oura wizard scan is captured. The source self-prefixes
+            // "Oura: "; [externalLog] redacts addresses. Statuses / service UUIDs / counts only, never a
+            // device address.
+            log = { ble.externalLog(it) },
+        )
 
     // MARK: - Add-a-device wizard (multi-WHOOP, MW-4) — thin pass-throughs to the BLE client.
 
     /** WHOOP straps surfaced by the wizard's present-scan ([presentWhoopScan]), WITHOUT auto-connecting.
      *  The wizard observes this directly so its pick list updates as straps appear. */
     val discoveredWhoops: StateFlow<List<com.noop.ble.WhoopBleClient.DiscoveredWhoop>> = ble.discoveredWhoops
+
+    /** The active Oura ring's live adopt outcome, mirrored from the [com.noop.ble.SourceCoordinator]. The
+     *  Add-Oura wizard observes this to leave its Adopting step: streaming -> success/close, failed -> the
+     *  honest Failed step. Idle whenever no Oura source is live. Mirrors Swift `AppModel.ouraAdoptPhase`. */
+    val ouraAdoptPhase: StateFlow<com.noop.ble.OuraLiveSource.AdoptPhase> =
+        noopApp.sourceCoordinator.ouraAdoptPhase
+
+    /** The active Oura ring's honest needs-pairing message (null when none), mirrored from the
+     *  [com.noop.ble.SourceCoordinator]. The wizard treats a non-null value during Adopting as an honest
+     *  failure too. Mirrors Swift `AppModel.ouraNeedsPairing`. */
+    val ouraNeedsPairing: StateFlow<String?> = noopApp.sourceCoordinator.ouraNeedsPairing
 
     /**
      * Point the WHOOP scan at a specific family, then present nearby straps WITHOUT auto-connecting (the
@@ -235,6 +265,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         addPairedDevice(device)
         if (makeActive) setActiveDevice(device.id)
     }
+
+    /**
+     * Store the 16-byte Oura application install key for a ring (keyed by its registry device id) in the
+     * encrypted, Keystore-backed [com.noop.ble.OuraInstallKeyStore]. The Add-Oura wizard's Advanced path
+     * calls this with the user-supplied key so the live [com.noop.ble.OuraLiveSource]'s authKey closure can
+     * read it on the next connect. The key is unsigned bytes 0..255; a wrong-length key is rejected by the
+     * store. Mirrors the macOS OuraKeyStore.save. The key is never logged.
+     */
+    fun saveOuraInstallKey(deviceId: String, key: IntArray): Boolean =
+        com.noop.ble.OuraInstallKeyStore.save(appContext, deviceId, key)
+
+    /**
+     * Arm (or clear) the one-shot adopt-intent for an Oura ring (keyed by its registry device id). The
+     * Add-Oura wizard's DESTRUCTIVE factory-reset-and-adopt path calls this with true AFTER its
+     * irreversible-consent gate and second destructive confirm, BEFORE registering the ring active, so the
+     * [com.noop.ble.SourceCoordinator] consumes it when it builds the live source and permits the dangerous
+     * post-factory-reset key install for that one session (OURA_PROTOCOL.md s3.2). The Advanced-key path
+     * NEVER calls this (it authenticates with the user's own key and must not reset the ring). One-shot:
+     * the source consumes it on the next connect.
+     */
+    fun armOuraAdopt(deviceId: String) =
+        com.noop.ble.OuraInstallKeyStore.setPendingAdopt(appContext, deviceId, true)
 
     // Body profile (age/sex/weight/height + HR-max override) — the same SharedPreferences
     // store the Settings screen edits. Feeds the on-device scorer's HRmax/zones/calories.
@@ -394,7 +446,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the strap with no WHOOP import.
      */
     val recentDays: StateFlow<List<DailyMetric>> =
-        repository.daysMergedFlow(deviceId)
+        // #797: bound the dashboard merge window. The unbounded daysMergedFlow re-merged the WHOLE daily
+        // history on every DB change; a years-deep import made that a heavy refresh feeding Today / Trends /
+        // illness watch. recentDaysMergedFlow caps each source to RECENT_DAYS_CAP most-recent days first, so
+        // the merge stays bounded while every current surface (deepest Trends range, 7-day Fitness Age /
+        // Vitality windows) keeps its data. Same oldest-first ordering as before.
+        repository.recentDaysMergedFlow(deviceId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -598,7 +655,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         NoopPrefs.setTsHealPending(appContext, false)
                     }
                 }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
-                runCatching {
+                // #836 parity (Android): the 15-min tick is a backstop, not a data-driven refresh. Every real
+                // update (sync, import, edit, recalibrate, the #547 heal above) rescores via its own path and
+                // moves the raw-HR fingerprint, so skip the heavy 21-day rescore when the HR stream is unchanged
+                // since the last COMPLETED run. Mirrors the Swift analyzeRecent(force:false) gate; the watermark
+                // advances only on success (below), so an interrupted run can never hide unscored data.
+                val analyzeFp = repository.hrFingerprint()
+                if (analyzeFp != NoopPrefs.analyzeWatermark(appContext)) runCatching {
                     IntelligenceEngine.analyzeRecent(
                         repo = repository,
                         profile = currentProfile(),
@@ -664,11 +727,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                     .active(com.noop.testcentre.TestDomain.STEPS))
                                 { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.STEPS) }
                             else null,
+                        // CAPTURE-B universal diagnostic (Test Centre, domain .universal): when ANY test
+                        // mode is on, stamp each scored day's `dayOwner …` line into the .universal-tagged
+                        // strap log so EVERY export self-diagnoses the read-vs-write identity + provenance.
+                        // active(UNIVERSAL) returns true whenever any non-universal mode is on, so the
+                        // universal line rides whatever domain the user enabled. Zero-cost when all off.
+                        universalSink =
+                            if (com.noop.testcentre.TestCentre.from(appContext)
+                                    .active(com.noop.testcentre.TestDomain.UNIVERSAL))
+                                { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.UNIVERSAL) }
+                            else null,
                     )
                     // analyzeRecent now hops to Dispatchers.Default; a scope cancellation surfaces as a
                     // CancellationException that runCatching would otherwise swallow, breaking the loop's
                     // own cancellation — rethrow it so onCleared() actually stops the loop. (#125)
-                }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+                }.onSuccess { NoopPrefs.setAnalyzeWatermark(appContext, analyzeFp) }
+                    .onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
                 // Opt-in writeback: push the freshly computed nights into Health Connect so other
                 // apps see them. Idempotent (clientRecordId per metric+day), so re-running every
                 // cycle just upserts. Never let an HC hiccup (perm revoked mid-flight, provider
@@ -1649,7 +1723,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  Reads each source's banked row for the logical day and runs the pure FusionResolver per metric;
      *  no core-waterfall change. Suspend so the screen calls it from a LaunchedEffect. */
     suspend fun fusedRecordForToday(): FusedRecord =
-        FusionDayAdapter.buildFor(repository, logicalDayKeyNow())
+        // SPINE / #814: the strap + computed reads follow the registry's ACTIVE strap id (the same id the
+        // live read path resolves to), not a hardcoded "my-whoop", so a non-WHOOP active band fuses its OWN
+        // data. A single-WHOOP install resolves to "my-whoop", so this is byte-identical there.
+        FusionDayAdapter.buildFor(repository, logicalDayKeyNow(), activeStrapId = deviceId)
 
     /** Toggle strap low/full battery notifications (#368). The notifier reads NoopPrefs on each
      *  live-state update, so persisting is all that's needed — no stream to re-arm. */

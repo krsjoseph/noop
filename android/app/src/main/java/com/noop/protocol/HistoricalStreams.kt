@@ -336,8 +336,16 @@ private fun decodeWhoop5Historical(frame: ByteArray): Map<String, Any?>? {
     }
     // @82 a single raw byte adjacent to the flag byte; carried raw, meaning not pinned.
     frame.histU8(82)?.let { out["aux_byte_82"] = it }
-    // @113 a float32 (observed range ~ -5.3..0, 0 = unset); purpose unknown, carried raw.
+    // @113 a float32 (observed range ~ -5.3..0, 0 = unset); purpose unknown, carried raw. EMPIRICAL.
     frame.histF32(113)?.let { if (it.isFinite()) out["unknown_f32_113"] = it }
+    // PROVENANCE / lossless-tail note (A10): this decoder maps only the fields above; bytes past @113
+    // up to the CRC32 trailer are NOT consumed here and are NOT a per-field loss. The Backfiller hands
+    // the VERBATIM frame (header..tail..CRC) to [RawHistoryArchive] for any record it can't turn into
+    // rows, and to the raw-capture batch when that research toggle is on, so the untouched trailing
+    // bytes survive on disk for a future re-decode. The `frame` ByteArray itself is never truncated by
+    // this function, so a caller that retains it keeps the full record. VERIFIED fields (physiologically
+    // cross-checked vs the strap's live 2A37 HR / |gravity|~1g): unix, heart_rate, rr, gravity, skin_temp.
+    // EMPIRICAL / not-pinned: status words, aux bytes, unknown_f32_113.
     return out
 }
 

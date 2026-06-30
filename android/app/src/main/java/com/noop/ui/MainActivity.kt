@@ -75,6 +75,16 @@ class MainActivity : ComponentActivity() {
         // feature is off). Wrapped because a WorkManager hiccup must never block launch.
         runCatching { DebugExportScheduler.reschedule(applicationContext) }
 
+        // Backup & Sync (#791): self-heal the daily auto-backup schedule (no-op when off / no folder),
+        // and run a DEFERRED on-launch catch-up backup. Must-fix #4: the catch-up is gated on the toggle
+        // being ON, runs fully off the main thread on Dispatchers.IO, and is launched AFTER the
+        // launch-critical setup so a 100MB+ whole-DB zip can never block app startup. Cheap (two prefs
+        // reads) when the feature is off, which is the default.
+        runCatching { BackupSync.reschedule(applicationContext) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { BackupSync.catchUpIfDue(applicationContext) }
+        }
+
         // Load the Light/Dark/System + chart-colour preferences before first composition so the theme
         // and chart ramps are correct from the very first frame (no flash).
         AppearancePrefs.load(this)
@@ -180,8 +190,20 @@ object NoopPrefs {
      *  via [AppViewModel]. Distinct from the WHOOP strap's own "broadcast HR" firmware config. */
     const val KEY_HR_BROADCAST = "noop.hrBroadcast"
 
+    const val KEY_ANALYZE_WATERMARK = "noop.analyzeWatermark"
+
     fun of(context: Context): SharedPreferences =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+
+    /** #836 — the raw-HR fingerprint ("count:maxTs") the last COMPLETED idle rescore scored against. The
+     *  15-min backstop tick skips when the current fingerprint equals this; cleared implicitly by any HR
+     *  insert/delete (the fingerprint moves). Mirrors the Swift `analyzeWatermark` UserDefaults key. */
+    fun analyzeWatermark(context: Context): String? =
+        of(context).getString(KEY_ANALYZE_WATERMARK, null)
+
+    fun setAnalyzeWatermark(context: Context, fingerprint: String) {
+        of(context).edit().putString(KEY_ANALYZE_WATERMARK, fingerprint).apply()
+    }
 
     /** Whether Kineva should hold the strap connection open via a foreground service. Default true. */
     fun backgroundConnection(context: Context): Boolean =

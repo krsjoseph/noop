@@ -87,7 +87,7 @@ struct ScreenScaffold<Content: View, Trailing: View>: View {
         // Large-title collapse (opt-in). The named space lets the title probe report its bottom edge
         // relative to the scroll viewport top; the toolbar copy cross-fades in as it crosses. Gated on
         // the flag so non-opted screens attach no toolbar item and keep their existing nav title.
-        .coordinateSpace(.named(noopScaffoldScrollSpace))
+        .coordinateSpace(name: noopScaffoldScrollSpace)
         #if os(iOS)
         .onPreferenceChange(TitleBottomKey.self) { maxY in
             guard collapsesTitleInBar else { return }

@@ -61,14 +61,16 @@ enum CsvExport {
             // Sleep: merged per end-day, imported wins (Repository.mergeSleep semantics).
             let impSleep = try await store.sleepSessions(deviceId: deviceId, from: 0, to: hi, limit: 100_000)
             let compSleep = try await store.sleepSessions(deviceId: computedId, from: 0, to: hi, limit: 100_000)
-            var sleepByDay: [String: CachedSleepSession] = [:]
             var sleepSource: [Int: String] = [:]   // keyed by startTs (the session's natural key)
             func endDay(_ s: CachedSleepSession) -> String {
                 Repository.localDayKey(Date(timeIntervalSince1970: TimeInterval(s.endTs)))
             }
-            for s in compSleep { sleepByDay[endDay(s)] = s; sleepSource[s.startTs] = "noop (APPROXIMATE)" }
-            for s in impSleep { sleepByDay[endDay(s)] = s; sleepSource[s.startTs] = "import" }
-            let sleeps = sleepByDay.values.sorted { $0.startTs < $1.startTs }
+            // #715 — keep EVERY session: naps and main nights each export as their own sleeps.csv row.
+            // Imported still wins per end-day. Shared, unit-tested grouping (WhoopStore.SleepMerge) replaces
+            // the per-day dict that silently dropped a second same-day session.
+            for s in compSleep { sleepSource[s.startTs] = "noop (APPROXIMATE)" }
+            for s in impSleep { sleepSource[s.startTs] = "import" }
+            let sleeps = SleepMerge.merge(imported: impSleep, computed: compSleep, endDay: endDay)
 
             // Workouts: imported WHOOP ∪ on-device detected. Apple-Health workouts are intentionally
             // omitted (read only the two Kineva sources), matching the cycles/sleep exclusion.

@@ -17,6 +17,25 @@ final class RestSubScoreTraceTests: XCTestCase {
         XCTAssertFalse(line.contains("\u{2014}"))
     }
 
+    // MARK: - CAPTURE-C (#799): sleep provenance line
+
+    func testSleepProvenanceLineMeasured() {
+        let line = AnalyticsEngine.sleepProvenanceLine(
+            provenance: .measured, hoursAsleepMin: 442.4, sourceRowId: "1700000000")
+        XCTAssertEqual(line, "sleepProvenance provenance=measured hoursAsleep=442 sourceRowId=1700000000")
+        XCTAssertFalse(line.contains("\u{2014}"))
+    }
+
+    func testSleepProvenanceLineImportedShowsSource() {
+        XCTAssertEqual(SleepProvenance.imported("whoop").wire, "imported:whoop")
+        XCTAssertEqual(SleepProvenance.imported("apple").wire, "imported:apple")
+        let line = AnalyticsEngine.sleepProvenanceLine(
+            provenance: .imported("whoop"), hoursAsleepMin: 410, sourceRowId: "imp-42")
+        XCTAssertTrue(line.contains("provenance=imported:whoop"), line)
+        XCTAssertTrue(line.contains("hoursAsleep=410"), line)
+        XCTAssertTrue(line.contains("sourceRowId=imp-42"), line)
+    }
+
     func testCompositeMatchesRestComposite() {
         // The line's composite= value must equal Rest.composite from the same inputs (cannot diverge).
         let tst = 7.5 * 3600.0, inBed = 8.0 * 3600.0, eff = 0.9

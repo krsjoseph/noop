@@ -1133,13 +1133,18 @@ private struct SkinTempSection: View {
     /// The cycle-awareness opt-in (default OFF). The same key AppModel reads, so a flip is consistent.
     @AppStorage(AppModel.cycleAwarenessKey) private var cycleEnabled = false
 
+    /// Whether the cycle-awareness opt-in is offered for this profile (#801). Delegates to the shared
+    /// ``ProfileStore/cycleAwarenessApplies`` gate so Health + Automations stay in lockstep: cycle phase
+    /// is read from the menstrual skin-temperature shift, so the opt-in is NOT shown for male profiles.
+    private var cycleOptInApplies: Bool { model.profile.cycleAwarenessApplies }
+
     var body: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Skin temperature", overline: "From your nightly sensor")
 
             // 1. Illness heads-up — only when the engine returned something worth surfacing.
             if let illness = model.illnessSignal, illness.level != .quiet {
-                HeadsUpCard(result: illness)
+                HeadsUpCard(result: illness, distance: model.illnessDistance)
             }
 
             // 2. Body clock — shows nil-state copy via the engine's own confidence handling.
@@ -1147,10 +1152,21 @@ private struct SkinTempSection: View {
                 BodyClockCard(estimate: phase)
             }
 
-            // 3. Cycle awareness — opt-in. The opt-in card until enabled; the awareness card after.
+            // 3. Cycle awareness: opt-in, and gated on profile sex (#801). Cycle phase is derived
+            // from the menstrual temperature shift, so the opt-in is only offered to profiles it can
+            // apply to (female / nonbinary); it is NOT rendered for male profiles. If a profile that
+            // previously enabled it later switches to male, we still honour the existing awareness card
+            // rather than silently hiding their data; only the OPT-IN invitation is gated.
             if cycleEnabled, let cycle = model.cyclePhase {
-                CycleAwarenessCard(result: cycle, curve: model.cycleCurve)
-            } else if !cycleEnabled {
+                CycleAwarenessCard(result: cycle, curve: model.cycleCurve,
+                                   // Symmetric off (#801): turn it off in-place, here in Health, where
+                                   // it was turned on, not only from Automations.
+                                   onTurnOff: {
+                                       cycleEnabled = false
+                                       model.cycleAwarenessEnabled = false
+                                       Task { await model.refreshV5Signals() }
+                                   })
+            } else if !cycleEnabled && cycleOptInApplies {
                 CycleAwarenessOptInCard(onEnable: {
                     cycleEnabled = true
                     model.cycleAwarenessEnabled = true
@@ -1158,9 +1174,12 @@ private struct SkinTempSection: View {
                 })
             }
 
-            // Honest empty state when the suite has nothing to show yet. (When cycle is OFF the opt-in
-            // card always renders, so the section is never blank; this covers the cycle-ON-but-thin case.)
-            if cycleEnabled && model.illnessSignal == nil && model.circadianPhase == nil && model.cyclePhase == nil {
+            // Honest empty state when the suite has nothing to show yet. The opt-in card normally fills
+            // the section when cycle is OFF, but it is gated off for male profiles (#801), so the
+            // section can also be blank when the opt-in doesn't apply AND nothing else has data. Show
+            // the empty state in either case (cycle ON but thin, OR opt-in hidden with no other signal).
+            if (cycleEnabled || !cycleOptInApplies)
+                && model.illnessSignal == nil && model.circadianPhase == nil && model.cyclePhase == nil {
                 ComingSoon(what: "Wear the strap overnight and these read from your nightly skin temperature.",
                            symbol: "thermometer.medium")
             }

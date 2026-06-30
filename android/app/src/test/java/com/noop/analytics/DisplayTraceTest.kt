@@ -69,6 +69,27 @@ class DisplayTraceTest {
         assertEquals("memoryHighWater peak=187.5MB", DisplayTrace.memoryHighWaterLine(187.46))
     }
 
+    // CAPTURE-D (#797): the data-volume line
+
+    @Test
+    fun dataVolumeLineShape() {
+        assertEquals(
+            "dataVolume dbRows=1234567 importedDays=420 workouts=88 lastRenderRows=512",
+            DisplayTrace.dataVolumeLine(
+                DataVolume(dbRows = 1_234_567, importedDays = 420, workouts = 88, lastRenderRows = 512),
+            ),
+        )
+    }
+
+    @Test
+    fun dataVolumeLineNullRenderRowsPrintsNa() {
+        // No render measured yet must print "n/a", never a fabricated 0. Byte-identical to the Swift line.
+        val line = DisplayTrace.dataVolumeLine(
+            DataVolume(dbRows = 0, importedDays = 0, workouts = 0, lastRenderRows = null),
+        )
+        assertEquals("dataVolume dbRows=0 importedDays=0 workouts=0 lastRenderRows=n/a", line)
+    }
+
     @Test
     fun readoutParsesLatestDeviceMetricsAndFrameSummary() {
         val tail = listOf(

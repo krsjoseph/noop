@@ -298,6 +298,17 @@ interface WhoopDao : DeviceRegistryDao {
     @Query("SELECT * FROM dailyMetric WHERE deviceId = :deviceId ORDER BY day ASC")
     fun daysFlow(deviceId: String): Flow<List<DailyMetric>>
 
+    /**
+     * #797: the most-recent [limit] daily metrics for a device, returned oldest-first. Backs the bounded
+     * dashboard merge: the SQL takes the newest rows (ORDER BY day DESC LIMIT), and the repository flips
+     * them to ascending so every downstream consumer sees the SAME oldest-first order as [daysFlow]. A
+     * generous bound (the repository's RECENT_DAYS_CAP) keeps every current surface intact (Trends' deepest
+     * view, Fitness Age / Vitality 7-day windows) while a years-deep import no longer re-merges the WHOLE
+     * history on every DB change.
+     */
+    @Query("SELECT * FROM dailyMetric WHERE deviceId = :deviceId ORDER BY day DESC LIMIT :limit")
+    fun recentDaysFlow(deviceId: String, limit: Int): Flow<List<DailyMetric>>
+
     @Query(
         "SELECT * FROM sleepSession WHERE deviceId = :deviceId AND startTs >= :from AND startTs <= :to " +
             "ORDER BY startTs ASC LIMIT :limit"
@@ -524,6 +535,9 @@ interface WhoopDao : DeviceRegistryDao {
     suspend fun latestHrSampleTs(deviceId: String): Long?
 
     @Query("SELECT COUNT(*) FROM hrSample") suspend fun countHr(): Int
+    // #836: max raw-HR timestamp across all devices. Paired with countHr() as a cheap whole-history change
+    // fingerprint so the 15-min idle rescore can skip when nothing new has landed (COALESCE → 0 when empty).
+    @Query("SELECT COALESCE(MAX(ts), 0) FROM hrSample") suspend fun maxHrTs(): Long
     @Query("SELECT COUNT(*) FROM rrInterval") suspend fun countRr(): Int
     @Query("SELECT COUNT(*) FROM event") suspend fun countEvents(): Int
     @Query("SELECT COUNT(*) FROM battery") suspend fun countBattery(): Int

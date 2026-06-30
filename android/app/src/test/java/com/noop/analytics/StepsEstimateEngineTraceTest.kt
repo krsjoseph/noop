@@ -99,6 +99,33 @@ class StepsEstimateEngineTraceTest {
         assertTrue(lines[0].contains("need >=2"))
     }
 
+    @Test fun emptyCounterReportsNoRawCounterNotBroken() {
+        // #810: a WHOOP 4.0 sends NO raw step counter, so daySteps is empty for it. The trace must say so
+        // honestly (the device is motion-estimated), NOT emit the "counterSamples=0 ... need >=2" line that
+        // read as broken. A 5/MG never hits this branch (it always banks counter rows).
+        val lines = StepsEstimateEngineTrace.rawCounterTrace(
+            daySteps = emptyList(), dayKey = dayUtc, tzOffsetSeconds = 0L, ticksPerStep = 1.0,
+        )
+        assertEquals(1, lines.size)
+        assertTrue(lines[0].contains("counterSamples=0"))
+        assertTrue(lines[0].contains("noRawCounter"))
+        assertTrue(lines[0].contains("motion-estimated"))
+        assertFalse(lines[0].contains("need >=2")) // not the misleading "broken" line
+        assertFalse(lines[0].contains("\u2014")) // no em-dash
+    }
+
+    @Test fun emptyAfterDayFilterAlsoReportsNoRawCounter() {
+        // daySteps has rows, but none fall on the requested day (e.g. all on a neighbouring day). After the
+        // local-day filter the sorted list is empty, so the same honest noRawCounter line is emitted rather
+        // than a broken-looking counterSamples=0 ... need >=2.
+        val otherDay = listOf(step(2 * 86_400L, 100), step(2 * 86_400L + 60, 150))
+        val lines = StepsEstimateEngineTrace.rawCounterTrace(
+            daySteps = otherDay, dayKey = dayUtc, tzOffsetSeconds = 0L, ticksPerStep = 1.0,
+        )
+        assertEquals(1, lines.size)
+        assertTrue(lines[0].contains("noRawCounter"))
+    }
+
     // MARK: WHOOP-4 calibration trace
 
     @Test fun calibrationTraceReusesCalibrateVerbatim() {

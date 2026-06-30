@@ -32,13 +32,20 @@ final class AppModel: ObservableObject {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
     }()
 
-    /// Shared device id for both live capture (BLEManager) and imported history.
+    /// The CANONICAL imported/computed id ("my-whoop"). The WHOOP-IMPORT target (`WhoopImporter`), the
+    /// FusionSource `.whoopImport` mapping, and a manually-saved workout all land under THIS stable id, and
+    /// the engine writes its computed scores under the matching `-noop` sibling. It must NOT follow the
+    /// active strap (#814 union-model follow-up): a remove+re-add gives the strap a fresh "whoop-<uuid>" id,
+    /// but if the import/computed target drifted to it, history banked earlier under "my-whoop" would be
+    /// orphaned. The Repository's ACTIVE-strap read id follows the registry instead (`adoptActiveDevice`),
+    /// and the dashboard reads the UNION of the two, so the re-added strap's live data AND the canonical
+    /// history both surface. `let` because nothing moves it.
     let deviceId = "my-whoop"
     /// Source id for imported Apple Health data (stored beside Whoop for per-source pages + consensus).
     let appleDeviceId = "apple-health"
     /// Observable snapshot driven by the BLE engine (connection, HR, battery, log).
     let live: LiveState
-    /// CoreBluetooth engine — scans, connects, bonds, streams.
+    /// CoreBluetooth engine , scans, connects, bonds, streams.
     let ble: BLEManager
     /// Read model over the on-device store (dashboard + detail screens).
     let repo: Repository
@@ -49,11 +56,11 @@ final class AppModel: ObservableObject {
     /// On-device WHOOP-style recovery/strain/sleep computation from raw strap streams.
     let intelligence: IntelligenceEngine
 
-    /// Opt-in AI coach (bring-your-own-key) — the one networked feature, off until the user enables it.
+    /// Opt-in AI coach (bring-your-own-key) , the one networked feature, off until the user enables it.
     let coach: AICoachEngine
 
     /// Observable cache over the paired-device registry; `activeDeviceId` drives the source coordinator.
-    /// Built lazily once the store opens (see `wireSourceCoordinator`). nil until then — with no generic
+    /// Built lazily once the store opens (see `wireSourceCoordinator`). nil until then , with no generic
     /// strap paired the active id stays "my-whoop", so this never affects the WHOOP startup path.
     /// `@Published` so the Devices screen re-renders the moment the registry is wired in (it observes
     /// `model.deviceRegistry`); nested `registry.$devices` changes are observed by the screen directly.
@@ -66,7 +73,7 @@ final class AppModel: ObservableObject {
     /// Timestamps of moments marked via a double-tap (persisted).
     @Published var moments: [Date] = []
 
-    /// Timestamps of "sleep marks" tapped on the strap (#461) — bedtime / wake / mid-night marks the
+    /// Timestamps of "sleep marks" tapped on the strap (#461) , bedtime / wake / mid-night marks the
     /// user double-taps without screenshots or remembering the time. Persisted; each also writes a
     /// greppable "Sleep mark @ HH:mm" line into the strap log. Phase-1 foundation for tap-driven sleep
     /// bounds + personal sleep-stage calibration.
@@ -82,7 +89,7 @@ final class AppModel: ObservableObject {
     @Published var lastWorkout: WorkoutRow?
 
     /// Records the GPS route of an in-flight distance-type workout (run / ride / walk / hike) from
-    /// CoreLocation (#524) — the Apple analogue of Android's `GpsSession` + foreground `LocationManager`.
+    /// CoreLocation (#524) , the Apple analogue of Android's `GpsSession` + foreground `LocationManager`.
     /// Fails safe: on a Mac with no GPS, or when location permission is denied, it records nothing and
     /// the session still banks HR + Effort without a route. Observed by the live workout card for live
     /// distance/pace; its final route is persisted on End via `RouteStore`, keyed by the saved row's
@@ -98,7 +105,7 @@ final class AppModel: ObservableObject {
     /// is recomputed as the window grows so the active card can show strain building in real time.
     struct ActiveWorkout: Equatable {
         let start: Date
-        /// The named sport chosen at start (e.g. "Tennis", "Padel") — persisted as the saved row's
+        /// The named sport chosen at start (e.g. "Tennis", "Padel") , persisted as the saved row's
         /// `sport` so a live-tracked session keeps its label instead of the old generic "Workout".
         /// Defaults to the catalogue default ("Other") when started without a pick. (#519)
         var sport: String = WorkoutCatalog.defaultSportName
@@ -115,8 +122,13 @@ final class AppModel: ObservableObject {
     // The Insights / skin-temp Health-hub cards take pure engine RESULTS by value. The analytics pass
     // (IntelligenceEngine.analyzeRecent → refreshV5Signals) computes them once from the stores and
     // publishes them here; AppModel exposes them so HealthView / InsightsHubView read a snapshot rather
-    // than re-deriving. All opt-in / honest-nil — a nil result means "not enough data / not enabled".
+    // than re-deriving. All opt-in / honest-nil , a nil result means "not enough data / not enabled".
     @Published var illnessSignal: IllnessSignalEngine.Result?
+    /// Parallel Mahalanobis illness-distance read (IllnessDistance), computed on the SAME illness-ward
+    /// z-vector as illnessSignal but NEVER gating the alert. The shipped IllnessSignalEngine stays the
+    /// sole fire gate; this only surfaces a "how strong" confidence readout in the Heads-Up card when
+    /// the engine has already raised. nil = not computed this pass. (Augment-only, Option A.)
+    @Published var illnessDistance: IllnessDistance.Result?
     /// Cycle-phase awareness (only computed when the user has opted in; else nil). Awareness only.
     @Published var cyclePhase: CyclePhaseEngine.Result?
     /// The nightly fused-index curve (oldest→newest) feeding the cycle card's sparkline.
@@ -135,7 +147,7 @@ final class AppModel: ObservableObject {
     // via BiofeedbackPrefs so a relaunch can't re-fire), carried verbatim between evaluations.
     private var rrBuf: [Int] = []
     private var stressState = BiofeedbackPrefs.loadStressState()
-    // Legacy experimental stress-nudge state (the older `behavior.stressNudge` buzz path) — a slow HRV
+    // Legacy experimental stress-nudge state (the older `behavior.stressNudge` buzz path) , a slow HRV
     // baseline + a rate limiter, kept so that toggle still works independently of the L3 check-in.
     private var hrvBaseline: Double = 0
     private var lastStressBuzzAt: Date = .distantPast
@@ -148,7 +160,7 @@ final class AppModel: ObservableObject {
     @Published var appleHealthImportSummary: String?
     /// Last Xiaomi / Mi Band import result surfaced in the Mi Band card.
     @Published var xiaomiImportSummary: String?
-    /// Typed failure flags per source — the summary's warning styling reads these instead of
+    /// Typed failure flags per source , the summary's warning styling reads these instead of
     /// substring-matching the human-readable message (which misses errors like "Couldn't open
     /// the local store."). Surfaced on both the Data Sources cards and the onboarding import step.
     @Published var whoopImportFailed = false
@@ -172,24 +184,34 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Smoothed, display-ready live heart rate — median over a short window, spike-filtered.
+    /// Smoothed, display-ready live heart rate , median over a short window, spike-filtered.
     /// Every screen should show THIS, not the raw per-beat value (which swings with HRV).
     @Published var bpm: Int?
     private var hrWindow: [(t: Date, v: Double)] = []
     private var hrCancellables = Set<AnyCancellable>()
+    /// Drives the READ spine off the registry's active device (#814 HIGH-1). A Devices-screen
+    /// switch/remove/re-add calls `registry.setActive` DIRECTLY (not through `registerDevice`), so without
+    /// this subscription the reads stayed pinned to whatever id was active at wiring time for the whole
+    /// session. Mirrors how `SourceCoordinator` drives the WRITE side off the same publisher. Retained for
+    /// the app's lifetime (the registry outlives the session); `removeDuplicates` collapses redundant emits.
+    private var readSpineCancellable: AnyCancellable?
     /// Daily re-arm timer for the single-instant firmware smart alarm (see scheduleDailySmartAlarmRearm).
     private var smartAlarmRearmTimer: Timer?
 
     init() {
         let live = LiveState()
         self.live = live
-        self.ble = BLEManager(state: live, deviceId: "my-whoop")
-        self.repo = Repository(deviceId: "my-whoop")
+        // SEED every subsystem with the same id (`deviceId`, "my-whoop" at launch). The store/registry
+        // aren't open yet here, so the registry's active id can't be read synchronously; `bootstrapStore`
+        // (write side) and `wireSourceCoordinator → adoptActiveDevice` (read spine, #814) re-point them to
+        // the registry active id once the store opens. Single-device install keeps "my-whoop" throughout.
+        self.ble = BLEManager(state: live, deviceId: deviceId)
+        self.repo = Repository(deviceId: deviceId)
         self.coach = AICoachEngine(repo: repo)
-        self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: "my-whoop")
+        self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: deviceId)
         // Route the engine's per-day scoring diagnostic into the SAME shareable strap log every other
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
-        // was computed per day. `live` is captured strongly (created just above) — the engine outlives the
+        // was computed per day. `live` is captured strongly (created just above) , the engine outlives the
         // app session, so there's no retain-cycle risk worth a weak dance here. (Sleep overhaul §2.5.)
         self.intelligence.diagnosticSink = { [live] line, domain in live.append(log: line, domain: domain) }
         // Workouts & GPS test mode (Test Centre): wire the Repository (auto-detect inputs/why + cross-source
@@ -228,7 +250,7 @@ final class AppModel: ObservableObject {
         // Illness/strain early-warning recomputes when the daily history changes.
         repo.$days.sink { [weak self] days in self?.evaluateIllness(days) }.store(in: &hrCancellables)
         // Re-arm the strap's firmware alarm whenever it (re)bonds. A smart-alarm time changed while the
-        // strap was away never reached it — the send is gated on bond — so the strap kept the OLD time
+        // strap was away never reached it , the send is gated on bond , so the strap kept the OLD time
         // and fired at it (#59). removeDuplicates() fires once per bond; gated on enabled so a disabled
         // alarm doesn't disarm on every reconnect.
         live.$bonded.removeDuplicates().sink { [weak self] bonded in
@@ -237,7 +259,7 @@ final class AppModel: ObservableObject {
         }.store(in: &hrCancellables)
         // The firmware alarm is a single absolute instant with no recurrence, and was re-armed ONLY on
         // a (re)bond or a settings change. A strap that stays continuously bonded (a Mac in range) would
-        // fire once and never re-arm — silent from day two. Re-arm daily so an always-on session keeps
+        // fire once and never re-arm , silent from day two. Re-arm daily so an always-on session keeps
         // waking the user.
         scheduleDailySmartAlarmRearm()
         // Re-apply "Continuous HRV capture" on every (re)bond: if on, the strap should hold the dense
@@ -254,12 +276,12 @@ final class AppModel: ObservableObject {
         // #755 COALESCE: a strap whose firmware segments a deep offload into many small HISTORY_COMPLETE
         // slices stamps `lastSyncedAt` once PER slice (BLEManager.exitBackfilling), seconds apart, for the
         // whole multi-minute download. Without coalescing each slice fired refreshAfterCompletedBackfill()
-        // — a full repo.refresh (~50 store reads) + analyzeRecent — and every one re-fired TodayView's
+        // , a full repo.refresh (~50 store reads) + analyzeRecent , and every one re-fired TodayView's
         // ~50-read loadAll, all contending with the backfill's bulk writes on the single-connection store.
         // On a heavy + actively-syncing history that stacked into a ~10s freeze. `.debounce` collapses the
         // slice storm: it suppresses the intermediate emissions and fires ONCE, 2s after the stream goes
-        // quiet — i.e. after the LAST slice lands (the backfill is done). Crucially it ALWAYS delivers the
-        // trailing edge, so the dashboard still refreshes with the newly-synced data — freshness is kept,
+        // quiet , i.e. after the LAST slice lands (the backfill is done). Crucially it ALWAYS delivers the
+        // trailing edge, so the dashboard still refreshes with the newly-synced data , freshness is kept,
         // we just stop re-doing it dozens of times mid-download. removeDuplicates() still drops a slice that
         // stamped an identical second; the trailing refresh after a real change is never dropped.
         live.$lastSyncedAt
@@ -280,10 +302,10 @@ final class AppModel: ObservableObject {
         // + saved on relaunch (#529). Restored here alongside the other UserDefaults-backed state.
         rehydrateActiveWorkout()
 
-        AppModel.shared = self   // publish for App Intents (Shortcuts) — see the static above (#42)
+        AppModel.shared = self   // publish for App Intents (Shortcuts) , see the static above (#42)
 
         // Seed the BLE client with the persisted "Continuous HRV capture" intent so `wantsRealtime`
-        // reflects it from launch — the reconciler then arms the dense stream as soon as the strap bonds
+        // reflects it from launch , the reconciler then arms the dense stream as soon as the strap bonds
         // (and the bond sink above re-applies it on every reconnect).
         ble.setKeepRealtimeForData(PuffinExperiment.keepRealtimeForDataEnabled)
 
@@ -292,13 +314,13 @@ final class AppModel: ObservableObject {
         // IntelligenceEngine computes, persists under "my-whoop-noop", and refreshes the dashboard.
         // One-shot reclaim of any stale Documents/Inbox picker drops a previous build left behind
         // before cleanup() reclaimed the original, PLUS any stranded `noop-*` temp scratch (e.g. the
-        // multi-GB `noop-health-*` export.xml an interrupted import leaves behind — #590). Off the main
+        // multi-GB `noop-health-*` export.xml an interrupted import leaves behind , #590). Off the main
         // actor; no-op on macOS for the Inbox part.
         Task.detached { AppModel.purgeImportInbox(); AppModel.purgeImportTemp() }
 
         // FIX 2(b): the launch sequence runs at `.utility` so its heavy one-shot 4000-day heal/rescore
         // yields to UI rendering instead of contending at the inherited user-initiated QoS. The reads are
-        // already off the main actor (analyzeRecent — FIX 1), and at `.utility` the scheduler keeps the
+        // already off the main actor (analyzeRecent , FIX 1), and at `.utility` the scheduler keeps the
         // main thread free for SwiftUI during the deep-history pass right after an import / first launch.
         Task(priority: .utility) { [weak self] in
             guard let self else { return }
@@ -317,7 +339,7 @@ final class AppModel: ObservableObject {
             await self.wireSourceCoordinator()                 // dormant unless a generic strap is active
             try? await Task.sleep(nanoseconds: 6_000_000_000)  // give the first offload a moment
             // FIX 2(a): DEFER the heavy one-shot 4000-day heal/rescore while an import is in flight. A
-            // large Apple Health import is the worst-case launch overlap — running a 4000-iteration heal
+            // large Apple Health import is the worst-case launch overlap , running a 4000-iteration heal
             // + rescore concurrently with the import's parse+writes is what produced the ~1-minute app-wide
             // lag. The import refreshes the dashboard itself on completion, and the steady-state cadence
             // loop below still runs, so deferring the ONE-SHOT passes until the import finishes costs
@@ -344,10 +366,15 @@ final class AppModel: ObservableObject {
             while !Task.isCancelled {
                 // #547 RE-POLLUTION: a sync since the last tick may have armed a re-heal (its ingest gate
                 // dropped bad-clock records). `runTimestampHealIfNeeded` honours the pending flag even after
-                // the one-shot done flag is set, purges any pollution, and rescores the affected days — so a
+                // the one-shot done flag is set, purges any pollution, and rescores the affected days , so a
                 // wandering-clock strap can't keep re-polluting. A no-op when nothing's pending.
                 await self.intelligence.runTimestampHealIfNeeded()
-                await self.intelligence.analyzeRecent()
+                // #836: the steady-state tick is a BACKSTOP, not a data-driven refresh — every real update
+                // (sync backfill, import, edit, recalibrate, heal) already rescores via its own forced call.
+                // `force: false` skips the heavy 21-day rescore when the raw HR stream is unchanged since the
+                // last run, instead of re-reading ~21×54 h of HR every 15 min on a big-import library. A new
+                // sample (the heal above, or a sync) moves the fingerprint and the tick rescores as before.
+                await self.intelligence.analyzeRecent(force: false)
                 // v5: recompute the skin-temp suite snapshots (cycle phase + body clock) from the
                 // freshly-scored history so the Health hub cards read a ready result.
                 await self.refreshV5Signals()
@@ -358,7 +385,7 @@ final class AppModel: ObservableObject {
 
     /// Build the device registry + source coordinator once the store is open, then start observing.
     /// Tiny and guarded: with no generic strap paired the active id is "my-whoop", so the coordinator
-    /// observes WHOOP-active and stays a NO-OP — the existing `scan()`/`disconnect()` WHOOP flow is
+    /// observes WHOOP-active and stays a NO-OP , the existing `scan()`/`disconnect()` WHOOP flow is
     /// untouched. The coordinator only acts if/when a non-WHOOP strap becomes the active device.
     /// `startWhoop`/`stopWhoop` are thin closures over BLEManager's EXISTING public methods (via the
     /// model's `scan()` / `disconnect()`), so the coordinator never references BLEManager directly.
@@ -372,10 +399,10 @@ final class AppModel: ObservableObject {
             storeHandle: { [weak self] in await self?.repo.storeHandle() },
             startWhoop: { [weak self] in self?.scan() },
             stopWhoop: { [weak self] in self?.disconnect() },
-            // WHOOP targeting hooks — thin wrappers over BLEManager's existing additive setters, so the
+            // WHOOP targeting hooks , thin wrappers over BLEManager's existing additive setters, so the
             // coordinator never references BLEManager directly (mirrors the start/stop injection). On the
             // single-WHOOP path these are setPreferredPeripheral(nil) and (no setActiveDeviceId call),
-            // i.e. the BLE engine's defaults — no behaviour change.
+            // i.e. the BLE engine's defaults , no behaviour change.
             setWhoopPreferredPeripheral: { [weak self] uuid in self?.ble.setPreferredPeripheral(uuid) },
             setWhoopActiveDeviceId: { [weak self] id in self?.ble.setActiveDeviceId(id) },
             // The engine's last-connected WHOOP uuid drives first-connect identity adoption.
@@ -389,13 +416,49 @@ final class AppModel: ObservableObject {
         coordinator.start()
         self.deviceRegistry = registry
         self.sourceCoordinator = coordinator
+        // #814 READ SPINE (HIGH-1): drive the read side off the registry's `activeDeviceId` for the WHOLE
+        // session, exactly as SourceCoordinator drives the WRITE side off the SAME publisher. A Devices-
+        // screen switch/remove/re-add calls `registry.setActive` DIRECTLY (NOT through `registerDevice`), so
+        // a one-shot adopt at wiring time would leave the reads pinned to the launch-time active id all
+        // session, a re-add's fresh "whoop-<uuid>" raw never surfaced until the next relaunch. The
+        // subscription re-points the Repository's active-strap READ id on every change; `adoptActiveDevice`
+        // is idempotent, so the initial emission (the current active id) does the first adopt and any later
+        // explicit `adoptActiveDevice` call (e.g. from `registerDevice`) is safely redundant. The import +
+        // computed WRITE targets stay STABLE on the canonical id (see `adoptActiveDevice`'s union-model note).
+        readSpineCancellable = registry.$activeDeviceId
+            .removeDuplicates()
+            .sink { [weak self] id in
+                Task { await self?.adoptActiveDevice(id) }
+            }
+    }
+
+    /// Re-point the Repository's ACTIVE-strap READ id at `activeId` and, if it moved, refresh + re-score so a
+    /// re-added strap's LIVE raw (written under its fresh "whoop-<uuid>" id) surfaces on the dashboard (#814).
+    /// Centralised so the registry-active subscription and a device add/activate share one path. A no-op (no
+    /// refresh) when the id is unchanged (the common single-device case).
+    ///
+    /// UNION MODEL (#814 follow-up): this moves ONLY the read-side active-strap id. The WHOOP-IMPORT + the
+    /// engine's COMPUTED write target, and the FusionSource `.whoopImport` mapping, stay STABLE on the
+    /// canonical `deviceId` ("my-whoop"), they must NOT follow the active strap, or history imported/scored
+    /// earlier under the canonical id would be orphaned. The Repository reads the UNION of the active strap +
+    /// the canonical id, so both the re-added strap's live data AND the canonical history surface. The engine
+    /// already resolves the active strap per day via the registry's own active id (`resolveDayOwner`), so it
+    /// reads + scores the re-added strap's raw and writes the computed result to the STABLE canonical
+    /// `-noop` sibling, no engine re-point needed.
+    private func adoptActiveDevice(_ activeId: String) async {
+        let trimmed = activeId.trimmingCharacters(in: .whitespaces)
+        let repoMoved = repo.adoptActiveDeviceId(trimmed)
+        guard repoMoved else { return }
+        live.append(log: "Read spine re-pointed to active device after registry change (#814).")
+        await repo.refresh()
+        await intelligence.analyzeRecent()
     }
 
     private func refreshAfterCompletedBackfill() async {
         live.append(log: "Backfill: refreshing dashboard cache from completed sync")
         await repo.refresh(days: 120)
         // Score the freshly-offloaded raw data RIGHT NOW rather than waiting for the next 15-minute
-        // analyzeRecent tick — otherwise a just-synced night's Charge / Effort / Rest can take up to
+        // analyzeRecent tick , otherwise a just-synced night's Charge / Effort / Rest can take up to
         // 15 minutes to appear on a strap-only (no-import) dashboard. analyzeRecent no-ops if a tick is
         // already running and refreshes the dashboard itself once the new scores persist. (PR #218)
         await intelligence.analyzeRecent()
@@ -415,7 +478,7 @@ final class AppModel: ObservableObject {
         }
         guard let inst else {
             // #39: when the live source is gone (disconnect blanks heartRate AND rr), drop the stale
-            // median so screens that now prefer `bpm` fall through to "—" instead of freezing on the
+            // median so screens that now prefer `bpm` fall through to "," instead of freezing on the
             // last value. Mirrors Android (_bpm = null on disconnect). A transient out-of-range sample
             // with the link still up (heartRate or rr still present) keeps the last median.
             if live.heartRate == nil && live.rr.isEmpty { resetSmoothing() }
@@ -427,7 +490,7 @@ final class AppModel: ObservableObject {
         if hrWindow.count > 40 { hrWindow.removeFirst(hrWindow.count - 40) }
         let vals = hrWindow.map(\.v).sorted()
         // live perf: only republish when the SMOOTHED value actually changes. ingestHR fires on every
-        // heartRate AND rr update (~1–3 Hz), but the median is stable across most of them — an
+        // heartRate AND rr update (~1–3 Hz), but the median is stable across most of them , an
         // unconditional assign re-renders every bpm observer (Live, menu bar, widgets) for nothing.
         let smoothed = vals.isEmpty ? nil : Int(vals[vals.count / 2].rounded())
         if bpm != smoothed { bpm = smoothed }
@@ -451,14 +514,14 @@ final class AppModel: ObservableObject {
         // #524: arm GPS route recording for a distance-type sport (run / ride / walk / hike), mirroring
         // Android, which defaults GPS on for `isDistanceSport`. Manual-first / opt-in: only these sports
         // record a route, and the recorder still captures nothing unless the user grants When-In-Use
-        // location (and on a Mac with no GPS it stays empty) — the session always banks HR + Effort
+        // location (and on a Mac with no GPS it stays empty) , the session always banks HR + Effort
         // regardless. A non-distance sport (yoga, strength) never touches location at all.
         activeWorkoutIsGps = WorkoutCatalog.sport(named: resolved)?.isDistanceSport ?? false
         if activeWorkoutIsGps {
             gpsRecorder.start(startMs: Int64(started.timeIntervalSince1970 * 1000))
         }
         // Make the session durable from the first instant (#529): persist it now so an OS kill right
-        // after Start — before any HR sample lands — can still be rehydrated + ended on relaunch.
+        // after Start , before any HR sample lands , can still be rehydrated + ended on relaunch.
         persistActiveWorkout()
         // Workouts & GPS test mode (Test Centre): one session-start line tagged `.workouts`. Zero-cost when
         // off (the gate is one UserDefaults bool read), so the lifecycle of a missing workout is visible.
@@ -504,7 +567,7 @@ final class AppModel: ObservableObject {
 
     /// Persist the in-flight manual workout to `UserDefaults` so it survives the app being killed mid-
     /// session (#529). Called on start + each captured sample. A no-op when nothing is running. Apple has
-    /// no GPS-route session, so every manual workout is the "non-GPS" case and gets this durability —
+    /// no GPS-route session, so every manual workout is the "non-GPS" case and gets this durability ,
     /// the Apple analogue of Android's `persistNonGpsWorkout`.
     private func persistActiveWorkout() {
         guard let w = activeWorkout else { return }
@@ -519,7 +582,7 @@ final class AppModel: ObservableObject {
     }
 
     /// If a manual workout was in flight when iOS killed the app, rebuild `activeWorkout` from the durable
-    /// snapshot so reopening doesn't lose it — the session can still be ended + saved (#529). The Apple
+    /// snapshot so reopening doesn't lose it , the session can still be ended + saved (#529). The Apple
     /// analogue of Android's `rehydrateActiveNonGpsWorkout`. No-op when a workout is already live (a live
     /// session wins over a stale snapshot) or nothing is stored. Called once from `init`.
     private func rehydrateActiveWorkout() {
@@ -535,18 +598,18 @@ final class AppModel: ObservableObject {
 
     /// Finish the active workout: finalize the GPS route (#524), score the captured HR window, and save it
     /// as a `WorkoutRow`. A session with no HR window AND no real GPS route is discarded quietly (parity
-    /// with Android) — but a GPS-only walk with HR not streaming still saves. Double-buzz confirms.
+    /// with Android) , but a GPS-only walk with HR not streaming still saves. Double-buzz confirms.
     func endWorkout() {
         guard let w = activeWorkout else { return }
         activeWorkout = nil
         let wasGps = activeWorkoutIsGps
         activeWorkoutIsGps = false
-        // Drop the durable snapshot the instant the session ends — whether it saves below or is discarded
-        // as too-short — so a relaunch never rehydrates an already-finished session (#529).
+        // Drop the durable snapshot the instant the session ends , whether it saves below or is discarded
+        // as too-short , so a relaunch never rehydrates an already-finished session (#529).
         ActiveWorkoutPersistence.clear()
-        // #524: finalize the GPS route. Stop the recorder and take its captured route — it kept
+        // #524: finalize the GPS route. Stop the recorder and take its captured route , it kept
         // accumulating from CoreLocation independently of the HR window. `capturedRoute()` is nil unless
-        // ≥2 points actually landed (honest: no route, no distance, when nothing was captured — e.g. a
+        // ≥2 points actually landed (honest: no route, no distance, when nothing was captured , e.g. a
         // Mac with no GPS, or denied permission). A non-GPS session never armed the recorder.
         var route: WorkoutRoute?
         if wasGps {
@@ -554,7 +617,7 @@ final class AppModel: ObservableObject {
             route = gpsRecorder.capturedRoute()
         }
         let samples = w.samples
-        // Save when there's an HR window OR a real GPS route — a GPS-only walk (HR not streaming) is
+        // Save when there's an HR window OR a real GPS route , a GPS-only walk (HR not streaming) is
         // still a workout (parity with Android's `samples.size < 2 && track.size < 2` discard gate).
         guard samples.count >= 2 || route != nil else {
             // Workouts & GPS test mode: record WHY a session vanished (too short / no route), tagged `.workouts`.
@@ -584,7 +647,7 @@ final class AppModel: ObservableObject {
             energyKcal: kcal > 0 ? kcal : nil, avgHr: avg, maxHr: peak, strain: strain,
             // GPS distance rides the shared row so the Workouts list / detail show it like any other
             // distance workout; the polyline itself is persisted alongside in RouteStore (the shared
-            // WorkoutRow has no route column on Apple). Only a real route sets distance — honest "—".
+            // WorkoutRow has no route column on Apple). Only a real route sets distance , honest ",".
             distanceM: route?.distanceM, zonesJSON: nil, notes: nil)
         // Persist the route polyline under the row's natural key so WorkoutDetailView can draw it. On
         // device only; mirrors the moments / sleepMarks UserDefaults persistence. (#524)
@@ -622,10 +685,10 @@ final class AppModel: ObservableObject {
         persistActiveWorkout()
     }
 
-    /// Drop the smoothing window and blank the hero number so a resume / re-attach shows "—"
+    /// Drop the smoothing window and blank the hero number so a resume / re-attach shows ","
     /// until a genuinely fresh sample arrives, instead of republishing the stale pre-gap median.
     /// Called on Live-tab entry / manual Start HR (see `startRealtimeHR`), NOT on the 30s keep-alive
-    /// re-arm — so steady-state smoothing is untouched. Fixes #46 (HR jumped to a stale ~100 on
+    /// re-arm , so steady-state smoothing is untouched. Fixes #46 (HR jumped to a stale ~100 on
     /// reopen, then "slowly came back down" as fresh low samples refilled the window).
     func resetSmoothing() {
         hrWindow.removeAll()
@@ -634,7 +697,7 @@ final class AppModel: ObservableObject {
 
     /// Stress evaluation, two independent layers (each opt-in, each off by default):
     ///   • the legacy experimental `behavior.stressNudge` buzz (a fresh HRV dip → one confirming buzz);
-    ///   • the v5 L3 closed-loop check-in — the unit-tested `StressOnsetDetector` decides, at the moment
+    ///   • the v5 L3 closed-loop check-in , the unit-tested `StressOnsetDetector` decides, at the moment
     ///     it matters, whether to offer a 60-s guided breath. On a fresh, non-metabolic HRV dip while the
     ///     user is still it fires a single confirming buzz AND posts a passive nudge to `stressNudgeCenter`
     ///     (the dismissible Stress check-in card surfaces it). The detector carries its own replay-safe
@@ -647,17 +710,17 @@ final class AppModel: ObservableObject {
         rrBuf.append(contentsOf: fresh)
         if rrBuf.count > 120 { rrBuf.removeFirst(rrBuf.count - 120) }
 
-        // ── Legacy experimental nudge (behavior.stressNudge) — unchanged behaviour, kept separate.
+        // ── Legacy experimental nudge (behavior.stressNudge) , unchanged behaviour, kept separate.
         if behavior.stressNudge, live.bonded, live.worn, rrBuf.count >= 20 {
             let rmssd = AppModel.rmssd(Array(rrBuf.suffix(60)))
             if rmssd > 0 {
                 hrvBaseline = hrvBaseline == 0 ? rmssd : hrvBaseline * 0.98 + rmssd * 0.02   // slow EMA
-                if let hr = bpm, hr >= 55, hr <= 100 {            // resting band — not a workout
+                if let hr = bpm, hr >= 55, hr <= 100 {            // resting band , not a workout
                     let now = Date()
                     if rmssd < hrvBaseline * 0.6, now.timeIntervalSince(lastStressBuzzAt) > 900 {
                         lastStressBuzzAt = now
                         buzz(loops: 1)
-                        live.append(log: "Stress nudge — take a paced breath")
+                        live.append(log: "Stress nudge , take a paced breath")
                     }
                 }
             }
@@ -681,7 +744,7 @@ final class AppModel: ObservableObject {
         guard decision.shouldNudge else { return }
         if canBuzz { buzz(loops: UInt8(clamping: decision.buzzLoops)) }
         stressNudgeCenter.present(fastRMSSD: decision.fastRMSSD, baselineRMSSD: decision.baselineRMSSD)
-        live.append(log: "Stress check-in — HRV dipped while still")
+        live.append(log: "Stress check-in , HRV dipped while still")
     }
 
     /// Whether the encrypted channel is up so a confirming buzz can actually fire (the command
@@ -696,8 +759,8 @@ final class AppModel: ObservableObject {
     }
 
     /// Start scanning for the strap. When no model is given, use the one the user
-    /// picked (persisted under "selectedWhoopModel"), so every scan entry point —
-    /// Live, onboarding, the menu bar, Settings — honours the same choice.
+    /// picked (persisted under "selectedWhoopModel"), so every scan entry point ,
+    /// Live, onboarding, the menu bar, Settings , honours the same choice.
     func scan(model: WhoopModel? = nil) {
         let chosen = model
             ?? UserDefaults.standard.string(forKey: "selectedWhoopModel").flatMap(WhoopModel.init(rawValue:))
@@ -715,7 +778,7 @@ final class AppModel: ObservableObject {
     // Thin pass-throughs over BLEManager's EXISTING public present-scan surface so the wizard never
     // references BLEManager directly (mirrors `scan()` / `disconnect()`). The wizard observes
     // `ble.discoveredWhoops` for the WHOOP families and runs its own `StandardHRSource` for generic
-    // straps — see AddDeviceWizard.
+    // straps , see AddDeviceWizard.
 
     /// The straps surfaced by the WHOOP present-scan (`scanForWhoops`), for the wizard's live list.
     /// Empty until a present-scan has discovered something; refreshed in place as RSSI updates.
@@ -741,24 +804,84 @@ final class AppModel: ObservableObject {
     /// Register a paired device and (optionally) make it the active one. The Add-a-device wizard's
     /// single write path: `add` upserts the row, and when `makeActive` is true `setActive` promotes it
     /// (the SourceCoordinator reacts to the active-device change and connects). No-op if the registry
-    /// hasn't been wired yet (pre store-open) — the wizard is only reachable once it has.
+    /// hasn't been wired yet (pre store-open) , the wizard is only reachable once it has.
     func registerDevice(_ device: PairedDevice, makeActive: Bool) {
         guard let registry = deviceRegistry else { return }
         registry.add(device)
-        if makeActive { registry.setActive(device.id) }
+        if makeActive {
+            // `setActive` republishes `registry.$activeDeviceId`, which the read-spine subscription
+            // (`readSpineCancellable`, wired in `wireSourceCoordinator`) observes and re-points the reads
+            // off, so the dashboard follows a re-add without a one-shot call here. The explicit adopt below
+            // is kept as a belt-and-braces immediate re-point (idempotent, so it's a safe no-op once the
+            // subscription has also fired). The just-activated id IS `device.id` (`setActive` made it active).
+            registry.setActive(device.id)
+            Task { [weak self] in await self?.adoptActiveDevice(device.id) }
+        }
+    }
+
+    // MARK: - Oura adopt (factory-reset-and-adopt)
+
+    /// The live adopt outcome of the active Oura ring, mirrored off the coordinator's live `OuraLiveSource`
+    /// so the Add-device wizard can drive its "Taking over your ring" step to success or an honest Failed
+    /// WITHOUT reaching into the BLE layer. nil when no Oura source is live or no adopt is in flight. PARITY:
+    /// the Android wizard observes the same coarse outcome to leave its Adopting step.
+    @Published private(set) var ouraAdoptPhase: OuraLiveSource.AdoptPhase = .idle
+    /// The active Oura ring's honest needs-pairing message (mirrored off the live source), surfaced verbatim
+    /// on the wizard's Failed step. nil when the ring is fine or no Oura source is live.
+    @Published private(set) var ouraNeedsPairing: String?
+    /// Combine subscriptions mirroring the live Oura source's `adoptPhase` / `needsPairing` into the two
+    /// published properties above. Re-bound whenever the active Oura source changes.
+    private var ouraAdoptCancellables = Set<AnyCancellable>()
+
+    /// Take over a factory-reset Oura ring: grant the coordinator explicit adopt consent for THIS ring (so
+    /// its live session may run the one-time key install, s3.2), register it active (which starts that live
+    /// session), then begin mirroring its adopt outcome for the wizard. The irreversible-consent gate has
+    /// ALREADY been passed in the wizard (the consent tick + the "Take over this ring?" confirm); this is the
+    /// commit. Never prompts to make-active (the takeover IS the user's new active source).
+    func adoptOuraRing(_ device: PairedDevice) {
+        sourceCoordinator?.requestOuraAdopt(deviceId: device.id)
+        // Reset the mirror so a previous attempt's outcome never leaks into this one.
+        ouraAdoptPhase = .idle
+        ouraNeedsPairing = nil
+        registerDevice(device, makeActive: true)
+        bindOuraAdoptMirror()
+    }
+
+    /// (Re)bind the adopt-outcome mirror to whichever `OuraLiveSource` the coordinator has live now and on
+    /// every later swap. `flatMap` switches to the current source's `adoptPhase` (defaulting to `.idle` when
+    /// there is no source), so the published value always tracks the live source without leaking subscriptions.
+    private func bindOuraAdoptMirror() {
+        ouraAdoptCancellables.removeAll()
+        guard let coordinator = sourceCoordinator else { return }
+        coordinator.$ouraSource
+            .flatMap { source -> AnyPublisher<OuraLiveSource.AdoptPhase, Never> in
+                source?.$adoptPhase.eraseToAnyPublisher()
+                    ?? Just(.idle).eraseToAnyPublisher()
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.ouraAdoptPhase = $0 }
+            .store(in: &ouraAdoptCancellables)
+        coordinator.$ouraSource
+            .flatMap { source -> AnyPublisher<String?, Never> in
+                source?.$needsPairing.eraseToAnyPublisher()
+                    ?? Just(nil).eraseToAnyPublisher()
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.ouraNeedsPairing = $0 }
+            .store(in: &ouraAdoptCancellables)
     }
 
     /// How many on-screen surfaces currently want the realtime HR stream (the Live tab and the
-    /// in-exercise LiveWorkoutView, which can be open at the same time — the workout sheet sits over
+    /// in-exercise LiveWorkoutView, which can be open at the same time , the workout sheet sits over
     /// Live, or is reached straight from the Workouts tab without Live ever appearing). The stream
     /// stays armed while ANY of them is visible, so a second surface arming it never disarms it out
-    /// from under the first (#681 — a WHOOP 5/MG manual workout started without first opening Live got
+    /// from under the first (#681 , a WHOOP 5/MG manual workout started without first opening Live got
     /// no live HR, so every sample was dropped and the session was silently discarded). Ref-counted to
     /// match Android's `realtimeWanters` (AppViewModel.requestRealtimeHr/releaseRealtimeHr).
     private var realtimeWanters = 0
 
-    /// A surface that shows live HR appeared. Arms the realtime stream on the 0→1 edge — and ONLY on
-    /// that edge blanks the stale smoothing window (#46) so a resume shows "—" until a fresh sample
+    /// A surface that shows live HR appeared. Arms the realtime stream on the 0→1 edge , and ONLY on
+    /// that edge blanks the stale smoothing window (#46) so a resume shows "," until a fresh sample
     /// lands, never re-clearing an already-live window when a second concurrent HR surface opens. The
     /// keep-alive re-arm goes through `ble.startRealtime()` directly, NOT here, so steady-state is
     /// untouched. Each surface must balance this with exactly one `stopRealtimeHR()` on disappear.
@@ -777,7 +900,7 @@ final class AppModel: ObservableObject {
         if realtimeWanters == 0 { ble.stopRealtime() }
     }
 
-    /// Re-issue the BLE realtime arm WITHOUT touching the ref-count — used when a fresh
+    /// Re-issue the BLE realtime arm WITHOUT touching the ref-count , used when a fresh
     /// connection/bond lands while a surface is already showing live HR (Apple's `ble.startRealtime()`
     /// must be re-sent on a new connection). A no-op when nothing wants the stream, so a stray
     /// connection event can't arm it behind a closed Live tab. Mirrors that Android re-arms via its
@@ -791,7 +914,7 @@ final class AppModel: ObservableObject {
 
     /// Fire a haptic buzz on the strap. patternId=2 is the graduated buzz confirmed on-device;
     /// `loops` sets the length. Used by the in-app test button and (later) notification alerts.
-    /// Requires a bonded connection — no-op otherwise (the command characteristic is gated on bond).
+    /// Requires a bonded connection , no-op otherwise (the command characteristic is gated on bond).
     func buzz(loops: UInt8 = 2) {
         ble.send(.runHapticsPattern, payload: [2, loops, 0, 0, 0])
     }
@@ -819,12 +942,12 @@ final class AppModel: ObservableObject {
         ble.send(.stopHaptics, payload: [0x00])
     }
 
-    // MARK: - Wrist-buzz mirror notifications (PR #577 — iOS only)
+    // MARK: - Wrist-buzz mirror notifications (PR #577 , iOS only)
     //
     // iOS can't keep the strap buzz silent in a pocket the way macOS surfaces it on screen, so a wrist
     // buzz the user might miss (a long sedentary stretch, the smart-alarm wake) is ALSO posted as a
     // local notification. macOS keeps routing to its dedicated Notifications screen and never calls
-    // these — `#if os(iOS)` makes them no-ops there so that path is untouched. Both are gated on the
+    // these , `#if os(iOS)` makes them no-ops there so that path is untouched. Both are gated on the
     // same `notif.masterEnabled` master switch the iOS Automations "Wrist alerts" toggle (PR #572) and
     // the SedentaryDetector read, so turning wrist alerts off silences these too.
 
@@ -839,7 +962,7 @@ final class AppModel: ObservableObject {
         #if os(iOS)
         let body = minutes > 0
             ? "You've been seated for about \(minutes) min. Time to move."
-            : "Time to move — you've been seated a while."
+            : "Time to move , you've been seated a while."
         postWristAlert(identifier: "inactivity-nudge", title: "Move reminder", body: body)
         #endif
     }
@@ -849,13 +972,13 @@ final class AppModel: ObservableObject {
     static func postSmartAlarm() {
         #if os(iOS)
         postWristAlert(identifier: "smart-alarm-wake", title: "Smart alarm",
-                       body: "Good morning — your smart alarm just woke you.")
+                       body: "Good morning , your smart alarm just woke you.")
         #endif
     }
 
     #if os(iOS)
     /// Shared post path: gate on the wrist-alerts master, then deliver only if the OS already authorized
-    /// notifications (no second system prompt — BatteryNotifier-style status-only check). A fresh
+    /// notifications (no second system prompt , BatteryNotifier-style status-only check). A fresh
     /// identifier per category means a new alert replaces the old one rather than stacking.
     private static func postWristAlert(identifier: String, title: String, body: String) {
         guard UserDefaults.standard.bool(forKey: wristAlertsMasterKey) else { return }
@@ -877,7 +1000,7 @@ final class AppModel: ObservableObject {
         guard behavior.smartAlarmEnabled else { ble.disableStrapAlarm(); return }
         guard let next = Self.nextSmartAlarmDate(minutes: behavior.smartAlarmMinutes,
                                                  weekdays: behavior.smartAlarmWeekdays) else {
-            // No enabled weekday in the next week (only possible from a corrupted set) — disarm rather
+            // No enabled weekday in the next week (only possible from a corrupted set) , disarm rather
             // than arm a misleading time the user never asked for.
             ble.disableStrapAlarm(); return
         }
@@ -951,7 +1074,7 @@ final class AppModel: ObservableObject {
         case .lockScreen:
             if !MacActions.lockScreen() {
                 #if os(macOS)
-                MacActions.runShortcut("Lock Screen")   // login.framework unavailable — fall back to a Shortcut
+                MacActions.runShortcut("Lock Screen")   // login.framework unavailable , fall back to a Shortcut
                 #endif
                 // iOS can't lock the device and .lockScreen isn't selectable there, so no stray Shortcut launch.
             }
@@ -963,7 +1086,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Whether the user's locale formats time on a 24-hour clock — drives the Haptic Clock's hour
+    /// Whether the user's locale formats time on a 24-hour clock , drives the Haptic Clock's hour
     /// encoding (#460) so a double-tap buzzes the time the way the user reads it. Derived from the
     /// locale's "j" (hour) template: a 12-hour locale includes the AM/PM ("a") symbol.
     static var localeUses24HourClock: Bool {
@@ -984,7 +1107,7 @@ final class AppModel: ObservableObject {
         live.append(log: "Moment marked")
     }
 
-    /// #461: record a "sleep mark" — a bedtime / wake / mid-night tap. Stored like moments (survives
+    /// #461: record a "sleep mark" , a bedtime / wake / mid-night tap. Stored like moments (survives
     /// relaunch) and written as a distinct, greppable "Sleep mark @ HH:mm" line into the strap log so it
     /// rides along in the shared log / raw export. A single buzz confirms it registered. No start/end
     /// smarts yet (Phase 1): marks are logged in sequence; pairing into sleep bounds comes later.
@@ -1001,7 +1124,7 @@ final class AppModel: ObservableObject {
         // Persistence parity with Android's `AppViewModel.markSleep` (#461): also upsert the TYPED
         // `sleep_mark` metric-series row that the Sleep screen reads back (SleepView.logMark writes the
         // same row when the user taps a button). A physical double-tap can't choose bedtime vs wake, so
-        // it defaults to `.bedtime` — the boundary the gesture most naturally marks. Idempotent by
+        // it defaults to `.bedtime` , the boundary the gesture most naturally marks. Idempotent by
         // (deviceId, day, key) through the repo's live store handle: no new Repository API, no schema
         // change. The UserDefaults list + buzz + freetext log line above are unchanged.
         let mark = SleepMark(type: .bedtime, at: date)
@@ -1034,25 +1157,25 @@ final class AppModel: ObservableObject {
         let zone = pct >= 0.9 ? 5 : pct >= 0.8 ? 4 : pct >= 0.7 ? 3 : pct >= 0.6 ? 2 : 1
         defer { lastCoachZone = zone }
         guard lastCoachZone != -1, zone != lastCoachZone else { return }
-        if zone == 5, lastCoachZone < 5 { buzz(loops: 3) }          // entered max — ease off
+        if zone == 5, lastCoachZone < 5 { buzz(loops: 3) }          // entered max , ease off
         else if zone <= 1, lastCoachZone > 1 { buzz(loops: 1) }     // recovered
     }
 
     /// Illness/strain early-warning (v5): the confounder-suppressed `IllnessSignalEngine`. For the last
     /// ~2 days vs a ~28-day personal baseline it z-scores resting HR, skin-temp deviation, HRV (negated)
     /// and respiration ORIENTED illness-ward, then the engine applies its minimum-corroboration gate,
-    /// composite score, and — the differentiating part — same-day journal confounder suppression
+    /// composite score, and , the differentiating part , same-day journal confounder suppression
     /// (alcohol / a hard-or-late workout / etc.) so a night out doesn't cry wolf. The journal context is
     /// read asynchronously, so this kicks a Task; the published `illnessSignal` + the `healthAlert`
-    /// banner both come from the engine's single decision. On-device only, APPROXIMATE — not a diagnosis.
+    /// banner both come from the engine's single decision. On-device only, APPROXIMATE , not a diagnosis.
     private func evaluateIllness(_ days: [DailyMetric]) {
         guard behavior.illnessWatch, days.count >= 14 else {
-            healthAlert = nil; illnessSignal = nil; return
+            healthAlert = nil; illnessSignal = nil; illnessDistance = nil; return
         }
         Task { [weak self] in
             guard let self else { return }
             // Confounder tags from the recent journal (within the last ~2 days). Read once, off the
-            // engine's hot path — the engine only needs presence flags, not the rows.
+            // engine's hot path , the engine only needs presence flags, not the rows.
             let recentDays = Set(days.suffix(2).map(\.day))
             let journal = await self.repo.journalEntries(days: 7)
             var ctxAlcohol = false, ctxHardWorkout = false, ctxAlreadyUnwell = false
@@ -1103,6 +1226,23 @@ final class AppModel: ObservableObject {
 
         let inputs = IllnessSignalEngine.Inputs(
             restingHR: rhr?.0, skinTemp: skin?.0, hrv: hrv?.0, respiration: resp?.0)
+
+        // PARALLEL Mahalanobis distance on the SAME illness-ward z-vector (RHR up, HRV negated, skin-temp
+        // up, respiration up). This NEVER gates the alert: the IllnessSignalEngine above remains the sole
+        // fire gate. We compute it here only so the Heads-Up card can show a "how strong" confidence band
+        // when the engine has already raised. nil where a reading is absent / not present (dropped from the
+        // distance). correlation: nil = identity, validated to agree ~100% with the z-sum detector.
+        func zIfPresent(_ r: (IllnessSignalEngine.SignalReading, Bool)?) -> Double? {
+            guard let reading = r?.0, reading.present else { return nil }
+            return reading.zIllnessward
+        }
+        let distanceFeatures = IllnessDistance.FeatureVector(
+            restingHR: zIfPresent(rhr),
+            rmssd: zIfPresent(hrv),       // hrv.zIllnessward is already the NEGATED HRV z
+            skinTemp: zIfPresent(skin),
+            respiration: zIfPresent(resp))
+        illnessDistance = IllnessDistance.evaluate(features: distanceFeatures, correlation: nil)
+
         // baselineTrusted: require the HRV/RHR baselines to be trusted before the engine may raise.
         let trusted = (rhr?.1 ?? false) || (hrv?.1 ?? false)
         let context = IllnessSignalEngine.Context(
@@ -1135,7 +1275,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Re-run the illness watch over the cached history. Called when the Automations toggle
-    /// flips — the repo.$days sink only fires on data changes, so a flip would otherwise wait
+    /// flips , the repo.$days sink only fires on data changes, so a flip would otherwise wait
     /// for the next refresh.
     func reevaluateIllness() {
         evaluateIllness(repo.days)
@@ -1146,9 +1286,9 @@ final class AppModel: ObservableObject {
     // Run in the analytics pass (IntelligenceEngine calls this after it persists the night's scores) so
     // the Health hub's skin-temp cards read a ready snapshot. Both are pure StrandAnalytics engines fed
     // from the merged daily history; cycle awareness is gated behind the opt-in flag (default OFF) and
-    // never computes — let alone surfaces — until the user turns it on.
+    // never computes , let alone surfaces , until the user turns it on.
 
-    /// UserDefaults key for the cycle-awareness opt-in (default OFF — the most sensitive health category,
+    /// UserDefaults key for the cycle-awareness opt-in (default OFF , the most sensitive health category,
     /// manual-first). The Settings toggle + the card's opt-in CTA both write this single key.
     static let cycleAwarenessKey = "noopCycleAwareness"
     var cycleAwarenessEnabled: Bool {
@@ -1175,7 +1315,7 @@ final class AppModel: ObservableObject {
               let hrvCfg = Baselines.metricCfg["hrv"] else { return }
 
         // The nightly absolute skin-temp mean isn't in repo.days (only the °C DEVIATION is), so z-score
-        // the deviation against its own folded spread — a zero-centred personal baseline. RHR + HRV
+        // the deviation against its own folded spread , a zero-centred personal baseline. RHR + HRV
         // z-score their raw columns. Oldest→newest.
         let sorted = days.sorted { $0.day < $1.day }
         let skinState = Baselines.foldHistory(sorted.map { $0.skinTempDevC }, cfg: tempCfg)
@@ -1237,7 +1377,7 @@ final class AppModel: ObservableObject {
     //
     // Assemble today's per-source values per metric and run `FusionResolver` so the "Your Data, Fused"
     // screen (FusedRecordView) can show the best-sourced number + provenance + agreement. This does NOT
-    // touch the core resolvedSeries waterfall — it's an additive read that reuses the rows the store
+    // touch the core resolvedSeries waterfall , it's an additive read that reuses the rows the store
     // already holds, exactly the seam the view's header documents.
 
     /// Build today's fused record (best signal per metric across every source, with agreement). Reads each
@@ -1258,7 +1398,7 @@ final class AppModel: ObservableObject {
             ("spo2", "Blood oxygen", nil),
         ]
         // Every source that could carry a value, mapped to its stored device id. (FusionSource.rawValue
-        // IS the canonical source id, but the strap's real id is `deviceId`/`computed` — map explicitly.)
+        // IS the canonical source id, but the strap's real id is `deviceId`/`computed` , map explicitly.)
         let sources: [(FusionSource, String)] = [
             (.whoopImport, deviceId),
             (.noopComputed, deviceId + "-noop"),
@@ -1317,13 +1457,13 @@ final class AppModel: ObservableObject {
     }
 
     /// Import a Whoop CSV export (.zip or folder) → on-device store, then refresh the dashboard.
-    /// A picked import file made safe to read. On iOS the security-scoped — and possibly
-    /// iCloud-placeholder — URL is coordinated and COPIED into the app's temp directory, so the
+    /// A picked import file made safe to read. On iOS the security-scoped , and possibly
+    /// iCloud-placeholder , URL is coordinated and COPIED into the app's temp directory, so the
     /// importer reads a stable LOCAL file. That's what makes import work for iCloud Drive files (they
     /// arrive as un-downloaded placeholders that ZIPFoundation can't open in place) and removes the
     /// scoped-access timing fragility that blocked iPhone imports (#179). On macOS the picked URL is
     /// read in place. `cleanup()` removes the temp copy AND the original `Documents/Inbox/` copy that
-    /// `UIDocumentPickerViewController(asCopy: true)` leaves behind — a multi-GB Apple Health
+    /// `UIDocumentPickerViewController(asCopy: true)` leaves behind , a multi-GB Apple Health
     /// `export.zip` parked there was the runaway "Documents & Data" growth in #590 (one import → the
     /// store rows AND a permanent ~19 GB Inbox duplicate the OS never reclaims). Sendable so it can
     /// cross the actor boundary.
@@ -1343,7 +1483,7 @@ final class AppModel: ObservableObject {
             }
         }
 
-        /// Only ever delete files the picker placed in OUR app's `Documents/Inbox/` — never a
+        /// Only ever delete files the picker placed in OUR app's `Documents/Inbox/` , never a
         /// user-chosen in-place file on macOS or an iCloud URL outside the sandbox. The guard keeps
         /// `cleanup()` from removing anything the user still owns.
         static func isInImportInbox(_ url: URL) -> Bool {
@@ -1386,7 +1526,7 @@ final class AppModel: ObservableObject {
 
     /// One-shot launch sweep of `Documents/Inbox/`: deletes any stale `asCopy:true` picker drops a
     /// previous build left behind before `cleanup()` reclaimed them (#590). Best-effort, off-main, and
-    /// safe — `Inbox` only ever holds picker hand-offs, never user data. Skips files newer than 60 s so
+    /// safe , `Inbox` only ever holds picker hand-offs, never user data. Skips files newer than 60 s so
     /// it can't race an import that's mid-flight at launch.
     nonisolated static func purgeImportInbox() {
         #if os(iOS)
@@ -1434,7 +1574,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Import an Apple Health export (export.zip) — streams + aggregates per-day into the store
+    /// Import an Apple Health export (export.zip) , streams + aggregates per-day into the store
     /// under the `apple-health` source, then refreshes. Large exports take ~1–2 minutes.
     func importXiaomi(url: URL) {
         beginImport(.xiaomi)
@@ -1470,7 +1610,7 @@ final class AppModel: ObservableObject {
     func importAppleHealth(url: URL) {
         beginImport(.appleHealth)
         // FIX 2(c): run the parse+writes at `.utility` so a large Apple Health import yields to UI
-        // rendering instead of inheriting the user-initiated QoS of the calling tap — the import's bulk
+        // rendering instead of inheriting the user-initiated QoS of the calling tap , the import's bulk
         // work was contending with the main actor and contributing to the transient post-import lag.
         Task(priority: .utility) {
             let scoped = url.startAccessingSecurityScopedResource()
@@ -1494,7 +1634,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: - Storage diagnostics (#590 — StorageView)
+    // MARK: - Storage diagnostics (#590 , StorageView)
 
     /// A point-in-time snapshot of where the app's on-disk footprint is going, for the Storage screen.
     /// All sizes in bytes; `db` is nil only for an unopened/in-memory store.
@@ -1548,7 +1688,7 @@ final class AppModel: ObservableObject {
         return total
     }
 
-    /// Sum every regular file under `dir` (one level — Inbox is flat). Best-effort; missing dir → 0.
+    /// Sum every regular file under `dir` (one level , Inbox is flat). Best-effort; missing dir → 0.
     nonisolated private static func directorySizeBytes(_ dir: URL) -> Int64 {
         guard let items = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey], options: []) else { return 0 }
@@ -1562,7 +1702,7 @@ final class AppModel: ObservableObject {
     }
 
     /// The Storage screen's "Clean up" action: purge the Inbox + stranded import temps, then truncate
-    /// the WAL so the freed pages return to the OS. Returns a fresh report so the screen updates. Safe —
+    /// the WAL so the freed pages return to the OS. Returns a fresh report so the screen updates. Safe ,
     /// Inbox/temp hold only picker hand-offs + this app's own temp copies, never user data or live rows.
     @discardableResult
     func cleanUpStorage() async -> StorageReport {
@@ -1588,9 +1728,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Handle a `noop://import-health` deep link (PR #581) — the HealthKit-free Shortcuts import for
+    /// Handle a `noop://import-health` deep link (PR #581) , the HealthKit-free Shortcuts import for
     /// sideloaded installs. Ingests the Shortcut-built payload into the `apple-health` source (NEVER the
-    /// strap — `ShortcutHealthImport` enforces the loop guard), then refreshes the dashboard. Surfaces
+    /// strap , `ShortcutHealthImport` enforces the loop guard), then refreshes the dashboard. Surfaces
     /// the result on the Apple Health card like the file import does. The iOS `.onOpenURL` in StrandiOS/
     /// calls this; macOS never registers the scheme.
     func handleHealthImportURL(_ url: URL) {

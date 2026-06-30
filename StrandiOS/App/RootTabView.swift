@@ -21,6 +21,10 @@ struct RootTabView: View {
     /// Selected tab — bound so tab switches can crossfade (README §Motion: ~240ms opacity swap
     /// between tab roots, calm easing). Defaults to Today.
     @State private var selectedTab: Int = 0
+    /// Which More-tab groups are expanded (S2). Insights + Body stay open at rest; Data + App collapse to
+    /// just their header until tapped, so the More list reads shorter without losing a single row. Keyed
+    /// by the section title so the set survives view rebuilds.
+    @State private var expandedMoreSections: Set<String> = ["Insights", "Body"]
 
     init() {
         // iOS 26+ renders the native Liquid Glass tab bar — leave its appearance untouched so the
@@ -51,7 +55,15 @@ struct RootTabView: View {
         // Tab crossfade — README §Motion: ~240ms opacity swap between tab roots, global calm
         // easing cubic-bezier(0.22,1,0.36,1).
         .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.24), value: selectedTab)
-        .task { await repo.refresh() }
+        .task {
+            await repo.refresh()
+            // Backup & Sync: on-launch catch-up (see RootView). Detached + utility priority so a
+            // 100MB+ whole-DB ZIP never blocks startup; gated on the auto toggle (default OFF). (Must-fix #4.)
+            let backupRepo = repo
+            Task.detached(priority: .utility) {
+                await FolderBackup.catchUpIfDue(checkpoint: { await backupRepo.checkpointForBackup() })
+            }
+        }
         // Quick-action sheet presents with the calm easing (~0.42s) per the README sheet spec —
         // the easing is applied where `quickAction` is set (see `presentQuickAction`), keeping the
         // animation scoped to the sheet rather than the whole shell.
@@ -241,13 +253,16 @@ struct RootTabView: View {
                     moreLink("Apple Health", "heart.fill") { AppleHealthView() }
                     moreLink("Mi Band", "figure.walk.motion") { XiaomiBandView() }
                     moreLink("Data Sources", "externaldrive.fill") { DataSourcesView() }
+                    moreLink("Backup & Sync", "externaldrive.fill.badge.icloud") { BackupSyncView() }
                     // #155: HealthKit-free Apple Health path for sideloaded installs (Siri Shortcut
                     // reads the opt-in Documents/noop_sync.txt drop file).
                     moreLink("Shortcuts Export", "square.and.arrow.up.fill") { ShortcutExportSettingsView() }
                 }
                 SettingsGroup(header: "App",
                               footer: "Automations, shortcuts, settings and support.") {
+                    moreLink("Alarms", "alarm.fill") { SmartAlarmView() }
                     moreLink("Automations", "wand.and.stars") { AutomationsView() }
+                    moreLink("Test Centre", "stethoscope") { TestCentreView() }
                     moreLink("Siri & Shortcuts", "mic.fill") { SiriShortcutsSettingsView() }
                     moreLink("Settings", "gearshape.fill") { SettingsView() }
                     moreLink("Support", "hands.clap.fill") { SupportView() }

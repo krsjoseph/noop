@@ -248,6 +248,30 @@ struct TodayView: View {
     // so a 4.0 user can reach calibration from where they actually notice the "est." caption.
     @State private var showStepsCalibration = false
 
+    // A1 (#514/#706): the Charge breakdown sheet, opened by tapping the Today hero Charge ring. Its body
+    // builds LAZILY on tap (#819 lag) and reads the drivers/confidence DERIVED from the same `displayDay`
+    // the ring shows (never a second store read) plus the folded Readiness, so the sheet can never disagree
+    // with the ring. A calibrating night (empty drivers) taps through to the EXISTING calibration countdown.
+    @State private var showChargeBreakdown = false
+
+    // S4: the Synthesis card collapses to a single one-liner that expands on tap. Default collapsed so the
+    // home screen stays tight; the live content (#506) is unchanged, only the chrome folds. @State (not
+    // persisted) so a relaunch starts collapsed again.
+    @State private var synthesisExpanded = false
+
+    // S5: the Key Metrics grid caps at the first `metricsCollapsedCap` tiles behind a "Show all metrics"
+    // expander, collapsing OVERFLOW only (never dropping or reordering a user-selected tile, #251). @State
+    // (not persisted) so the home screen reopens compact.
+    @State private var metricsExpanded = false
+    /// The number of Key-Metric tiles shown before the "Show all metrics" expander (S5). Two columns, so
+    /// six fills three clean rows; the rest fold behind the expander. Static so the cap is unit-testable.
+    static let metricsCollapsedCap = 6
+
+    // S5: the Data Sources footer collapses to a single "Synced from: …" summary line that expands inline
+    // to the full per-source rows + strap battery/sync on tap. Default collapsed so the home screen ends
+    // tight; nothing is removed, only folded behind a tap. @State (not persisted) so it reopens collapsed.
+    @State private var sourcesExpanded = false
+
     // THE single grid definition — every tile group reuses it so margins line up. minimum 150 (not
     // 168) so two tiles reliably fit a phone's ~345pt content width; at 168 the grid sat on the
     // single-vs-two-column boundary and could collapse to one full-width column on a narrow phone.
@@ -263,6 +287,15 @@ struct TodayView: View {
         #else
         return false
         #endif
+    }
+
+    /// #817 - the furthest-back offset the day-nav (swipe + chevrons + date jump) may reach: today's
+    /// logical day back to the earliest banked day across all sources. 0 when there's no data yet, so
+    /// today stays the only navigable day. Drives the swipe clamp so a swipe can't strand the user on a
+    /// day with no data behind it.
+    private var earliestDayOffset: Int {
+        Self.maxDayOffset(earliestDayKey: repo.freshness.earliestDay,
+                          todayKey: Repository.logicalDayKey(Date()))
     }
 
     /// The logical day the selector resolves to: offset 0 is today's logical day (rolls at 04:00 like
@@ -341,6 +374,30 @@ struct TodayView: View {
         return days.last(where: { $0.recovery != nil && $0.day < selectedDayKey })
     }
 
+    /// #817 - day-nav swipe/arrow clamp. Pure + unit-testable so the bounds can't drift between the
+    /// swipe gesture, the chevrons and the date jump. `current` is the days-back offset (0 = today),
+    /// `delta` is +1 to step one day OLDER, -1 to step one day NEWER. The result is clamped to
+    /// `0 ... maxOffset`: never past today (no future day), never older than the earliest data day.
+    /// `maxOffset` is the number of whole days from today's logical day back to the earliest banked day
+    /// (0 when there's no data yet, so the only reachable day is today). Mirror EXACTLY in Kotlin.
+    static func clampedDayOffset(current: Int, delta: Int, maxOffset: Int) -> Int {
+        let upper = max(0, maxOffset)
+        return min(upper, max(0, current + delta))
+    }
+
+    /// Whole days from today's logical day back to `earliestDayKey` (the oldest banked day across all
+    /// sources). nil/unparseable earliest, or a key on/after today, both yield 0 - today is then the only
+    /// navigable day. Both keys are "yyyy-MM-dd". Pure + unit-testable.
+    static func maxDayOffset(earliestDayKey: String?, todayKey: String) -> Int {
+        guard let earliestKey = earliestDayKey,
+              let earliest = dayKeyParser.date(from: earliestKey),
+              let today = dayKeyParser.date(from: todayKey) else { return 0 }
+        let gap = Calendar.current.dateComponents([.day],
+                                                  from: Calendar.current.startOfDay(for: earliest),
+                                                  to: Calendar.current.startOfDay(for: today)).day ?? 0
+        return max(0, gap)
+    }
+
     /// Carry-over recency cap (#779): the "Last night" framing only holds when the carried scored day is
     /// within this many days of today. A weeks-old import is still carried so the recovery side isn't a bare
     /// blank, but it is relabelled "Latest sleep · <date>" so a stale number is NEVER passed off as today's.
@@ -378,6 +435,65 @@ struct TodayView: View {
     private var lastScoredCharge: (value: Double, caption: String)? {
         guard let prior = lastScoredRecoveryDay, let rec = prior.recovery else { return nil }
         return (rec, carriedCaption(prior))
+    }
+
+    // MARK: A1/A3 Charge breakdown drivers (DERIVED from the displayed row, never a second read)
+
+    /// The row the breakdown reads, mirroring the ring: today's own when scored, else the carried last-
+    /// scored day (#543) so the sheet matches the carried ring instead of being empty at the rollover.
+    private var chargeBreakdownRow: DailyMetric? { lastScoredRecoveryDay ?? displayDay }
+
+    /// The ordered "What shaped it" Charge drivers for the displayed Charge ring. PURE derivation from the
+    /// SAME `displayDay` (post-#814 union-read row) the ring already shows, plus the HRV/RHR/resp baselines
+    /// folded from `repo.days` (exactly the inputs `AnalyticsEngine` scored with), so a row can NEVER
+    /// describe a term the ring's number didn't use. This is NOT a second store read: it reads only data
+    /// already resolved into `repo.days`/`displayDay`. Empty for a calibrating / cold-start night (no usable
+    /// HRV baseline or no value), so the sheet gates through to the calibration countdown instead.
+    private var chargeDrivers: [ChargeDriver] {
+        guard let row = chargeBreakdownRow,
+              let hrv = row.avgHrv, let rhr = row.restingHr else { return [] }
+        let hrvBase = Baselines.foldHistory(repo.days.map(\.avgHrv), cfg: Baselines.hrvCfg)
+        guard hrvBase.usable else { return [] }
+        let rhrBase = Baselines.foldHistory(repo.days.map { $0.restingHr.map(Double.init) },
+                                            cfg: Baselines.restingHRCfg)
+        let respBase = Baselines.foldHistory(repo.days.map(\.respRateBpm), cfg: Baselines.respCfg)
+        // Rest-quality term = the Rest composite ÷100, matching AnalyticsEngine's `sleepPerf`. `restScore`
+        // is the same merged sleep_performance value the Rest ring reads, so the term stays consistent.
+        let sleepPerf = restScore.map { $0 / 100.0 }
+        return RecoveryScorer.chargeDrivers(
+            hrv: hrv, rhr: Double(rhr), resp: row.respRateBpm,
+            hrvBaseline: hrvBase,
+            rhrBaseline: rhrBase.usable ? rhrBase : nil,
+            respBaseline: respBase.usable ? respBase : nil,
+            sleepPerf: sleepPerf, skinTempDev: row.skinTempDevC)
+    }
+
+    /// The Charge confidence tier for the displayed row, SURFACED (never recomputed) from the existing
+    /// `ScoreConfidence.charge` against the same folded HRV baseline the drivers scored with, so the dot +
+    /// tier tag in the sheet header agree with the breakdown.
+    private var chargeBreakdownConfidence: ScoreConfidence {
+        let hrvBase = Baselines.foldHistory(repo.days.map(\.avgHrv), cfg: Baselines.hrvCfg)
+        return ScoreConfidence.charge(recovery: chargeBreakdownRow?.recovery, hrvBaseline: hrvBase)
+    }
+
+    /// The night's relative skin-temp marker for the displayed row (A5), or nil. Surfaced verbatim from
+    /// `RecoveryScorer.skinTempRelative` (no recompute) so it reads identically to the Intelligence screen.
+    private var chargeSkinTempRel: SkinTempRelative? {
+        RecoveryScorer.skinTempRelative(deviationC: chargeBreakdownRow?.skinTempDevC)
+    }
+
+    /// #205 (one-word readiness read kept on the hero: Push / Maintain / Rest). PURE mapping of the
+    /// existing `ReadinessEngine.Level` so the hero keeps a glanceable verdict even though the full
+    /// Readiness card folds into the Charge breakdown sheet (S4). `insufficient` returns nil (the hero then
+    /// shows no readiness word, matching the old card hiding itself). Mirror EXACTLY in Kotlin.
+    static func readinessWord(_ level: ReadinessEngine.Level) -> String? {
+        switch level {
+        case .primed:       return "Push"
+        case .balanced:     return "Maintain"
+        case .strained:     return "Rest"
+        case .rundown:      return "Rest"
+        case .insufficient: return nil
+        }
     }
 
     // MARK: Component 2 — explained score states (calibrating / carriedLastNight / needsStrap)
@@ -604,6 +720,16 @@ struct TodayView: View {
         TodayDerived(readiness: computeReadiness(), calibration: computeCalibration())
     }
 
+    /// Synthesis-card copy while the recovery baseline calibrates; nil otherwise.
+    private var calibrationStatus: LocalizedStringKey? {
+        recoveryCalibration == nil ? nil : "Calibrating"
+    }
+
+    private var calibrationDetail: LocalizedStringKey? {
+        guard let n = recoveryCalibration else { return nil }
+        return "Learning your baseline, \(n) of \(Baselines.minNightsSeed) nights."
+    }
+
     /// Whether the verdict hero has a real score to summarise — today's own Charge or the carried last
     /// scored night. When false (first-run / calibrating / needs-strap), the hero suppresses its synthesis
     /// read-out so the empty state isn't a third restatement of "Calibrating / No data" already carried by
@@ -656,6 +782,38 @@ struct TodayView: View {
         let f = DateFormatter(); f.dateFormat = "EEE d MMM"; f.locale = Locale(identifier: "en_US_POSIX"); return f
     }()
 
+    /// The selected day as a small locale-aware numeric date ("28/06/2026" or "6/28/2026" per region). The
+    /// top bar shows just this now, no "Today" / "Yesterday" word and no prev/next arrows. Day-change is by
+    /// horizontal swipe or by tapping to open the picker, and the rotating hint below teaches both.
+    private var dayNavDateText: String {
+        selectedLogicalDay.formatted(date: .numeric, time: .omitted)
+    }
+
+    /// Periodic one-word hint shown in place of the date for ~1.5s every ~10s (nil = show the date). With the
+    /// arrows gone the day-nav affordances are otherwise invisible, so this teaches them in the accent colour.
+    @State private var dayNavHint: String? = nil
+    private static let dayNavHints = ["Swipe", "Tap"]
+
+    /// #817 - the day-nav swipe. A horizontal drag flips the day: swipe right (toward today) to the newer
+    /// day, swipe left to the older one. Gated so it only fires on a clearly-horizontal drag past a small
+    /// threshold (vertical scrolling keeps winning), and clamped to `0 ... earliestDayOffset` so it can't
+    /// reach a future day or step older than the earliest banked day. Mirrors the chevron bounds exactly.
+    private var daySwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                // Horizontal-dominant and far enough to count as a deliberate day flip.
+                guard abs(dx) > abs(dy) * 1.5, abs(dx) > 50 else { return }
+                // Swipe LEFT (dx < 0) -> OLDER day (+1 offset); swipe RIGHT -> NEWER day (-1 offset).
+                let delta = dx < 0 ? 1 : -1
+                let next = Self.clampedDayOffset(current: selectedDayOffset, delta: delta,
+                                                 maxOffset: earliestDayOffset)
+                guard next != selectedDayOffset else { return }
+                withAnimation(StrandMotion.interactive) { selectedDayOffset = next }
+            }
+    }
+
     /// Picker binding that converts a chosen date back to a whole-day offset (capped at today).
     private var dayPickerBinding: Binding<Date> {
         Binding(
@@ -677,27 +835,27 @@ struct TodayView: View {
     @ViewBuilder private var todayTopBar: some View {
         HStack(alignment: .center, spacing: 10) {
             Button { showDayPicker = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 5) {
-                        Text(dayNavLabel)
-                            .font(.system(size: 27, weight: .bold, design: .rounded))
-                            .foregroundStyle(StrandPalette.textPrimary)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(StrandPalette.textTertiary)
-                    }
-                    Text(selectedLogicalDay.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(StrandPalette.textSecondary)
-                }
-                .contentShape(Rectangle())
+                // Just the date, small (locale numeric), no relative word and no prev/next arrows. Every ~10s
+                // it swaps for ~1.5s to a one-word "Swipe" / "Tap" hint in the accent colour so users learn
+                // they can change the day by swiping across or tapping here. fixedSize makes it claim its own
+                // width so a tight top bar never compresses it, and the trailing icon cluster keeps its room.
+                Text(dayNavHint ?? dayNavDateText)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(dayNavHint != nil ? StrandPalette.accent : StrandPalette.textPrimary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .contentTransition(.opacity)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(dayNavLabel). Change day")
+            .layoutPriority(1)
+            .accessibilityLabel("\(dayNavLabel). Swipe or tap to change day")
             .popover(isPresented: $showDayPicker) {
                 DatePicker("", selection: dayPickerBinding, in: ...Date(), displayedComponents: [.date])
                     .datePickerStyle(.graphical).labelsHidden().padding(12)
+                    // #840 — give the graphical picker an explicit size so the iPad popover bubble doesn't
+                    // clip the calendar grid (anchored to a 13pt label it otherwise sizes too small).
+                    .frame(minWidth: 320, minHeight: 360)
             }
 
             Spacer(minLength: 8)
@@ -757,18 +915,19 @@ struct TodayView: View {
             }
         }
         .frame(height: 46)
-    }
-
-    private func topNavChevron(_ name: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: name)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(enabled ? StrandPalette.accent : StrandPalette.textTertiary)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+        // Cycle the swipe/tap hint: roughly every 10s flash a one-word hint for ~1.5s, alternating "Swipe" /
+        // "Tap", then return to the date. One async loop, auto-cancelled when Today goes away (no leaked timer).
+        .task {
+            var i = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                if Task.isCancelled { break }
+                withAnimation(.easeInOut(duration: 0.3)) { dayNavHint = Self.dayNavHints[i % Self.dayNavHints.count] }
+                i += 1
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                withAnimation(.easeInOut(duration: 0.3)) { dayNavHint = nil }
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
     }
 
     /// Settings presented as a sheet from the top-bar profile button (sheets inherit the app
@@ -917,6 +1076,15 @@ struct TodayView: View {
             // something to refract; over the flat canvas it would be low-contrast, so scene-off keeps the
             // opaque frosted card). No-op below iOS 26 / on macOS (the surface falls back to frosted).
             .environment(\.noopGlassSurface, useGlassSurface)
+            #if os(iOS)
+            // #817 - horizontal swipe to change day. A right-swipe (positive X) steps to the NEWER day
+            // (toward today), a left-swipe to the OLDER day, both clamped by `clampedDayOffset` so it can't
+            // pass today or go older than the earliest banked day - the same bounds the chevrons use. A
+            // height/width ratio gate keeps a near-vertical scroll from registering as a day swipe, and a
+            // ~50pt minimum distance avoids stray taps flipping the day. minimumDistance lets the scroll view
+            // win short drags so vertical scrolling is unaffected.
+            .gesture(daySwipeGesture)
+            #endif
             // #755: mirror `LiveState.backfilling` into `liveBackfillingFlag` WITHOUT TodayView observing
             // LiveState (which would re-flood `body` ~1 Hz — see the top-of-type note). The bridge is a
             // zero-size leaf in `.background` (no layout impact) that owns the observation and pushes only
@@ -998,6 +1166,9 @@ struct TodayView: View {
         .sheet(isPresented: $showStepsCalibration) {
             StepsCalibrationSheet(repo: repo, onClose: { showStepsCalibration = false })
         }
+        // A1 (#514/#706): the Charge breakdown, opened by tapping the Today hero Charge ring. The body
+        // builds lazily here (#819 lag) from the drivers DERIVED off the displayed row (never a second read).
+        .sheet(isPresented: $showChargeBreakdown) { chargeBreakdownSheet }
         // Honour a "Restore to Today" tap from the inbox: flip the matching dismissed flag back so the
         // card reappears (the inbox also clears the @AppStorage key directly, but this covers an
         // already-mounted Today). Cleared once handled.
@@ -1132,13 +1303,32 @@ struct TodayView: View {
         // would be just an empty header over three "—" rows, which reads as broken. Hide it entirely — the
         // "scores building" note + the calibrating rings already explain that data is still landing.
         if showReadiness || showVitals {
+            VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+                if showReadiness {
+                    readinessCard(r)
+                }
+                // The vitals that drive recovery — HRV / Resting HR / Respiratory. Now their single home,
+                // sitting directly under the readiness reasoning that uses them. Hidden until a night has
+                // landed, so the empty state never shows three blank "—" rows.
+                if showVitals {
+                    recoveryVitalsCard(displayDay)
+                }
+            }
+        }
+    }
+
+    /// S4: Readiness now lives behind the Charge-ring tap (in `chargeBreakdownSheet`), not as a standalone
+    /// home-screen card. This wrapper is retained for the sheet's use: a titled header + the card body. A
+    /// one-word readiness read (Push / Maintain / Rest, #205) stays on the hero so the home screen keeps a
+    /// glanceable verdict. Hidden when there isn't enough history (the `.insufficient` level).
+    @ViewBuilder
+    private func readinessCard(_ r: ReadinessEngine.Readiness) -> some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
-            // When Readiness is anchored on the carried last-scored day (#543), the overline stamps
-            // its date so the prior read isn't passed off as today's; otherwise the usual prompt.
+            // When Readiness is anchored on the carried last-scored day (#543), the overline stamps its
+            // date so the prior read isn't passed off as today's; otherwise the usual prompt.
             SectionHeader("Readiness",
                           overline: lastScoredRecoveryDay.map { "\(carriedCaption($0))" } ?? "Should you push today?")
-            if showReadiness {
-                NoopCard {
+            NoopCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
                             Circle().fill(readinessColor(r.level)).frame(width: 10, height: 10)
@@ -1192,14 +1382,6 @@ struct TodayView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-            // The vitals that drive recovery — HRV / Resting HR / Respiratory. Now their single home,
-            // sitting directly under the readiness reasoning that uses them. Hidden until a night has
-            // landed, so the empty state never shows three blank "—" rows.
-            if showVitals {
-                recoveryVitalsCard(displayDay)
-            }
-        }
         }
     }
 
@@ -1294,6 +1476,12 @@ struct TodayView: View {
                     explainedScoreNote(chargeScoreState)
                 }
 
+                // While the Charge baseline is still building, show the upstream countdown inside the
+                // fork's single hero card instead of leaving Charge as an unexplained blank.
+                if selectedDayOffset == 0, let banked = recoveryCalibration {
+                    chargeCalibrationCountdown(banked: banked)
+                }
+
                 // Synthesis read-out — the headline + one-line coaching the rings add up to. Rendered as
                 // plain text (not a nested InsightCard) so it doesn't box a card inside the hero card.
                 // Shown ONLY when there's a real score to summarise: in the first-run / calibrating / needs-
@@ -1334,6 +1522,233 @@ struct TodayView: View {
                 }
             }
         }
+    }
+
+    /// A4, the Charge calibrating countdown callout. `banked` is the existing `recoveryCalibration`
+    /// (nights gathered so far); the nights-to-go and progress copy come from the pure
+    /// `ChargeBreakdownFormat` helpers so they read identically here and in tests.
+    @ViewBuilder
+    private func chargeCalibrationCountdown(banked: Int) -> some View {
+        let remaining = max(1, Baselines.minNightsSeed - banked)
+        let countdown = ChargeBreakdownFormat.calibrationCountdown(nightsRemaining: remaining)
+        let unlock = ChargeBreakdownFormat.calibrationUnlockCopy(scoreName: "Charge")
+        let progress = ChargeBreakdownFormat.calibrationProgress(banked: banked, seed: Baselines.minNightsSeed)
+        NoopCard(padding: 14, tint: StrandPalette.chargeColor) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(StrandPalette.chargeColor)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(countdown)
+                            .font(StrandFont.headline)
+                            .foregroundStyle(StrandPalette.textPrimary)
+                        Spacer(minLength: 0)
+                        ConfidenceTierChip(confidence: .calibrating)
+                    }
+                    Text(unlock)
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(progress)
+                        .font(StrandFont.footnote)
+                        .foregroundStyle(StrandPalette.textTertiary)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Charge baseline calibrating. \(countdown), \(unlock). \(progress).")
+    }
+
+    // MARK: A1/S4 Charge breakdown sheet (the Charge-ring tap target)
+
+    /// The sheet opened by tapping the Today hero Charge ring. It builds lazily from the same displayed row
+    /// the ring shows, then folds the full Readiness card under the Charge-driver breakdown.
+    @ViewBuilder
+    private var chargeBreakdownSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
+                    let drivers = chargeDrivers
+                    if drivers.isEmpty {
+                        if let banked = recoveryCalibration {
+                            chargeCalibrationCountdown(banked: banked)
+                        } else {
+                            chargeBreakdownEmptyNote
+                        }
+                    } else {
+                        NoopCard(padding: 18, tint: StrandPalette.chargeColor) {
+                            ChargeBreakdownSection(drivers: drivers,
+                                                   confidence: chargeBreakdownConfidence,
+                                                   skinTempRel: chargeSkinTempRel)
+                        }
+                    }
+                    readinessSheetBody
+
+                    NavigationLink {
+                        ScoringGuideView(initialSection: .charge, onClose: { showChargeBreakdown = false })
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "function")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(StrandPalette.chargeColor)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("How Charge is calculated")
+                                    .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                                Text("The method behind the score, not today's values.")
+                                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(StrandPalette.textTertiary)
+                        }
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(StrandPalette.surfaceInset))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How Charge is calculated. The method behind the score.")
+                }
+                .padding(NoopMetrics.screenPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(StrandPalette.surfaceBase.ignoresSafeArea())
+            .navigationTitle("What shaped your Charge")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showChargeBreakdown = false }
+                        .foregroundStyle(StrandPalette.accent)
+                }
+                #else
+                ToolbarItem {
+                    Button("Done") { showChargeBreakdown = false }
+                        .foregroundStyle(StrandPalette.accent)
+                }
+                #endif
+            }
+        }
+    }
+
+    private var chargeBreakdownEmptyNote: some View {
+        NoopCard(padding: 18, tint: StrandPalette.chargeColor) {
+            VStack(alignment: .leading, spacing: NoopMetrics.space2) {
+                Text("No Charge breakdown yet")
+                    .font(StrandFont.headline)
+                    .foregroundStyle(StrandPalette.textPrimary)
+                Text(Self.needsStrapCaption)
+                    .font(StrandFont.subhead)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readinessSheetBody: some View {
+        let r = readiness
+        if r.level != .insufficient {
+            readinessCard(r)
+        }
+    }
+
+    /// S4: the Synthesis card, collapsed to a one-liner that expands on tap. Collapsed: the category +
+    /// status headline + a chevron. Expanded: the FULL `InsightCard` (status + detail), the existing locked
+    /// component, unchanged. The headline is the SAME `synthesisCardStatus` / calibration / DEBUG-frame copy
+    /// in both states (#506 content untouched), so only the chrome folds, never the read.
+    /// Plain (non-ViewBuilder) resolver for the Synthesis headline + detail. Kept OUT of the @ViewBuilder
+    /// body below because an if/else of assignments inside a ViewBuilder is read as a Void "view" and fails
+    /// to compile. The copy is identical in the collapsed and expanded states (#506 content untouched).
+    private func synthesisCopy(d: DailyMetric?, score: Double?) -> (status: LocalizedStringKey, detail: LocalizedStringKey) {
+        #if DEBUG
+        if let f = DemoDayHarness.active {
+            return ("\(f.synthHeadline)", "\(f.synthBody)")
+        }
+        #endif
+        return (calibrationStatus ?? "\(synthesisCardStatus(d, score: score))",
+                calibrationDetail ?? "\(synthesisCardDetail(d, score: score))")
+    }
+
+    @ViewBuilder
+    private func synthesisCollapsible(d: DailyMetric?, score: Double?) -> some View {
+        // Resolve the headline + detail once so the collapsed line and the expanded card never disagree.
+        let copy = synthesisCopy(d: d, score: score)
+        let status = copy.status
+        let detail = copy.detail
+
+        if synthesisExpanded {
+            // Expanded: the full locked InsightCard, then a tap target to collapse it again.
+            Button {
+                withAnimation(StrandMotion.interactive) { synthesisExpanded = false }
+            } label: {
+                InsightCard(
+                    category: "Synthesis",
+                    status: status,
+                    detail: detail,
+                    statusColor: StrandPalette.textPrimary,
+                    tint: StrandPalette.chargeColor
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Synthesis. \(status)")
+            .accessibilityHint("Collapse")
+        } else {
+            // Collapsed: a one-liner with the category overline, the status headline and a down-chevron.
+            Button {
+                withAnimation(StrandMotion.interactive) { synthesisExpanded = true }
+            } label: {
+                NoopCard(tint: StrandPalette.chargeColor) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Synthesis").strandOverline()
+                            Text(status)
+                                .font(StrandFont.headline)
+                                .foregroundStyle(StrandPalette.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(StrandPalette.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Synthesis. \(status)")
+            .accessibilityHint("Expand for the full read")
+        }
+    }
+
+    /// S4 (#205): the one-word readiness pill on the hero (Push / Maintain / Rest). A small tinted capsule
+    /// matching the score-pill chrome, coloured by the readiness level. Tapping it opens the Charge
+    /// breakdown sheet, where the FULL Readiness card now lives, so the glanceable word still leads to the
+    /// detail it summarises.
+    private func readinessHeroPill(_ word: String) -> some View {
+        Button {
+            showChargeBreakdown = true
+        } label: {
+            Text(word)
+                .font(StrandFont.overline)
+                .tracking(StrandFont.overlineTracking)
+                .foregroundStyle(readinessColor(readiness.level))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule(style: .continuous).fill(readinessColor(readiness.level).opacity(0.12)))
+                .overlay(Capsule(style: .continuous).stroke(readinessColor(readiness.level).opacity(0.32), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Readiness: \(word)")
+        .accessibilityHint("See your full readiness")
     }
 
     // MARK: - Your cards (#582 / Design Reset)
@@ -1461,11 +1876,11 @@ struct TodayView: View {
         case .sleep:
             return sleepValue(d)
         case .steps:
+            // #843/#813 — same-day real count only (strap @57 or same-day phone import); never the latest
+            // imported row or the sparkline tail (both went stale). Else fall through to the estimate.
             let appleStepsForDay = appleDays.last(where: { $0.day == selectedDayKey })?.steps
-                ?? (selectedDayOffset == 0 ? appleDays.last?.steps : nil)
             let real = (d?.steps).map { intString(Double($0)) }
                 ?? appleStepsForDay.map { intString(Double($0)) }
-                ?? sparks["steps"]?.last.map { intString($0) }
             let est = stepsEstByDay[selectedDayKey].map { intString(Double($0)) }
             return real ?? est ?? "—"
         case .calories:
@@ -1842,7 +2257,14 @@ struct TodayView: View {
         let ring = Self.heroRingDiameter(rowWidth: measured)
         HStack(alignment: .top, spacing: 22) {
             // Component 4: Charge/Rest badge their real per-day merge winner; Effort has no badge.
-            heroRingColumn(section: .charge, domain: .charge, provenanceKey: "recovery") { chargeRing(score: score, d: d, diameter: ring) }
+            // A1 (#514/#706): the Charge ring is TAPPABLE (a small chevron cue overlays the ring's bottom
+            // edge, INSIDE the ring frame so it adds no stacked height, keeping the #762 self-sizing row
+            // untouched). It opens the Charge breakdown sheet (the existing ChargeBreakdownSection), built
+            // lazily on tap. No new badge/dot/tier sits under the ring (that would re-load the #762 stack).
+            heroRingColumn(section: .charge, domain: .charge, provenanceKey: "recovery",
+                           onRingTap: { showChargeBreakdown = true }) {
+                chargeRing(score: score, d: d, diameter: ring)
+            }
             heroRingColumn(section: .effort, domain: .effort) { effortRing(d: d, diameter: ring) }
             heroRingColumn(section: .rest, domain: .rest, provenanceKey: "sleep_performance") { restRing(diameter: ring) }
         }
@@ -1890,11 +2312,29 @@ struct TodayView: View {
     @ViewBuilder
     private func heroRingColumn<RingBody: View>(
         section: ScoreSection, domain: DomainTheme, provenanceKey: String? = nil,
+        onRingTap: (() -> Void)? = nil,
         @ViewBuilder ring: () -> RingBody
     ) -> some View {
         VStack(spacing: 8) {
-            ring()
-            Button { guideSection = section } label: {
+            // A1: when the column is tappable (Charge), wrap the ring in a button (the body is just the ring
+            // with a contentShape so the whole disc is hittable). The tappable ring carries NO in-ring cue:
+            // the single affordance is the label chevron below it (see the comment near the Button below).
+            // The non-tappable rings render unchanged.
+            if let onRingTap {
+                Button(action: onRingTap) {
+                    ring().contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.domainLabel(domain))
+                .accessibilityHint("See what shaped your Charge")
+                .accessibilityAddTraits(.isButton)
+            } else {
+                ring()
+            }
+            // ONE chevron affordance under every ring, so the row reads uniformly (no second cue on the
+            // Charge ring). Charge's chevron opens the "what shaped it" breakdown (its richest explanation);
+            // Effort / Rest open their scoring-guide section.
+            Button { if let onRingTap { onRingTap() } else { guideSection = section } } label: {
                 HStack(spacing: 3) {
                     // The CHARGE/EFFORT/REST hero label is localized: the catalog key is the natural-case
                     // domain word (Charge/Effort/Rest) and `.textCase(.uppercase)` does the uppercasing in
@@ -1911,7 +2351,8 @@ struct TodayView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Self.domainGuideAccessibilityLabel(domain))
+            .accessibilityLabel(onRingTap == nil ? Self.domainGuideAccessibilityLabel(domain)
+                                                  : "See what shaped your Charge")
             // Component 4 — the real per-day source under the ring (only when this score has a value for
             // the day AND we resolved its winner; a calibrating / empty ring shows no provenance badge).
             // Apple Watch (M1): a watch-sourced score reads "Apple Watch" with its confidence bound to the
@@ -1953,6 +2394,14 @@ struct TodayView: View {
         if let s = score {
             GlowRing(fraction: s / 100, value: s, format: { "\(Int($0.rounded()))" },
                      color: StrandPalette.chargeColor, diameter: diameter, lineWidth: diameter * 0.10)
+        } else if recoveryCalibration == nil, let carried = lastScoredCharge {
+            // #802: a CARRIED last-night Charge draws as a real (dimmed) ring, matching the Rest ring, rather
+            // than a bare number on a faint track, which read as broken next to Rest's filled ring. Same
+            // diameter, so the #762 self-sizing hero row is untouched; the dim + the row-level "Last night"
+            // caption already beneath the rings mark it as carried, not today's fresh score.
+            GlowRing(fraction: carried.value / 100, value: carried.value, format: { "\(Int($0.rounded()))" },
+                     color: StrandPalette.chargeColor, diameter: diameter, lineWidth: diameter * 0.10)
+                .opacity(0.8)
         } else {
             emptyHeroRing(diameter: diameter) { ringEmptyOverlay(d: d, diameter: diameter) }
         }
@@ -2042,13 +2491,10 @@ struct TodayView: View {
     /// the arc fraction and the gauge's "of N" caption so both follow the toggle (#313).
     private var effortGaugeMax: Double { effortScale == .whoop ? 21 : 100 }
 
-    /// Honest overlay shown over the Charge ring when today's recovery is nil: calibrating count, the
-    /// last scored Charge carried over, or No data. After the logical-day rollover the new day has no
-    /// recovery until tonight is scored; rather than a bare "No data" on the hero ring while live HR
-    /// ticks (which reads as broken, #543), show the most recent scored Charge as a centred read-out
-    /// clearly stamped "Last night · <date>". The ring TRACK stays empty (today genuinely isn't scored,
-    /// so we never fill the GlowRing as if it were today's number) — the carried value sits inside it as
-    /// a labelled prior reading, the way WHOOP keeps last recovery visible until the new one lands.
+    /// Honest overlay shown over the Charge ring when today's recovery is nil: either the calibrating
+    /// count or No data. The carried last-scored Charge case is NOT handled here anymore: chargeRing now
+    /// intercepts it and draws a dimmed FILLED ring (so it reads like the Rest ring, not a bare number on
+    /// an empty track, #802). This overlay therefore only covers the calibrating and no-data cases.
     @ViewBuilder
     private func ringEmptyOverlay(d: DailyMetric?, diameter: CGFloat) -> some View {
         VStack(spacing: 3) {
@@ -2059,22 +2505,6 @@ struct TodayView: View {
                     .lineLimit(1).minimumScaleFactor(0.7).fixedSize()
                 Text("\(n) of \(Baselines.minNightsSeed)").font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
                     .lineLimit(1)
-            } else if let carried = lastScoredCharge {
-                // Ring text consistency (#hero): the carried "49%" centre number renders in the SAME size +
-                // weight as a filled ring's number (GlowRing.centerFont), so a carried Charge, a clean "93"
-                // and a "No data" ring all share one centre-number style. Its "Last night" subtitle stays a
-                // footnote, matching the calibrating subtitle.
-                Text("\(Int(carried.value.rounded()))%")
-                    .font(GlowRing.centerFont(diameter: diameter))
-                    .monospacedDigit()
-                    .foregroundStyle(StrandPalette.recoveryColor(carried.value))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                Text(carried.caption)
-                    .font(StrandFont.footnote)
-                    .foregroundStyle(StrandPalette.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             } else {
                 ringNoData(diameter: diameter)
             }
@@ -2220,15 +2650,64 @@ struct TodayView: View {
                 .help("Choose which Key Metrics show and reorder them")
             }
             // Render the enabled tiles in the saved order; an empty layout still shows the default set.
+            // S5: cap the grid to the first `metricsCollapsedCap` tiles behind a "Show all metrics" expander.
+            // This collapses OVERFLOW ONLY (the visible tiles stay in the user's saved order), and no
+            // pinned/selected tile is dropped or reordered (#251); the rest just fold until the expander.
             LazyVGrid(columns: grid, alignment: .leading, spacing: NoopMetrics.gap) {
-                ForEach(enabledKeyMetrics) { metric in
+                ForEach(visibleKeyMetrics) { metric in
+                    // Fill the row height so both cards in a row are equal height: otherwise a taller tile
+                    // (e.g. Rest with its sparkline) leaves its row-mate short, and the empty space below the
+                    // shorter card reads as an uneven gap on one side of the grid.
                     keyMetricTile(metric)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            }
+            if metricsHasOverflow {
+                metricsExpander
             }
         }
         .sheet(isPresented: $showingMetricsEditor) {
             KeyMetricsEditorSheet(layoutRaw: $keyMetricsRaw)
         }
+    }
+
+    /// S5: the Key-Metric tiles actually rendered: all of them when expanded, else the first
+    /// `metricsCollapsedCap` (overflow folds behind the expander). Order is the user's saved order, sliced
+    /// from the front, so a pinned tile is never dropped or reordered (#251); only the tail collapses.
+    private var visibleKeyMetrics: [KeyMetric] {
+        let all = enabledKeyMetrics
+        if metricsExpanded || all.count <= Self.metricsCollapsedCap { return all }
+        return Array(all.prefix(Self.metricsCollapsedCap))
+    }
+
+    /// True when there are more enabled tiles than the collapsed cap, so the expander is worth showing.
+    private var metricsHasOverflow: Bool { enabledKeyMetrics.count > Self.metricsCollapsedCap }
+
+    /// S5: the "Show all metrics" / "Show fewer" expander under the capped grid. Toggles `metricsExpanded`
+    /// only; it never changes WHICH tiles are enabled or their order (that stays the #251 editor's job).
+    private var metricsExpander: some View {
+        let hidden = max(0, enabledKeyMetrics.count - Self.metricsCollapsedCap)
+        return Button {
+            withAnimation(StrandMotion.interactive) { metricsExpanded.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Text(metricsExpanded ? "Show fewer" : "Show all metrics")
+                    .font(StrandFont.footnote)
+                if !metricsExpanded {
+                    Text("\(hidden)")
+                        .font(StrandFont.captionNumber)
+                        .foregroundStyle(StrandPalette.textTertiary)
+                }
+                Image(systemName: metricsExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(StrandPalette.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(metricsExpanded ? "Show fewer metrics" : "Show all metrics, \(hidden) more")
     }
 
     /// A carried recovery-vital tile's (value, caption): today's own value wins (with the metric's
@@ -2379,11 +2858,13 @@ struct TodayView: View {
             // sparkline tail as a last-resort recent value. Only when a day has NONE of those real sources
             // do we fall back to the on-device ESTIMATE (steps_est) a WHOOP 4.0 user gets — flagged "est."
             // so it's never mistaken for a measured count. Mirrors Android (#276/#150).
+            // #843/#813 — a day shows a REAL count only from the strap (@57) or a SAME-DAY phone import.
+            // Never the latest imported Apple-Health row (it can be days stale) or the sparkline tail (that
+            // is the most-recent value, not this day's): both froze the tile on an old import. Otherwise
+            // fall through to the on-device estimate ("est."). Mirrors Android stepsForDay (#276/#150).
             let appleStepsForDay = appleDays.last(where: { $0.day == selectedDayKey })?.steps
-                ?? (selectedDayOffset == 0 ? aLatest?.steps : nil)
             let realSteps: String? = (d?.steps).map { intString(Double($0)) }
                 ?? appleStepsForDay.map { intString(Double($0)) }
-                ?? (sparks["steps"]?.last).map { intString($0) }
             let estSteps = stepsEstByDay[selectedDayKey]
             // H6 — only an ESTIMATED day (no real strap/phone count, so the on-device estimate filled in)
             // gets the calibration entry; a real measured count needs no calibration.
@@ -2460,36 +2941,102 @@ struct TodayView: View {
     private var sourcesSection: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
             SectionHeader("Data Sources", overline: "Provenance")
-            NoopCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    sourceRow(
-                        badge: "Whoop",
-                        tint: StrandPalette.accent,
-                        present: !repo.days.isEmpty,
-                        detail: "\(repo.days.count) days · \(repo.sleeps.count) sleeps"
-                    )
-                    Divider().overlay(StrandPalette.hairline)
-                    sourceRow(
-                        badge: "Apple Health",
-                        tint: StrandPalette.metricCyan,
-                        present: !appleDays.isEmpty,
-                        detail: "\(appleDays.count) days · \(workouts.filter { WorkoutSource.isAppleHealth($0.source) }.count) workouts"
-                    )
-                    if xiaomiDays > 0 {
+            // S5: collapsed to a single "Synced from: …" summary line by default; tapping expands the full
+            // per-source rows + strap battery/sync inline. Nothing is removed, the detail is one tap away.
+            if sourcesExpanded {
+                NoopCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // A header row to collapse it back, so the expanded card has an obvious "less" cue.
+                        Button {
+                            withAnimation(StrandMotion.interactive) { sourcesExpanded = false }
+                        } label: {
+                            HStack {
+                                Text("Synced from").strandOverline()
+                                Spacer()
+                                Image(systemName: "chevron.up")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(StrandPalette.textTertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Hide data source detail")
                         Divider().overlay(StrandPalette.hairline)
                         sourceRow(
-                            badge: "Mi Band",
-                            tint: StrandPalette.metricAmber,
-                            present: true,
-                            detail: "\(xiaomiDays) days · \(xiaomiSleeps) sleeps"
+                            badge: "Whoop",
+                            tint: StrandPalette.accent,
+                            present: !repo.days.isEmpty,
+                            detail: "\(repo.days.count) days · \(repo.sleeps.count) sleeps"
                         )
+                        Divider().overlay(StrandPalette.hairline)
+                        sourceRow(
+                            badge: "Apple Health",
+                            tint: StrandPalette.metricCyan,
+                            present: !appleDays.isEmpty,
+                            detail: "\(appleDays.count) days · \(workouts.filter { WorkoutSource.isAppleHealth($0.source) }.count) workouts"
+                        )
+                        if xiaomiDays > 0 {
+                            Divider().overlay(StrandPalette.hairline)
+                            sourceRow(
+                                badge: "Mi Band",
+                                tint: StrandPalette.metricAmber,
+                                present: true,
+                                detail: "\(xiaomiDays) days · \(xiaomiSleeps) sleeps"
+                            )
+                        }
+                        strapBatteryRow
+                        Divider().overlay(StrandPalette.hairline)
+                        strapSyncRow
                     }
-                    strapBatteryRow
-                    Divider().overlay(StrandPalette.hairline)
-                    strapSyncRow
                 }
+            } else {
+                sourcesSummaryRow
             }
         }
+    }
+
+    /// S5: the collapsed Data Sources footer: a single "Synced from: WHOOP, Apple Watch >" line that taps
+    /// to expand the full per-source rows. Lists only the sources that actually have data (so a strap-only
+    /// user doesn't read "Apple Health"), and falls back to an honest "No sources yet" when nothing's banked.
+    private var sourcesSummaryRow: some View {
+        Button {
+            withAnimation(StrandMotion.interactive) { sourcesExpanded = true }
+        } label: {
+            NoopCard {
+                HStack(spacing: 8) {
+                    Text(Self.syncedFromSummary(
+                        hasWhoop: !repo.days.isEmpty,
+                        hasApple: !appleDays.isEmpty,
+                        hasXiaomi: xiaomiDays > 0))
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(StrandPalette.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Data sources")
+        .accessibilityHint("Show what NOOP is synced from")
+    }
+
+    /// PURE: the "Synced from: …" summary string for the collapsed footer (S5). Names the sources with
+    /// data using the audience-facing words ("WHOOP", "Apple Watch" for Apple Health, "Mi Band"); "No
+    /// sources yet" when nothing is banked. Unit-testable so the collapsed copy can't drift. The expanded
+    /// card still uses the existing per-source rows, so the Apple-Health provenance footer is unchanged.
+    static func syncedFromSummary(hasWhoop: Bool, hasApple: Bool, hasXiaomi: Bool) -> String {
+        var names: [String] = []
+        if hasWhoop { names.append("WHOOP") }
+        if hasApple { names.append("Apple Watch") }
+        if hasXiaomi { names.append("Mi Band") }
+        guard !names.isEmpty else { return "No sources yet" }
+        return "Synced from: " + names.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -3147,16 +3694,21 @@ private struct RecordingStatusLight: View {
     }
 
     var body: some View {
-        if let state = TodayView.recordingState(live: live, selectedDayOffset: selectedDayOffset) {
-            Button(action: onTap) {
-                Circle().fill(StrandPalette.surfaceInset)
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().fill(hue(state)).frame(width: 10, height: 10))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(state.accessibilityText)
+        // The 36pt chip ALWAYS renders so the top-bar icon row never jumps when you scrub to a past day.
+        // A live recording state colours the dot (green / amber / red); a past day (no state) shows a muted
+        // dot and the chip is non-actionable, recording status only means something for today.
+        let state = TodayView.recordingState(live: live, selectedDayOffset: selectedDayOffset)
+        Button(action: onTap) {
+            Circle().fill(StrandPalette.surfaceInset)
+                .frame(width: 36, height: 36)
+                .overlay(Circle()
+                    .fill(state.map(hue) ?? StrandPalette.textTertiary.opacity(0.4))
+                    .frame(width: 10, height: 10))
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .disabled(state == nil)
+        .accessibilityLabel(state?.accessibilityText ?? "Recording status, not shown for a past day")
     }
 }
 

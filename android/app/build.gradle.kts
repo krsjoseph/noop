@@ -22,8 +22,8 @@ android {
         applicationId = "com.aretetechnologies.kineva"
         minSdk = 26
         targetSdk = 34
-        versionCode = 245
-        versionName = "7.3.1"
+        versionCode = 249
+        versionName = "7.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

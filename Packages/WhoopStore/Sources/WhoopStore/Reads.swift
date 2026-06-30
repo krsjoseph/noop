@@ -45,6 +45,26 @@ extension WhoopStore {
         }
     }
 
+    /// Cheap change-detector for the raw HR stream: `(count, maxTs)` over `[from, to]`, computed in
+    /// SQLite over the `(deviceId, ts)` index WITHOUT materializing any rows (#836). Lets a caller decide
+    /// "nothing was inserted since last time, skip the expensive re-read" for pennies — `COUNT(*)` moves on
+    /// any insert (including a backfilled OLD night whose `maxTs` wouldn't change), and `maxTs` distinguishes
+    /// fresh appends. COALESCE so an empty window is `(0, 0)`, never nil.
+    public func hrFingerprint(deviceId: String, from: Int, to: Int) async throws -> (count: Int, maxTs: Int) {
+        try syncRead { db in
+            // COUNT(*) and COALESCE(MAX(ts),0) are both NON-NULL, and the aggregate query always returns
+            // exactly one row, so fetchOne is non-nil and the columns read straight into Int. The guard is
+            // belt-and-suspenders.
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT COUNT(*) AS c, COALESCE(MAX(ts), 0) AS m FROM hrSample
+                WHERE deviceId = ? AND ts >= ? AND ts <= ?
+                """, arguments: [deviceId, from, to]) else { return (0, 0) }
+            let c: Int = row["c"]
+            let m: Int = row["m"]
+            return (c, m)
+        }
+    }
+
     /// Downsampled HR for charting: mean bpm per `bucketSeconds`-wide bucket over `[from, to]`,
     /// keyed by the bucket's start (floor(ts/bucket)*bucket). Aggregates in SQL so a 24h window
     /// returns ~`(to-from)/bucketSeconds` rows instead of every ~1 Hz sample. Ascending by time.

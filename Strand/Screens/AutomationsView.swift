@@ -21,6 +21,11 @@ struct AutomationsView: View {
 
     /// v5 cycle-awareness opt-in (default OFF — the most sensitive health category, manual-first).
     @AppStorage(AppModel.cycleAwarenessKey) private var cycleAwareness = false
+
+    /// Whether the cycle-awareness opt-in is offered for this profile (#801). Delegates to the shared
+    /// ``ProfileStore/cycleAwarenessApplies`` gate (mirrors HealthView's opt-in gate) so a male profile
+    /// can't enable the feature here when it can't see the Health card either.
+    private var cycleOptInApplies: Bool { model.profile.cycleAwarenessApplies }
     /// v5 Rhythm experimental gate (the screen still shows its own consent clickwrap when opened).
     @AppStorage(RhythmConsent.enabledKey) private var rhythmEnabled = false
     /// Inactivity reminder (#419) — UI-local store, persisted in UserDefaults. The buzz itself fires
@@ -372,16 +377,18 @@ struct AutomationsView: View {
             header: "Health insights",
             footer: "Optional, on-device reads from your nightly signals. Each is off by default — for awareness only, never a diagnosis."
         ) {
-            SettingsRow(icon: "thermometer.medium", title: "Cycle awareness",
-                        subtitle: "Reads a coarse menstrual-cycle phase from your nightly skin temperature, entirely on \(Platform.deviceNounPhrase). Awareness only — not contraception, not a fertility predictor, not a medical service. The card appears in Health.",
-                        value: cycleAwareness ? "On" : nil) {
-                Toggle("", isOn: $cycleAwareness)
-                    .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
-                    .accessibilityLabel("Cycle awareness")
-            }
-            .onChangeCompat(of: cycleAwareness) { on in
-                model.cycleAwarenessEnabled = on
-                Task { await model.refreshV5Signals() }
+            if cycleOptInApplies {
+                SettingsRow(icon: "thermometer.medium", title: "Cycle awareness",
+                            subtitle: "Reads a coarse menstrual-cycle phase from your nightly skin temperature, entirely on \(Platform.deviceNounPhrase). Awareness only — not contraception, not a fertility predictor, not a medical service. The card appears in Health.",
+                            value: cycleAwareness ? "On" : nil) {
+                    Toggle("", isOn: $cycleAwareness)
+                        .labelsHidden().toggleStyle(.switch).tint(StrandPalette.accent)
+                        .accessibilityLabel("Cycle awareness")
+                }
+                .onChangeCompat(of: cycleAwareness) { on in
+                    model.cycleAwarenessEnabled = on
+                    Task { await model.refreshV5Signals() }
+                }
             }
             SettingsRow(icon: "waveform.path", title: "Rhythm visualization (experimental)",
                         subtitle: "An experimental picture of your beat-to-beat heart timing. Not an ECG and not a diagnosis. You'll read and accept an experimental note before it shows anything.",

@@ -48,12 +48,27 @@ struct WorkoutsView: View {
         #endif
     }
 
-    /// All loaded sessions, newest first. Seedable for previews.
+    /// All loaded sessions, newest first. Seedable for previews. #797: this holds only the rows inside the
+    /// currently-LOADED window (`loadedWindowDays`), not the entire history. A 1700+-workout import made
+    /// the eager all-rows read + sort fire on every `refreshSeq` bump (first paint AND every backfill
+    /// slice). First paint loads a bounded window; selecting a wider range than is loaded lazily pages in
+    /// the rest (`expandWindow`).
     @State private var allRows: [WorkoutRow]
     @State private var loaded: Bool
     @State private var seededInitialRange = false
     @State private var range: Range = .all
+    /// #797: how many trailing days of workouts are currently LOADED into `allRows`. First paint loads
+    /// `Self.firstPaintWindowDays`; picking "All" (or a range wider than this) pages the full history in on
+    /// demand. nil means the full history is loaded (the user expanded to "All"). Preview rows are treated
+    /// as fully loaded (nil) so the preview path is unchanged.
+    @State private var loadedWindowDays: Int?
     private let usesPreviewRows: Bool
+
+    /// #797: trailing-day window the FIRST workouts read is bounded to, so first paint never sorts a
+    /// multi-thousand-workout history. Comfortably covers the default range (the tightest range with ≥2
+    /// sessions, almost always ≤90 days); a wider pick pages the rest in via `expandWindow`. 400 days
+    /// covers the 1Y range plus headroom.
+    static let firstPaintWindowDays = 400
 
     // iPhone (.compact) can't fit the labelled "Add workout" button beside the 5-segment range pill —
     // the button got crushed into a tall sliver (#234/#339). Stack them there; iPad/Mac keep one row.
@@ -88,6 +103,8 @@ struct WorkoutsView: View {
     init(previewRows: [WorkoutRow]? = nil) {
         _allRows = State(initialValue: previewRows ?? [])
         _loaded = State(initialValue: previewRows != nil)
+        // Preview-seeded rows are treated as the full history (nil window) so the preview path never pages.
+        _loadedWindowDays = State(initialValue: previewRows != nil ? nil : Self.firstPaintWindowDays)
         usesPreviewRows = previewRows != nil
     }
 
@@ -150,7 +167,8 @@ struct WorkoutsView: View {
         }
         .task(id: repo.refreshSeq) {
             guard !usesPreviewRows else { return }
-            let r = await repo.workoutRows()
+            // #797: read only the currently-loaded window (bounded on first paint), not the whole history.
+            let r = await repo.workoutRows(days: loadedWindowDays ?? 4000)
             allRows = r
             let wasLoaded = loaded
             loaded = true
@@ -165,6 +183,13 @@ struct WorkoutsView: View {
                 range = defaultRange(for: allRows)
                 seededInitialRange = true
             }
+        }
+        // #797: when the user picks a range wider than the bounded first-paint window (typically "All"),
+        // page the full history in. A pick that fits the loaded window is a no-op. Also covers the
+        // auto-widen: if the selected window is sparse and `effectiveRange` falls back to `.all`, the
+        // full read is needed to show the older sessions.
+        .onChange(of: range) { newRange in
+            Task { await expandWindowIfNeeded(for: newRange == .all ? .all : effectiveRange) }
         }
         .sheet(item: $sheet) { target in
             ManualWorkoutSheet(editing: target.editing) { row, replacing in
@@ -225,7 +250,19 @@ struct WorkoutsView: View {
     /// Keeps the user's current range — only the initial load picks a default — and the auto-widen
     /// (`effectiveRange`) still covers a now-empty window.
     private func reload() async {
-        allRows = await repo.workoutRows()
+        allRows = await repo.workoutRows(days: loadedWindowDays ?? 4000)
+    }
+
+    /// #797: page the FULL workout history in when the user selects a range wider than the bounded
+    /// first-paint window. Idempotent: once expanded (`loadedWindowDays == nil`) it never re-reads here.
+    /// Only a pick of `.all` (or a future range exceeding the loaded window) triggers the one-time full
+    /// read, so the common 7D/30D/90D/1Y interactions stay on the already-loaded bounded set.
+    private func expandWindowIfNeeded(for picked: Range) async {
+        guard !usesPreviewRows, loadedWindowDays != nil else { return }
+        // A bounded range that fits inside what's already loaded needs no wider read.
+        if let pickedDays = picked.days, pickedDays <= (loadedWindowDays ?? 0) { return }
+        loadedWindowDays = nil
+        allRows = await repo.workoutRows(days: 4000)
     }
 
     // MARK: - Post-log activity-cost note (#439)
@@ -704,8 +741,9 @@ struct WorkoutsView: View {
                           overline: "Log",
                           trailing: "\(rows.count) total")
             NoopCard(padding: 0) {
-                // The fixed-width columns total ≈612pt — wider than an iPhone — so on iOS the table
-                // scrolls horizontally instead of clipping the SPORT / DIST / SOURCE columns (#183).
+                // The fixed-width columns total well over an iPhone's width (more so since #796 added the
+                // EFFORT column) so on iOS the table scrolls horizontally instead of clipping the SPORT /
+                // DIST / EFFORT / SOURCE columns (#183).
                 // macOS windows are wide enough to show it all, so they keep the full-width layout.
                 #if os(iOS)
                 ScrollView(.horizontal, showsIndicators: true) {
@@ -751,6 +789,10 @@ struct WorkoutsView: View {
             colHeader("AVG HR", width: ColWidth.hr, align: .trailing)
             colHeader("KCAL", width: ColWidth.kcal, align: .trailing)
             colHeader("DIST", width: ColWidth.dist, align: .trailing)
+            // #796 - per-session Effort (the stored 0-100 strain this workout contributed to the day),
+            // shown on the user's selected Effort scale. Same value the Effort ring and the detail's
+            // Effort card read, surfaced per row so each session's effort is visible without opening it.
+            colHeader("EFFORT", width: ColWidth.effort, align: .trailing)
             Spacer(minLength: 0)
             colHeader("SOURCE", width: ColWidth.source, align: .trailing)
             // Empty header over the per-row "•••" actions menu column (keeps SOURCE aligned).
@@ -796,6 +838,9 @@ struct WorkoutsView: View {
             cell(row.energyKcal.map { grouped($0) } ?? "–", width: ColWidth.kcal,
                  color: row.energyKcal != nil ? StrandPalette.metricAmber : nil)
             cell(distanceLabel(row.distanceM), width: ColWidth.dist)
+            // #796 - per-session Effort, on the user's scale, tinted the Effort colour when present.
+            cell(Self.effortCellLabel(strain: row.strain, scale: effortScale), width: ColWidth.effort,
+                 color: row.strain != nil ? StrandPalette.effortColor : nil)
 
             Spacer(minLength: 0)
 
@@ -871,6 +916,14 @@ struct WorkoutsView: View {
                    source: "manual", durationS: row.durationS, energyKcal: row.energyKcal,
                    avgHr: row.avgHr, maxHr: row.maxHr, strain: row.strain, distanceM: row.distanceM,
                    zonesJSON: row.zonesJSON, notes: row.notes)
+    }
+
+    /// #796 - the per-session Effort cell label: the stored 0-100 strain mapped to the user's Effort scale
+    /// (the SAME `UnitFormatter.effortDisplay` every other Effort read-out routes through, so the toggle and
+    /// rounding stay consistent), or "–" when the session has no captured strain. Pure + unit-testable.
+    static func effortCellLabel(strain: Double?, scale: EffortScale) -> String {
+        guard let strain else { return "–" }
+        return UnitFormatter.effortDisplay(strain, scale: scale)
     }
 
     private func cell(_ text: String, width: CGFloat, color: Color? = nil) -> some View {
@@ -1069,6 +1122,7 @@ struct WorkoutsView: View {
         static let hr: CGFloat = 64
         static let kcal: CGFloat = 70
         static let dist: CGFloat = 72
+        static let effort: CGFloat = 64   // #796 per-session Effort column
         static let source: CGFloat = 80
         static let action: CGFloat = 36   // trailing "•••" per-row actions menu
     }

@@ -67,6 +67,14 @@ public enum AnalyticsEngine {
         public let workouts: [ExerciseSession]
         /// Recovery / "Charge" score [0,100] or nil (cold-start / no HRV baseline).
         public let recovery: Double?
+        /// Ordered Charge driver breakdown (one row per real term that fed the score, biggest
+        /// mover first). Empty when there is no score (cold-start) or no driver computed. The UI
+        /// renders one row per driver under the Charge ring; it never recomputes the score.
+        public let chargeDrivers: [ChargeDriver]
+        /// A5: skin temperature as a RELATIVE deviation-from-baseline marker (a trend, never a
+        /// clinical absolute), or nil when no deviation is available. Carries the signed °C
+        /// deviation + the relative tier (cooler / typical / warmer) for the UI to present.
+        public let skinTempRelative: SkinTempRelative?
         /// Day strain / "Effort" [0,100] or nil (insufficient HR samples / invalid HRR).
         public let strain: Double?
         /// Rest composite [0,100] or nil (no in-bed data). This is the value the
@@ -98,10 +106,14 @@ public enum AnalyticsEngine {
                     chargeConfidence: ScoreConfidence = .calibrating,
                     effortConfidence: ScoreConfidence = .calibrating,
                     restConfidence: ScoreConfidence = .calibrating,
-                    sessionMotionByStart: [Int: [Double]] = [:]) {
+                    sessionMotionByStart: [Int: [Double]] = [:],
+                    chargeDrivers: [ChargeDriver] = [],
+                    skinTempRelative: SkinTempRelative? = nil) {
             self.daily = daily; self.sleepSessions = sleepSessions
             self.cachedSleep = cachedSleep; self.workouts = workouts
             self.recovery = recovery; self.strain = strain
+            self.chargeDrivers = chargeDrivers
+            self.skinTempRelative = skinTempRelative
             self.nightlySkinTempC = nightlySkinTempC
             self.restScore = restScore
             self.chargeConfidence = chargeConfidence
@@ -241,6 +253,13 @@ public enum AnalyticsEngine {
                                   // byte-identical default for pure-function callers/tests; IntelligenceEngine
                                   // threads `PuffinExperiment.experimentalSleepV2Enabled`. (V7 / #690)
                                   useSleepStagerV2: Bool = false,
+                                  // Sleep PROVENANCE for the per-day sleep trace (CAPTURE-C / #799). The
+                                  // measured BLE path is `.measured` (the default); the caller passes
+                                  // `.imported(...)` when a previously-imported sleep row WON the daily merge,
+                                  // so the trace shows the import winning instead of silently substituting the
+                                  // measured night. Trace-only: never alters the DayResult. nil/default keeps
+                                  // pure-function callers/tests byte-identical (still emits `measured`).
+                                  sleepProvenance: SleepProvenance = .measured,
                                   // Sleep & Rest test-mode trace sink (zero-cost default nil = byte-identical).
                                   // When non-nil, the gate trace from detectSleep and the Rest sub-score line
                                   // are forwarded line-by-line. Side-effect-only; never alters the DayResult.
@@ -334,6 +353,14 @@ public enum AnalyticsEngine {
                 restorativeSeconds: deepS + remS, needHours: sleepNeedHours,
                 consistency: sleepConsistency, deepSeconds: deepS,
                 groupFragments: mainGroup.count, groupInBedSeconds: inBedS))
+            // CAPTURE-C (#799): append the sleep PROVENANCE so an imported row winning the merge is visible
+            // (not silently swapped for the measured night). hoursAsleep = the scored night's tst in minutes;
+            // sourceRowId = the main-night's start ts for the measured path (stable per night), else the
+            // caller-supplied winning-row id. Trace-only; the DayResult is unchanged.
+            let mainStart = mainGroup.map { $0.start }.min() ?? matched.map { $0.start }.min() ?? 0
+            traceSink(sleepProvenanceLine(provenance: sleepProvenance,
+                                          hoursAsleepMin: tstS / 60.0,
+                                          sourceRowId: String(mainStart)))
         }
 
         // #525 NOTE: the sleep-DURATION figures above are main-night-only (the headline "your night"),
@@ -386,6 +413,9 @@ public enum AnalyticsEngine {
 
         // ── Recovery / "Charge" ───────────────────────────────────────────────
         var recovery: Double? = nil
+        // Ordered "why is Charge what it is" rows, built from the SAME inputs as the score
+        // (empty when there is no score / cold-start). Surfaced on DayResult for the UI.
+        var chargeDrivers: [ChargeDriver] = []
         if let hrvVal = avgHRVDaily, let rhrVal = restingHRDaily, let hrvBase = baselines.hrv {
             // Rest-quality term = the Rest composite ÷100 (replaces raw efficiency).
             let sleepPerf = restScore.map { $0 / 100.0 }
@@ -398,7 +428,20 @@ public enum AnalyticsEngine {
                 respBaseline: baselines.resp,
                 sleepPerf: sleepPerf,
                 skinTempDev: skinTempDevC)  // symmetric penalty; drops + renormalizes when nil
+            // Driver breakdown from the identical inputs; omits any missing term, never faked.
+            chargeDrivers = RecoveryScorer.chargeDrivers(
+                hrv: hrvVal,
+                rhr: Double(rhrVal),
+                resp: respRateDaily,
+                hrvBaseline: hrvBase,
+                rhrBaseline: baselines.restingHR,
+                respBaseline: baselines.resp,
+                sleepPerf: sleepPerf,
+                skinTempDev: skinTempDevC)
         }
+        // A5: skin temp as a RELATIVE deviation marker (trend, not a clinical absolute). nil
+        // when no deviation is available (no baseline yet / not worn) so the UI shows nothing.
+        let skinTempRelative = RecoveryScorer.skinTempRelative(deviationC: skinTempDevC)
 
         // ── Strain / "Effort" (cardiovascular load over the full CALENDAR day) ──
         // Integrate dayHr ([localMidnight, localMidnight+24h), clamped to `now` for today) when the
@@ -533,7 +576,9 @@ public enum AnalyticsEngine {
                          chargeConfidence: chargeConfidence,
                          effortConfidence: effortConfidence,
                          restConfidence: restConfidence,
-                         sessionMotionByStart: sessionMotionByStart)
+                         sessionMotionByStart: sessionMotionByStart,
+                         chargeDrivers: chargeDrivers,
+                         skinTempRelative: skinTempRelative)
     }
 
     // MARK: - Rest composite (Charge/Effort/Rest)

@@ -99,6 +99,7 @@ struct HowNoopWorksView: View {
                     ForEach(Section.allCases) { section in
                         primerCard(section)
                     }
+                    scoringMethodsCard
                     footerNote
                 }
                 .padding(20)
@@ -207,6 +208,117 @@ struct HowNoopWorksView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(section.title). \(section.body)")
+    }
+
+    // MARK: - A7: "How your scores are computed" (named method families)
+
+    /// The four scores, each named with the PUBLISHED method family it follows. Honest about the
+    /// approach without faking precision: it cites the method, not a proprietary-identical claim. Order
+    /// mirrors the app's score order (Charge, Effort, Rest, Fitness Age); the tint matches each domain.
+    private enum ScoreMethod: CaseIterable, Identifiable {
+        case charge, effort, rest, fitnessAge
+        var id: Self { self }
+
+        var name: String {
+            switch self {
+            case .charge:     return "Charge"
+            case .effort:     return "Effort"
+            case .rest:       return "Rest"
+            case .fitnessAge: return "Fitness Age"
+            }
+        }
+
+        /// The plain-English description of the published method behind the score.
+        var method: String {
+            switch self {
+            case .charge:
+                return "A baseline-normalized recovery score: your resting heart rate, sleep quality and night-to-night consistency, weighted against your own baseline, with heart-rate variability (rMSSD) leading wherever the strap gives us a clean reading."
+            case .effort:
+                return "A cardiovascular load in the Banister TRIMP family: time spent in each heart-rate zone, weighted so harder zones count for more, summed into one daily figure."
+            case .rest:
+                return "Sleep scored from how long you slept versus how much you needed, how efficient the night was, and the restorative (deep and REM) share of it."
+            case .fitnessAge:
+                return "An estimated VO2max from the Nes / HUNT Fitness Study model (resting heart rate, age and activity), read against population norms to express it as a fitness age."
+            }
+        }
+
+        /// The short method-family tag shown as an overline next to the score name.
+        var family: String {
+            switch self {
+            case .charge:     return "RESTING HR + SLEEP + HRV"
+            case .effort:     return "BANISTER TRIMP / HR ZONES"
+            case .rest:       return "DURATION + EFFICIENCY + STAGES"
+            case .fitnessAge: return "NES / HUNT VO2MAX"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .charge:     return DomainTheme.charge.color
+            case .effort:     return DomainTheme.effort.color
+            case .rest:       return DomainTheme.rest.color
+            case .fitnessAge: return StrandPalette.accent
+            }
+        }
+    }
+
+    /// A7 , the "How your scores are computed" card: one row per score naming its published method
+    /// family, honest about the approach without claiming a proprietary-identical result.
+    private var scoringMethodsCard: some View {
+        NoopCard(tint: DomainTheme.charge.color) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "function")
+                        .font(.system(size: 18))
+                        .foregroundStyle(DomainTheme.charge.color)
+                        .frame(width: 24)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("METHOD")
+                            .font(StrandFont.overline)
+                            .tracking(StrandFont.overlineTracking)
+                            .foregroundStyle(DomainTheme.charge.color)
+                        Text("How your scores are computed")
+                            .font(StrandFont.headline)
+                            .foregroundStyle(StrandPalette.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Text("Each score follows a published method, computed on your device. We name the method family so you can read up on it, and we never claim to reproduce another company's number exactly.")
+                    .font(StrandFont.subhead)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(ScoreMethod.allCases) { method in
+                        methodRow(method)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// One score-method row: the score name + its method-family overline, then the plain-English method.
+    private func methodRow(_ m: ScoreMethod) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(m.name)
+                    .font(StrandFont.subhead)
+                    .foregroundStyle(StrandPalette.textPrimary)
+                Text(m.family)
+                    .font(StrandFont.overline)
+                    .tracking(0.4)
+                    .foregroundStyle(m.tint)
+                Spacer(minLength: 0)
+            }
+            Text(m.method)
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(m.name). \(m.method)")
     }
 
     private var footerNote: some View {

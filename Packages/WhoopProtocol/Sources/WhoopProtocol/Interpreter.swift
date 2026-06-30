@@ -436,6 +436,12 @@ private func decodeWhoop5Historical(_ frame: [UInt8], fb: FieldBuilder, payloadE
     }
     // The remaining bytes (optical/perfusion + the unmapped tail) are not ground-truth-mapped; keep them
     // as one honest raw region.
+    // PROVENANCE / lossless-tail note (A10): the fields above split into VERIFIED (physiologically
+    // cross-checked vs the live 2A37 HR / |gravity|~1g: unix, heart_rate, rr, gravity, skin_temp) and
+    // EMPIRICAL / not-pinned (status words, aux bytes, unknown_f32_113). This decoder never truncates
+    // `frame`; the unmapped trailing bytes are preserved verbatim upstream (RawHistoryArchive for
+    // undecodable records, the raw-capture batch when that toggle is on), so a future re-decode is
+    // lossless. Kept in lockstep with the Android decodeWhoop5Historical provenance note.
     if let payloadEnd = payloadEnd, 82 < payloadEnd, payloadEnd <= frame.count {
         fb.region(82, payloadEnd, "unmapped (optical/perfusion + tail)", "unknown")
     }

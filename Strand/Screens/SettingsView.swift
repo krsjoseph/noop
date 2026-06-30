@@ -162,6 +162,13 @@ struct SettingsView: View {
     @StateObject private var updateChecker = UpdateChecker()
     @Environment(\.openURL) private var openURL
 
+    /// Whether the "Advanced" disclosure (Recovery, Test Centre, experimental probes, Backup &
+    /// restore) is expanded. Default FALSE so a first-run user lands on the handful of everyday
+    /// sections (profile, units, appearance, strap, features) instead of the full wall of 11 cards
+    /// (S3). Nothing is removed; every section below stays one tap away by expanding this group.
+    /// Persisted so it remembers the user's choice; mirrors the Android `noop.settingsAdvancedOpen` key.
+    @AppStorage(SettingsDisclosureDefaults.advancedOpenKey) private var advancedOpen = SettingsDisclosureDefaults.advancedOpenDefault
+
     var body: some View {
         ScreenScaffold(title: "Settings",
                        subtitle: "Your numbers, your strap, and how Kineva works. All on \(Platform.deviceNounPhrase).",
@@ -169,16 +176,31 @@ struct SettingsView: View {
                        topBackground: showDayCycleBackground
                            ? AnyView(SceneScreenBackground().drawingGroup()) : nil) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+                // Everyday sections stay expanded; lower-frequency controls live behind Advanced.
                 profileGroup.staggeredAppear(index: 0)
                 unitsGroup.staggeredAppear(index: 1)
                 appearanceGroup.staggeredAppear(index: 2)
                 strapGroup.staggeredAppear(index: 3)
-                recoveryGroup.staggeredAppear(index: 4)
                 featuresGroup.staggeredAppear(index: 5)
-                testCentreCard.staggeredAppear(index: 6)
-                experimentalGroup.staggeredAppear(index: 7)
-                backupGroup.staggeredAppear(index: 8)
-                aboutGroup.staggeredAppear(index: 9)
+
+                // Lower-frequency sections collapse behind a single default-closed disclosure so the
+                // screen opens at ~6 sections instead of 11. Nothing is removed; every section here
+                // (Recovery / advanced scoring, Test Centre, the experimental probes + raw-capture, and
+                // Backup & restore) stays one tap away. Modelled on the Test Centre "Advanced" group.
+                SettingsDisclosureGroup(
+                    title: "Advanced",
+                    subtitle: "Recovery, Test Centre, experimental probes, and backup. Tucked away to keep the everyday screen tidy.",
+                    isExpanded: $advancedOpen
+                ) {
+                    recoveryGroup
+                    testCentreCard
+                    experimentalGroup
+                    backupGroup
+                }
+                .staggeredAppear(index: 6)
+
+                // About stays expanded at the foot (version, links and the help sheets people return to).
+                aboutGroup.staggeredAppear(index: 7)
             }
         }
         .alert(backupAlertTitle, isPresented: $showBackupAlert) {
@@ -1285,6 +1307,27 @@ struct SettingsView: View {
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                // Reach the scheduled / folder-based Backup & Sync screen (back up to a chosen folder on
+                // demand or about once a day, restore from a snapshot in that folder).
+                NavigationLink {
+                    BackupSyncView()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "externaldrive.fill.badge.icloud")
+                            .accessibilityHidden(true)
+                        Text("Backup & Sync to a folder…")
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(StrandFont.caption)
+                            .foregroundStyle(StrandPalette.textTertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .font(StrandFont.subhead)
+                    .foregroundStyle(StrandPalette.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open Backup and Sync to a folder")
             }
             .settingsRowInsets()
         }
@@ -1669,6 +1712,66 @@ struct SettingsView: View {
     }
     #endif
 
+}
+
+// MARK: - Advanced disclosure (S3)
+
+/// The persisted defaults for the Settings "Advanced" disclosure. Pulled out so the one fact that must
+/// never regress, that a fresh install lands COLLAPSED, is a single testable constant. The key matches
+/// the Android `SettingsDisclosurePrefs.KEY` suffix so a backup/restore round-trip carries the choice.
+enum SettingsDisclosureDefaults {
+    static let advancedOpenKey = "settingsAdvancedOpen"
+    static let advancedOpenDefault = false
+}
+
+/// A collapsible group that tucks the lower-frequency settings sections behind one tap. It is NOT a
+/// section card itself (the cards it wraps keep their own `SettingsSection` chrome). It's just a
+/// header row + a default-collapsed reveal, modelled on the Test Centre "Advanced" group. Nothing is
+/// removed: collapsed simply means the wrapped sections aren't drawn until the row is tapped open.
+/// A custom header (not SwiftUI's `DisclosureGroup`) is used so it matches Kineva's near-black
+/// instrument look, which the system control's tint and inset don't.
+private struct SettingsDisclosureGroup<Content: View>: View {
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    @Binding var isExpanded: Bool
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .center, spacing: NoopMetrics.space3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(StrandFont.title2)
+                            .foregroundStyle(StrandPalette.textPrimary)
+                        Text(subtitle)
+                            .font(StrandFont.subhead)
+                            .foregroundStyle(StrandPalette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer(minLength: NoopMetrics.space2)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(StrandPalette.textTertiary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Shows the advanced settings sections")
+            .accessibilityAddTraits(.isButton)
+
+            if isExpanded {
+                content()
+            }
+        }
+    }
 }
 
 // MARK: - iOS diagnostics sheet

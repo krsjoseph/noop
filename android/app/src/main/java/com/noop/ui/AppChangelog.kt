@@ -25,7 +25,7 @@ object AppChangelog {
      * Bump this when you add a release below. The "What's New" sheet shows automatically when the
      * stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
      */
-    const val CURRENT_VERSION = "7.3.1"
+    const val CURRENT_VERSION = "7.5.0"
 
     data class Release(
         val version: String,
@@ -36,6 +36,51 @@ object AppChangelog {
 
     /** Newest first. */
     val releases: List<Release> = listOf(
+        Release(
+            version = "7.5.0",
+            title = "Local Oura ring support: use your Oura ring with no Oura app (beta)",
+            date = "June 2026",
+            items = listOf(
+                "**Local Oura ring support (beta).** Kineva can now read an Oura ring directly over Bluetooth, fully on-device, so you can use the ring with no Oura app, no account and no cloud. It reads heart rate, HRV, SpO2, skin temperature and sleep stages off the ring and runs Kineva's own Charge and Rest scoring, not Oura's. Works on Oura Ring 3, 4 and 5, with per-generation capabilities.",
+                "**How setup works.** Pairing factory-resets the ring and adopts it locally, which is recoverable: if Kineva cannot take it over, you just re-pair it in the Oura app. This is early beta and may not work on every ring yet, so there is also an Advanced bring-your-own-key path and a file-import fallback.",
+            ),
+        ),
+        Release(
+            version = "7.4.1",
+            title = "Bug-fix sweep: steps, sleep export, and a battery-saving reconnect fix",
+            date = "June 2026",
+            items = listOf(
+                "**Your steps keep counting.** Steps could freeze and stop updating partway through the day. They now keep ticking over as they should. (#843, #813)",
+                "**Sleep export keeps every night.** Exporting your sleep to CSV could quietly drop nights when a day had more than one session (a nap plus the main night). Every session is kept now, each as its own row. (#715)",
+                "**A flaky strap no longer drains your battery.** When a WHOOP kept dropping the connection, the app could loop (bond, drop, rescan, bond) forever and drain the battery. It now spots that loop, pauses the automatic reconnect, and shows the re-pair guide instead. (#844)",
+                "**Smaller fixes.** Editing and deleting hydration entries behaves correctly (#842), the date picker no longer clips on iPad (#840), and a steady-state tidy stops the app re-scoring when nothing has changed (#836).",
+            ),
+        ),
+        Release(
+            version = "7.4.0",
+            title = "A calmer Today, your Charge explained, and new HRV science under the hood",
+            date = "June 2026",
+            items = listOf(
+                "**A simpler Today.** The dashboard had got busy, so we calmed it down: one clean read at the top, the daily synthesis folds into a single line you can expand, and the metric cards line up evenly. Less noise, the same depth when you want it.",
+                "**See exactly what shaped your Charge.** Tap your Charge to see which signals moved it and by how much (HRV, resting heart rate, sleep, respiration, skin temperature), each with a plain-English note. A new \"How Charge is calculated\" link explains the method itself, so the score is never a black box.",
+                "**New on-device measures from your heart-rate rhythm.** The Stress screen now also shows frequency-domain HRV (your LF/HF autonomic balance) and a Baevsky stress index, both computed locally from the day's beat-to-beat data. They sit alongside the existing stress read, they do not replace it.",
+                "**A sharper illness heads-up.** When the early-warning signal fires, it now carries a confidence read based on how far your vitals have moved together. The alert itself is unchanged, this just tells you how strong the signal is.",
+                "**Test Centre is one tap away.** The diagnostics and bug-report hub moved out of Settings and into the More tab (and the Mac sidebar), so reporting something takes seconds.",
+                "**Polish all over.** The date header is tidier (it shows the date and reminds you that you can swipe or tap to change the day), the score rings behave on every day, and a handful of layout and spacing niggles are gone.",
+            ),
+        ),
+        Release(
+            version = "7.3.2",
+            title = "Backup & Restore, the wrong-day fix, and a smarter Test Centre",
+            date = "June 2026",
+            items = listOf(
+                "**New: Backup & Restore.** You can now back up everything (your whole history, scores and sleep) to a folder you choose, on demand or on a daily schedule, and restore it later. It's off by default, runs entirely on your device, and the restore checks the file is really yours and keeps a safety snapshot first, so a failed restore can't wipe your data. Find it in Settings.",
+                "**Your dashboard shows the right day again.** A cluster of \"Today is empty / stuck on an old day / the same sleep every night\" reports turned out to be one underlying issue: after re-adding a strap the app saved your live data under one name but looked for it under another. It now reads your live strap data and your imported history together, so nothing gets orphaned, and switching straps updates the screen straight away. (#814, #799)",
+                "**A batch of fixes.** The Deep Timeline HRV chart was plotting raw heartbeat intervals, not HRV, now it shows real, filtered HRV (#803). Cycle Awareness is only offered where it applies and has a proper off switch (#801). The app no longer gets sluggish after a very large Apple Health import (#797). And WHOOP 4.0 steps now explain that the strap has no step counter, rather than looking broken (#807).",
+                "**Bug reporting got much better.** When the first people used the new Test Centre it showed us two flaws in the reporting itself, both fixed: reports were arriving empty (the Report button wasn't including the log), and a test mode could capture nothing without saying so. The export now fills the report in for you, runs a completeness check, carries a strap-clock and data-source line so the trickiest problems diagnose themselves, and verifies nothing private survived the privacy scrub.",
+                "**Small wins.** Swipe or tap arrows to move between days. Delete a hydration entry and set a custom container size. See each workout's effort number on its detail.",
+                "Thank you to everyone who became a tester this week. Several of these came straight from your reports.",
+            )),
         Release(
             version = "7.3.1",
             title = "A big bug-fix sweep, with the Test Centre to back it up",

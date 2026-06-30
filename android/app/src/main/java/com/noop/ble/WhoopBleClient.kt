@@ -2885,17 +2885,21 @@ class WhoopBleClient(
                                 log("Strap banked history span: ${fmt.format(java.util.Date(oldestUnix * 1000L))} → newest " +
                                     "(~$spanDays day${if (spanDays == 1L) "" else "s"} of backlog, drained oldest-first)")
                             }
-                            // Connection test mode: promote the CLOCK-DRIFT picture from the buried raw frames
-                            // to one upfront tagged line - the strap-reported [oldest, newest] window vs wall
-                            // clock with a FUTURE-DATE flag (#767 / #754 cluster). Gated zero-cost; pure
+                            // CAPTURE-B parity: promote the CLOCK-DRIFT picture from the buried raw frames to
+                            // one upfront line in the UNIVERSAL block - the strap-reported [oldest, newest]
+                            // window vs wall clock with a FUTURE-DATE flag (#767 / #754 / #72 cluster). A
+                            // wandering / un-clocked strap is the single most common root cause (live HR works
+                            // but offloaded history lands months off), so this rides EVERY Test Centre export
+                            // (gate = active(UNIVERSAL) == any mode on), tagged .universal, not just the
+                            // Connection mode. Matches the universal dayOwner line. Gated zero-cost; pure
                             // formatter, no behaviour change. Twin of the macOS data-range emit.
-                            if (testCentre.active(com.noop.testcentre.TestDomain.CONNECTION)) {
+                            if (testCentre.active(com.noop.testcentre.TestDomain.UNIVERSAL)) {
                                 val line = com.noop.analytics.ConnectionTrace.clockDriftLine(
                                     oldestUnix = if (oldestUnix != null && oldestUnix < it) oldestUnix else null,
                                     newestUnix = it,
                                     wallNowUnix = System.currentTimeMillis() / 1000L,
                                 )
-                                log(line, com.noop.testcentre.TestDomain.CONNECTION)
+                                log(line, com.noop.testcentre.TestDomain.UNIVERSAL)
                             }
                         }
                     }
@@ -4324,7 +4328,13 @@ class WhoopBleClient(
                 timedOut = connTimedOut,
             )
         ) {
-            log("Bond-loop (#617): ${postBondLoop.consecutiveBondTimeouts} bond-then-timeout cycles — surfacing the re-pair guide")
+            log("Bond-loop (#617): ${postBondLoop.consecutiveBondTimeouts} bond-then-timeout cycles — surfacing the re-pair guide and pausing auto-reconnect")
+            // #844 — the loop is bond → drop → rescan → bond → drop, forever, draining the battery. Surfacing
+            // the guide alone left the involuntary-drop rescan running. Pause auto-reconnect too (the disconnect
+            // rescan already skips while this is set); a user Connect or a genuine bond re-arms it. We do NOT
+            // touch the bond/parse path — the bond is real; the stale OS pairing is the problem. Mirrors the
+            // Swift BLEManager #844 fix.
+            autoReconnectPausedForBondLoop = true
             if (_state.value.reconnectGuide == null) {
                 _state.value = _state.value.copy(
                     reconnectGuide = """

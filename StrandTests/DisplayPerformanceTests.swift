@@ -20,6 +20,7 @@ final class DisplayPerformanceTests: XCTestCase {
     override func tearDown() {
         DisplayPerformanceMonitor.shared.stop()
         DisplayPerformanceMonitor.shared.emit = nil
+        DisplayPerformanceMonitor.shared.dataVolumeProvider = nil
         UserDefaults.standard.removeObject(forKey: "testcentre.active.display")
         UserDefaults.standard.removeObject(forKey: "testcentre.active.master")
         super.tearDown()
@@ -67,6 +68,36 @@ final class DisplayPerformanceTests: XCTestCase {
                        "the display link must be torn down by stop()")
         XCTAssertTrue(captured.contains { $0.hasPrefix("memoryHighWater ") },
                       "stop() must emit the memory high-water line, got \(captured)")
+    }
+
+    // MARK: - CAPTURE-D (#797): the dataVolume line on start.
+
+    func testStartEmitsDataVolumeLineWhenProviderWired() async {
+        let captured = LineBox()
+        DisplayPerformanceMonitor.shared.emit = { captured.append($0) }
+        DisplayPerformanceMonitor.shared.dataVolumeProvider = {
+            DataVolume(dbRows: 1234, importedDays: 7, workouts: 3, lastRenderRows: 9)
+        }
+        DisplayPerformanceMonitor.shared.start()
+        // The provider is async (the store is an actor), so the line lands on a later main-actor turn. Yield
+        // until it arrives (bounded), then assert the exact shape.
+        for _ in 0..<50 where !captured.lines.contains(where: { $0.hasPrefix("dataVolume ") }) {
+            await Task.yield()
+        }
+        DisplayPerformanceMonitor.shared.stop()
+        XCTAssertTrue(captured.lines.contains("dataVolume dbRows=1234 importedDays=7 workouts=3 lastRenderRows=9"),
+                      "start() with a provider must emit one dataVolume line, got \(captured.lines)")
+    }
+
+    func testNoProviderEmitsNoDataVolumeLine() async {
+        let captured = LineBox()
+        DisplayPerformanceMonitor.shared.emit = { captured.append($0) }
+        // No dataVolumeProvider wired (the default): start() must NOT emit a dataVolume line.
+        DisplayPerformanceMonitor.shared.start()
+        for _ in 0..<10 { await Task.yield() }
+        DisplayPerformanceMonitor.shared.stop()
+        XCTAssertFalse(captured.lines.contains { $0.hasPrefix("dataVolume ") },
+                       "no provider must mean no dataVolume line, got \(captured.lines)")
     }
 
     func testDoubleStartIsIdempotent() {
@@ -125,4 +156,12 @@ final class DisplayPerformanceTests: XCTestCase {
                       "the review must name the attached screenshot, got: \(gate.previewText)")
         XCTAssertFalse(gate.isCleared, "the gate must start uncleared (nothing ships until Share)")
     }
+}
+
+/// Main-actor-isolated capture box for the monitor's emit sink, so the async dataVolume emit (which lands
+/// on a later main-actor turn) accumulates without a closure-mutation warning.
+@MainActor
+private final class LineBox {
+    private(set) var lines: [String] = []
+    func append(_ line: String) { lines.append(line) }
 }

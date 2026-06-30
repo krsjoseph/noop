@@ -11,11 +11,11 @@ options:
   developmentLanguage: en
 settings:
   base:
-    MARKETING_VERSION: "7.3.1"
+    MARKETING_VERSION: "7.5.0"
     # iOS build number (CFBundleVersion). GLOBAL so the iOS app AND its widget extension inherit the
     # SAME value — they must match or iOS warns "extension version must match parent app" (#416).
     # macOS sets its own CFBundleVersion on the Strand target and is unaffected by this.
-    CURRENT_PROJECT_VERSION: "157"
+    CURRENT_PROJECT_VERSION: "161"
     SWIFT_VERSION: "5.0"
     # Emit localizable strings so Xcode auto-extracts every LocalizedStringKey into the
     # String Catalog on build (the English (US) base entries).
@@ -50,6 +50,10 @@ packages:
     path: Packages/StrandImport
   StrandDesign:
     path: Packages/StrandDesign
+  # Clean-room local Oura ring BLE protocol (framing, auth, decoders, driver). Pure value types,
+  # zero CoreBluetooth, so it stays headless/JVM-testable; the app target imports it for OuraLiveSource.
+  OuraProtocol:
+    path: Packages/OuraProtocol
   # Compresses the full-database `.noopbak` backup (single-entry deflate ZIP) in DataBackup.swift.
   # Already resolved transitively via StrandImport; linked directly so the app target can
   # `import ZIPFoundation`. Same exact version as StrandImport's, so SPM resolves one copy.
@@ -75,7 +79,7 @@ targets:
         CFBundleName: Kineva
         CFBundleDisplayName: Kineva
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "188"
+        CFBundleVersion: "192"
         LSMinimumSystemVersion: "13.0"
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         NSBluetoothAlwaysUsageDescription: "Kineva connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your Mac. Nothing leaves your device."
@@ -118,6 +122,7 @@ targets:
       - package: StrandDesign
       - package: MarkdownUI
       - package: ZIPFoundation
+      - package: OuraProtocol
   StrandTests:
     type: bundle.unit-test
     platform: macOS
@@ -128,6 +133,7 @@ targets:
       - target: Strand
       - package: WhoopProtocol
       - package: WhoopStore
+      - package: OuraProtocol
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
